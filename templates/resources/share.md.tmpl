@@ -1,0 +1,20 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: ""
+description: |-
+  Manages a MotherDuck database share.
+---
+
+# {{.Name}} ({{.Type}})
+
+Manages a MotherDuck database share.
+
+Use this resource when Terraform owns the share name, source database, access mode, visibility, update mode, and optional catalog include patterns. Name, source, access, visibility, and update mode are replacement-only. Include patterns update in place with `ALTER SHARE`.
+
+The computed `url` attribute is sensitive. Treat share URLs as access-bearing infrastructure metadata, especially for unrestricted shares. Terraform still stores sensitive values in state, so use an encrypted backend with restricted access and pass share URLs to downstream systems intentionally through sensitive outputs or a secret manager.
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_share/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}

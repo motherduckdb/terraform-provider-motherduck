@@ -1,0 +1,1 @@
+terraform import motherduck_role_grant.service_account analytics_readers/user/svc_analytics_reader

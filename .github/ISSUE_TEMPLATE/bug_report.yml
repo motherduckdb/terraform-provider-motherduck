@@ -1,0 +1,81 @@
+name: Bug report
+description: Report a reproducible problem with the MotherDuck Terraform provider.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste MotherDuck tokens, generated access tokens, session cookies, or full Terraform state.
+
+  - type: input
+    id: terraform-version
+    attributes:
+      label: Terraform version
+      placeholder: "1.15.8"
+    validations:
+      required: true
+
+  - type: input
+    id: provider-version
+    attributes:
+      label: Provider version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - SQL resource or data source
+        - REST resource or data source
+        - Provider configuration
+        - Release package or installation
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Terraform configuration
+      description: Minimal configuration that reproduces the issue. Redact names if needed.
+      render: hcl
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: debug-output
+    attributes:
+      label: Debug output
+      description: Include relevant redacted TF_LOG output only. Do not include tokens or state files.
+      render: text
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. terraform init
+        2. terraform apply
+        3. terraform plan
+    validations:
+      required: true

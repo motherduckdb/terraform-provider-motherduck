@@ -1,0 +1,152 @@
+name: Live Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      terraform_versions:
+        description: "Terraform versions to test, separated by spaces or commas"
+        required: false
+        default: "1.5.7 1.8.5 1.12.2 1.15.8"
+      opentofu_versions:
+        description: "OpenTofu versions to test, separated by spaces or commas"
+        required: false
+        default: "1.12.5"
+      run_sql_lifecycle:
+        description: "Run SQL create/destroy lifecycle checks for every Terraform version"
+        type: boolean
+        required: false
+        default: false
+      run_blueprint_lifecycle:
+        description: "Run SQL-only blueprint lifecycle checks for every Terraform version"
+        type: boolean
+        required: false
+        default: false
+  schedule:
+    - cron: "17 7 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-matrix:
+    name: Prepare CLI matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Build matrix
+        id: matrix
+        shell: bash
+        env:
+          TF_VERSIONS: ${{ inputs.terraform_versions || '1.5.7 1.8.5 1.12.2 1.15.8' }}
+          TOFU_VERSIONS: ${{ inputs.opentofu_versions || '1.12.5' }}
+        run: |
+          python3 - <<'PY' >> "${GITHUB_OUTPUT}"
+          import json
+          import os
+          import re
+          import sys
+
+          def versions(name):
+              values = [v for v in re.split(r"[\s,]+", os.environ.get(name, "")) if v]
+              for value in values:
+                  if not re.fullmatch(r"\d+\.\d+\.\d+", value):
+                      print(f"Invalid {name} value {value!r}; use versions like 1.15.8.", file=sys.stderr)
+                      sys.exit(1)
+              return values
+
+          include = [{"cli": "terraform", "version": v} for v in versions("TF_VERSIONS")]
+          include += [{"cli": "opentofu", "version": v} for v in versions("TOFU_VERSIONS")]
+          if not include:
+              print("No Terraform or OpenTofu versions configured.", file=sys.stderr)
+              sys.exit(1)
+          print("matrix=" + json.dumps({"include": include}, separators=(",", ":")))
+          PY
+
+  live-smoke:
+    name: Live MotherDuck smoke (${{ matrix.cli }} ${{ matrix.version }})
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
+    env:
+      MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+      MOTHERDUCK_ADMIN_TOKEN: ${{ secrets.MOTHERDUCK_ADMIN_TOKEN }}
+      TF_VERSIONS: ${{ matrix.cli == 'terraform' && matrix.version || '' }}
+      TOFU_VERSIONS: ${{ matrix.cli == 'opentofu' && matrix.version || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Skip when SQL token is not configured
+        id: token-check
+        shell: bash
+        run: |
+          if [[ -z "${MOTHERDUCK_TOKEN}" ]]; then
+            echo "configured=false" >> "${GITHUB_OUTPUT}"
+            echo "MOTHERDUCK_TOKEN is not configured; skipping live smoke."
+          else
+            echo "::add-mask::${MOTHERDUCK_TOKEN}"
+            if [[ -n "${MOTHERDUCK_ADMIN_TOKEN}" ]]; then
+              echo "::add-mask::${MOTHERDUCK_ADMIN_TOKEN}"
+            fi
+            echo "configured=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Run Terraform version matrix
+        if: steps.token-check.outputs.configured == 'true' && !inputs.run_sql_lifecycle && !inputs.run_blueprint_lifecycle
+        run: make test-terraform-versions
+
+      - name: Run SQL lifecycle Terraform version matrix
+        if: steps.token-check.outputs.configured == 'true' && inputs.run_sql_lifecycle
+        run: make test-terraform-versions-lifecycle
+
+      - name: Run blueprint Terraform version matrix
+        if: steps.token-check.outputs.configured == 'true' && inputs.run_blueprint_lifecycle
+        run: make test-terraform-versions-blueprint
+
+  cleanup:
+    name: Audit live cleanup
+    needs: live-smoke
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Skip when SQL token is not configured
+        id: token-check
+        shell: bash
+        run: |
+          if [[ -z "${MOTHERDUCK_TOKEN}" ]]; then
+            echo "configured=false" >> "${GITHUB_OUTPUT}"
+            echo "MOTHERDUCK_TOKEN is not configured; skipping live cleanup audit."
+          else
+            echo "::add-mask::${MOTHERDUCK_TOKEN}"
+            echo "configured=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Audit live cleanup
+        if: steps.token-check.outputs.configured == 'true'
+        run: make test-live-cleanup-audit

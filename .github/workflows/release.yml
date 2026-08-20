@@ -1,0 +1,216 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify release inputs
+        shell: bash
+        env:
+          VERSION: ${{ github.ref_name }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          if [[ -z "${GPG_PRIVATE_KEY}" ]]; then
+            echo "GPG_PRIVATE_KEY secret is required for Terraform Registry releases." >&2
+            exit 1
+          fi
+          if [[ -z "${GPG_PASSPHRASE}" ]]; then
+            echo "GPG_PASSPHRASE secret is required for Terraform Registry releases." >&2
+            exit 1
+          fi
+          if [[ ! -f "release-notes/${VERSION}.md" ]]; then
+            echo "Release notes file release-notes/${VERSION}.md is required." >&2
+            exit 1
+          fi
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run release preflight checks
+        run: make pre-push-check release-check
+
+  build:
+    name: Build ${{ matrix.goos }}_${{ matrix.goarch }}
+    needs: preflight
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      attestations: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - runner: ubuntu-24.04-arm
+            goos: linux
+            goarch: arm64
+          - runner: macos-latest
+            goos: darwin
+            goarch: amd64
+          - runner: macos-latest
+            goos: darwin
+            goarch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Package provider
+        env:
+          VERSION: ${{ github.ref_name }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          DIST_DIR: ${{ github.workspace }}/dist
+        run: ./scripts/package-release.sh
+
+      - name: Create package digest
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          cd dist
+          sha256sum -- *.zip > "provider_${GOOS}_${GOARCH}.sha256"
+          sha256sum -c "provider_${GOOS}_${GOARCH}.sha256"
+
+      - name: Attest package provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*.zip
+
+      - name: Upload package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish GitHub release
+    needs:
+      - preflight
+      - build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      attestations: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Import GPG key
+        id: gpg
+        uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec # v6.3.0
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Create checksums and signature
+        shell: bash
+        env:
+          VERSION: ${{ github.ref_name }}
+          GPG_FINGERPRINT: ${{ steps.gpg.outputs.fingerprint }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          version="${VERSION#v}"
+          manifest="terraform-provider-motherduck_${version}_manifest.json"
+          checksum="terraform-provider-motherduck_${version}_SHA256SUMS"
+          cp terraform-registry-manifest.json "dist/${manifest}"
+          cd dist
+          shopt -s nullglob
+          digest_files=(provider_*.sha256)
+          if [[ "${#digest_files[@]}" -eq 0 ]]; then
+            echo "No per-build digest files found." >&2
+            exit 1
+          fi
+          sha256sum -c "${digest_files[@]}"
+          packages=(terraform-provider-motherduck_"${version}"_*.zip)
+          if [[ "${#packages[@]}" -eq 0 ]]; then
+            echo "No provider packages found for version ${version}." >&2
+            exit 1
+          fi
+          sha256sum "${packages[@]}" "${manifest}" > "${checksum}"
+          sha256sum -c "${checksum}"
+          if [[ -z "${GPG_PASSPHRASE}" ]]; then
+            echo "GPG_PASSPHRASE secret is required for Terraform Registry releases." >&2
+            exit 1
+          fi
+          gpg --batch \
+            --local-user "${GPG_FINGERPRINT}" \
+            --pinentry-mode loopback \
+            --passphrase "${GPG_PASSPHRASE}" \
+            --output "${checksum}.sig" \
+            --detach-sign "${checksum}"
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          notes_file="release-notes/${VERSION}.md"
+          if [[ ! -f "${notes_file}" ]]; then
+            echo "Release notes file ${notes_file} is required." >&2
+            exit 1
+          fi
+          gh release create "${VERSION}" dist/* \
+            --verify-tag \
+            --title "${VERSION}" \
+            --notes-file "${notes_file}"

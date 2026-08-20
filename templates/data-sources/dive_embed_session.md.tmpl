@@ -1,0 +1,18 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: ""
+description: |-
+  Creates a short-lived Dive embed session for a service account.
+---
+
+# {{.Name}} ({{.Type}})
+
+Creates a short-lived Dive embed session for a service account.
+
+~> Prefer the `motherduck_dive_embed_session` ephemeral resource for new configurations. This data source creates a credential and persists it in Terraform state.
+
+## Example Usage
+
+{{tffile "examples/data-sources/motherduck_dive_embed_session/data-source.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}

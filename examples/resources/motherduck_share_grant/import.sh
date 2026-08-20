@@ -1,0 +1,1 @@
+terraform import motherduck_share_grant.reader analytics_share/role/analytics_readers

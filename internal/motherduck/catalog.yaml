@@ -1,0 +1,79 @@
+version: 1
+source:
+  rest_openapi: https://api.motherduck.com/docs/specs
+rest:
+  - path: /v1/users
+    methods: [POST]
+    provider_surface: resource.motherduck_service_account
+    status: stable
+  - path: /v1/users/{username}
+    methods: [DELETE]
+    provider_surface: resource.motherduck_service_account
+    status: stable
+  - path: /v1/users/{username}/tokens
+    methods: [GET, POST]
+    provider_surface: [resource.motherduck_access_token, data_source.motherduck_user_tokens]
+    status: stable
+  - path: /v1/users/{username}/tokens/{token_id}
+    methods: [DELETE]
+    provider_surface: resource.motherduck_access_token
+    status: stable
+  - path: /v1/users/{username}/instances
+    methods: [GET, PUT]
+    provider_surface: [resource.motherduck_duckling_config, resource.motherduck_service_account]
+    status: stable
+  - path: /v1/active_accounts
+    methods: [GET]
+    provider_surface: data_source.motherduck_active_accounts
+    status: preview
+  - path: /v1/dives/{dive_id}/embed-session
+    methods: [POST]
+    provider_surface:
+      - data_source.motherduck_dive_embed_session
+      - ephemeral_resource.motherduck_dive_embed_session
+    status: ephemeral
+sql:
+  resources:
+    - motherduck_database
+    - motherduck_schema
+    - motherduck_table
+    - motherduck_view
+    - motherduck_secret
+    - motherduck_role
+    - motherduck_role_grant
+    - motherduck_share
+    - motherduck_share_grant
+    - motherduck_snapshot
+    - motherduck_dive
+    - motherduck_guide
+    - motherduck_flight
+    - motherduck_flight_run
+  data_sources:
+    - motherduck_databases
+    - motherduck_attached_databases
+    - motherduck_database_snapshots
+    - motherduck_owned_shares
+    - motherduck_owned_share
+    - motherduck_shared_with_me
+    - motherduck_secrets
+    - motherduck_current_user
+    - motherduck_version
+    - motherduck_live_duckling_size
+    - motherduck_buckets_for_secret
+    - motherduck_files
+    - motherduck_roles
+    - motherduck_role_members
+    - motherduck_roles_for_user
+    - motherduck_roles_for_role
+    - motherduck_dives
+    - motherduck_dive
+    - motherduck_dive_versions
+    - motherduck_flights
+    - motherduck_flight
+    - motherduck_flight_versions
+    - motherduck_flight_runs
+    - motherduck_flight_logs
+    - motherduck_guides
+    - motherduck_guide
+    - motherduck_guide_grantees
+    - motherduck_guide_versions
