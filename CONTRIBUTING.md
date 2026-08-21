@@ -89,7 +89,7 @@ Use focused live smoke tests for changed surfaces instead of running every live 
 MOTHERDUCK_TOKEN=... make test-live-sql-stable
 ```
 
-The Terraform compatibility matrix defaults to Terraform `1.5.7`, `1.8.5`, `1.12.2`, and `1.15.9`. Override locally with `TF_VERSIONS`, for example:
+The Terraform compatibility matrix defaults to Terraform `1.5.7`, `1.8.5`, `1.12.2`, `1.15.8`, and `1.15.9`. Override locally with `TF_VERSIONS`, for example:
 
 ```bash
 TF_VERSIONS="1.8.5 1.15.9" MOTHERDUCK_TOKEN=... make test-terraform-versions
