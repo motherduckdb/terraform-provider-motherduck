@@ -260,7 +260,7 @@ func TestRESTStringEnumValidators(t *testing.T) {
 func TestRESTRangeValidators(t *testing.T) {
 	ctx := context.Background()
 
-	intValidator := int64RangeValidator{name: "MotherDuck access token TTL", min: 300, max: 31536000}
+	intValidator := accessTokenTTLValidators()[0]
 	for name, tc := range map[string]struct {
 		value   types.Int64
 		wantErr bool
