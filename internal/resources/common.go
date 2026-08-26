@@ -274,7 +274,7 @@ func accessTokenTypeValidators() []validator.String {
 }
 
 func accessTokenTTLValidators() []validator.Int64 {
-	return []validator.Int64{int64RangeValidator{name: "MotherDuck access token TTL", min: 300, max: 31536000}}
+	return []validator.Int64{tfvalidators.Int64Range("MotherDuck access token TTL", 300, 31536000)}
 }
 
 func snapshotRetentionValidators() []validator.Int64 {
@@ -319,7 +319,7 @@ func validateUUIDString(value, subject string, diags *diag.Diagnostics) bool {
 }
 
 func ducklingCooldownValidators() []validator.Int64 {
-	return []validator.Int64{int64RangeValidator{name: "MotherDuck Duckling cooldown seconds", min: 60, max: 86400}}
+	return []validator.Int64{tfvalidators.Int64Range("MotherDuck Duckling cooldown seconds", 60, 86400)}
 }
 
 func ducklingFlockSizeValidators() []validator.Float64 {
@@ -557,30 +557,6 @@ func isASCIILetter(r rune) bool {
 
 func isASCIIDigit(r rune) bool {
 	return '0' <= r && r <= '9'
-}
-
-type int64RangeValidator struct {
-	name string
-	min  int64
-	max  int64
-}
-
-func (v int64RangeValidator) Description(context.Context) string {
-	return fmt.Sprintf("must be between %d and %d", v.min, v.max)
-}
-
-func (v int64RangeValidator) MarkdownDescription(context.Context) string {
-	return fmt.Sprintf("must be between `%d` and `%d`", v.min, v.max)
-}
-
-func (v int64RangeValidator) ValidateInt64(ctx context.Context, req validator.Int64Request, resp *validator.Int64Response) {
-	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
-		return
-	}
-	value := req.ConfigValue.ValueInt64()
-	if value < v.min || value > v.max {
-		resp.Diagnostics.AddAttributeError(req.Path, "Invalid "+v.name, fmt.Sprintf("Value must be between %d and %d.", v.min, v.max))
-	}
 }
 
 type float64RangeValidator struct {
