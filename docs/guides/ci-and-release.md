@@ -19,10 +19,11 @@ The Terraform compatibility job repeats the offline Terraform checks against sup
 - `1.8.5`
 - `1.12.2`
 - `1.15.8`
+- `1.15.9`
 
 These checks validate examples, invalid-configuration diagnostics, and missing-credential diagnostics without making live MotherDuck calls.
 
-The live-smoke workflow also runs the provider against OpenTofu. The default OpenTofu version is `1.12.5`; override it with the `opentofu_versions` manual workflow input or `TOFU_VERSIONS` locally.
+The live-smoke workflow also runs the provider against OpenTofu. The default OpenTofu version is `1.12.6`; override it with the `opentofu_versions` manual workflow input or `TOFU_VERSIONS` locally.
 
 ## Live Smoke
 

@@ -6,11 +6,11 @@ on:
       terraform_versions:
         description: "Terraform versions to test, separated by spaces or commas"
         required: false
-        default: "1.5.7 1.8.5 1.12.2 1.15.8"
+        default: "1.5.7 1.8.5 1.12.2 1.15.8 1.15.9"
       opentofu_versions:
         description: "OpenTofu versions to test, separated by spaces or commas"
         required: false
-        default: "1.12.5"
+        default: "1.12.6"
       run_sql_lifecycle:
         description: "Run SQL create/destroy lifecycle checks for every Terraform version"
         type: boolean
@@ -42,8 +42,8 @@ jobs:
         id: matrix
         shell: bash
         env:
-          TF_VERSIONS: ${{ inputs.terraform_versions || '1.5.7 1.8.5 1.12.2 1.15.8' }}
-          TOFU_VERSIONS: ${{ inputs.opentofu_versions || '1.12.5' }}
+          TF_VERSIONS: ${{ inputs.terraform_versions || '1.5.7 1.8.5 1.12.2 1.15.8 1.15.9' }}
+          TOFU_VERSIONS: ${{ inputs.opentofu_versions || '1.12.6' }}
         run: |
           python3 - <<'PY' >> "${GITHUB_OUTPUT}"
           import json
@@ -55,7 +55,7 @@ jobs:
               values = [v for v in re.split(r"[\s,]+", os.environ.get(name, "")) if v]
               for value in values:
                   if not re.fullmatch(r"\d+\.\d+\.\d+", value):
-                      print(f"Invalid {name} value {value!r}; use versions like 1.15.8.", file=sys.stderr)
+                      print(f"Invalid {name} value {value!r}; use versions like 1.15.9.", file=sys.stderr)
                       sys.exit(1)
               return values
 

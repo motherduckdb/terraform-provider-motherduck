@@ -5,8 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OS="$(go env GOOS)"
 ARCH="$(go env GOARCH)"
 
-TF_VERSIONS="${TF_VERSIONS-1.5.7 1.8.5 1.12.2 1.15.8}"
-TOFU_VERSIONS="${TOFU_VERSIONS-1.12.5}"
+TF_VERSIONS="${TF_VERSIONS-1.5.7 1.8.5 1.12.2 1.15.8 1.15.9}"
+TOFU_VERSIONS="${TOFU_VERSIONS-1.12.6}"
 TF_VERSION_LIST=()
 while IFS= read -r version; do
   if [[ -n "${version}" ]]; then
@@ -21,7 +21,7 @@ TOFU_VERSION_LIST=()
 while IFS= read -r version; do
   if [[ -n "${version}" ]]; then
     if [[ ! "${version}" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
-      echo "Invalid OpenTofu version '${version}'. Use versions like 1.12.5, separated by spaces or commas." >&2
+      echo "Invalid OpenTofu version '${version}'. Use versions like 1.12.6, separated by spaces or commas." >&2
       exit 1
     fi
     TOFU_VERSION_LIST+=("${version}")

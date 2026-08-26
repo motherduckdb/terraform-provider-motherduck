@@ -81,11 +81,11 @@ The compatibility matrix validates the provider across supported Terraform versi
 MOTHERDUCK_TOKEN=... make test-terraform-versions
 ```
 
-The default matrix runs Terraform `1.5.7`, `1.8.5`, `1.12.2`, and `1.15.8`, plus OpenTofu `1.12.5`. Override either matrix locally with spaces or commas:
+The default matrix runs Terraform `1.5.7`, `1.8.5`, `1.12.2`, `1.15.8`, and `1.15.9`, plus OpenTofu `1.12.6`. Override either matrix locally with spaces or commas:
 
 ```bash
-TF_VERSIONS="1.8.5 1.15.8" MOTHERDUCK_TOKEN=... make test-terraform-versions
-TOFU_VERSIONS="1.12.5" MOTHERDUCK_TOKEN=... make test-terraform-versions
+TF_VERSIONS="1.8.5 1.15.9" MOTHERDUCK_TOKEN=... make test-terraform-versions
+TOFU_VERSIONS="1.12.6" MOTHERDUCK_TOKEN=... make test-terraform-versions
 ```
 
 Add an admin token to include REST administration lifecycle coverage when the token has organization-admin permissions:
