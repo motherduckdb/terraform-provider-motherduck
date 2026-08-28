@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OS="$(go env GOOS)"
 ARCH="$(go env GOARCH)"
 
-TF_VERSIONS="${TF_VERSIONS-1.5.7 1.8.5 1.12.2 1.15.8 1.15.9}"
+TF_VERSIONS="${TF_VERSIONS-1.5.7 1.8.5 1.12.2 1.15.8 1.15.9 1.16.0}"
 TOFU_VERSIONS="${TOFU_VERSIONS-1.12.6}"
 TF_VERSION_LIST=()
 while IFS= read -r version; do

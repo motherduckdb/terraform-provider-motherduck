@@ -13,7 +13,7 @@ body:
     id: terraform-version
     attributes:
       label: Terraform version
-      placeholder: "1.15.9"
+      placeholder: "1.16.0"
     validations:
       required: true
 

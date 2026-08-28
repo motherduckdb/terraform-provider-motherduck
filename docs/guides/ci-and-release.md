@@ -20,6 +20,7 @@ The Terraform compatibility job repeats the offline Terraform checks against sup
 - `1.12.2`
 - `1.15.8`
 - `1.15.9`
+- `1.16.0`
 
 These checks validate examples, invalid-configuration diagnostics, and missing-credential diagnostics without making live MotherDuck calls.
 
