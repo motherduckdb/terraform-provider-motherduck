@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	stdsql "database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -109,6 +110,17 @@ func showRows(ctx context.Context, client interface {
 		return nil, err
 	}
 	return rows, nil
+}
+
+func decodeNullableJSON[T any](raw stdsql.NullString, target *T, errorSummary string, diags *diag.Diagnostics) bool {
+	if !raw.Valid || raw.String == "" || raw.String == "null" {
+		return true
+	}
+	if err := json.Unmarshal([]byte(raw.String), target); err != nil {
+		diags.AddError(errorSummary, err.Error())
+		return false
+	}
+	return true
 }
 
 func isNotFound(err error) bool {
