@@ -78,6 +78,11 @@ check_no_search_matches \
   '[s]nowflake|[s]nowflakedb' \
   ignore-case
 
+if rg -n 't[.](Skip|Skipf)[(]' internal --glob '*_test.go'; then
+  echo "Go tests must use explicit build tags and hard preconditions instead of reporting skipped gates." >&2
+  exit 1
+fi
+
 while IFS= read -r script_path; do
   [[ "${script_path}" == *"*"* ]] && continue
   script_path="${script_path#./}"

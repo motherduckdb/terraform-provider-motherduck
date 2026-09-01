@@ -38,7 +38,7 @@ func (d *baseDataSource) rest(diags *diag.Diagnostics) *mdrest.Client {
 	return d.provider.REST
 }
 
-func (d *baseDataSource) sql(ctx context.Context, diags *diag.Diagnostics) *mdsql.Client {
+func (d *baseDataSource) sql(ctx context.Context, diags *diag.Diagnostics) providerctx.SQLClient {
 	if d.provider == nil {
 		diags.AddError("MotherDuck token required", mdsql.ErrMissingToken.Error())
 		return nil

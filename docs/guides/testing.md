@@ -10,17 +10,23 @@ Offline checks do not require MotherDuck credentials:
 make pre-push-check
 ```
 
-The pre-push gate runs Go formatting, Terraform formatting, `go vet`, Go tests, workflow linting, shell syntax checks, generated example validation, import diagnostics, invalid-configuration diagnostics, missing-credential diagnostics, REST helper checks, repository hygiene checks, and a provider build.
+The pre-push gate combines static checks with hermetic behavior contracts. It runs formatting, linting, vulnerability checks, workflow and shell validation, generated example and documentation checks, provider builds, race-enabled Go tests, and Terraform protocol lifecycle tests against strict in-memory SQL and REST clients.
 
 Use narrower targets while iterating:
 
 ```bash
 make test-unit
+make test-contract
+make static-check
 make test-examples
 make test-invalid-configuration
 make test-missing-credentials
 make workflow-check
 ```
+
+`make test-unit` runs hermetic Go tests with the race detector, randomized ordering, and package coverage summaries. Coverage is diagnostic information, not a line-percentage gate.
+
+`make test-contract` runs the real Terraform protocol lifecycle against strict fake backends. The contracts cover database create/refresh/import/deletion/recreation/destroy, table type canonicalization and drift replacement, access-token secret preservation and deletion recovery, typed nullable owned-share state, and ephemeral Dive embed sessions. Unexpected backend operations fail the test.
 
 `make test-examples` validates every Terraform directory under `examples/` against a fresh local provider mirror. Resource and blueprint examples also run offline plans with dummy values. Data-source examples stop at validation because Terraform reads data sources during planning.
 
@@ -35,16 +41,15 @@ make docs
 Live checks use credentials from environment variables:
 
 - `MOTHERDUCK_TOKEN`: SQL and DuckDB-backed resources and data sources.
-- `MOTHERDUCK_ADMIN_TOKEN`: REST-backed administration resources and data sources.
+- `MOTHERDUCK_ADMIN_TOKEN`: optional organization-admin coverage for REST-backed administration resources and data sources. Hosted gates do not have this credential.
 
-Run SQL integration and Terraform acceptance tests:
+Run the required SQL lifecycle gate:
 
 ```bash
-MOTHERDUCK_TOKEN=... make test-integration
-MOTHERDUCK_TOKEN=... make test-acceptance
+MOTHERDUCK_TOKEN=... make test-live-required
 ```
 
-Add `MOTHERDUCK_ADMIN_TOKEN` for service-account, access-token, active-account, and Duckling-configuration coverage. The admin token must belong to a MotherDuck organization admin. Regular read-write tokens can run SQL checks but REST administration lifecycle tests will skip before creating infrastructure.
+All three targets require `MOTHERDUCK_TOKEN` and fail when it is missing. `test-integration` runs the Go SQL-client integration tests, `test-acceptance` runs Terraform provider lifecycles, and `test-live-required` runs both followed by a cleanup audit. REST administration behavior is required in the hermetic protocol suite; admin-only Go acceptance tests additionally require the `admin_acceptance` build tag and remain optional because the hosted environment has no organization-admin token.
 
 Run the broad stable SQL smoke before release candidates or larger SQL lifecycle changes:
 

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	resourceTimeouts "github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
-	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlcatalog"
@@ -1685,7 +1685,7 @@ func prepareSnapshotCreateState(model *snapshotModel) {
 }
 
 func relationExists(ctx context.Context, r interface {
-	sql(context.Context, *diag.Diagnostics) *mdsql.Client
+	sql(context.Context, *diag.Diagnostics) providerctx.SQLClient
 }, database, schemaName, name, tableType string, diags *diag.Diagnostics) bool {
 	client := r.sql(ctx, diags)
 	if client == nil {
@@ -1710,7 +1710,7 @@ func relationExists(ctx context.Context, r interface {
 	return exists
 }
 
-func readTableColumnTypes(ctx context.Context, client *mdsql.Client, database, schemaName, name string, diags *diag.Diagnostics) map[string]string {
+func readTableColumnTypes(ctx context.Context, client providerctx.SQLClient, database, schemaName, name string, diags *diag.Diagnostics) map[string]string {
 	var rowsJSON string
 	err := retry.SQL(ctx, func() error {
 		var queryErr error
@@ -1791,7 +1791,7 @@ func canonicalColumnType(ctx context.Context, client scalarStringer, columnType 
 	return client.ScalarString(ctx, "SELECT typeof(CAST(NULL AS "+trimmed+"))")
 }
 
-func readViewServerDefinition(ctx context.Context, client *mdsql.Client, database, schemaName, name string, diags *diag.Diagnostics) (string, bool) {
+func readViewServerDefinition(ctx context.Context, client providerctx.SQLClient, database, schemaName, name string, diags *diag.Diagnostics) (string, bool) {
 	var definition stdsql.NullString
 	err := retry.SQL(ctx, func() error {
 		if err := client.AttachDatabase(ctx, database); err != nil {
@@ -1858,7 +1858,7 @@ func viewQueryFromDefinition(definition string) string {
 }
 
 func dropRelation(ctx context.Context, r interface {
-	sql(context.Context, *diag.Diagnostics) *mdsql.Client
+	sql(context.Context, *diag.Diagnostics) providerctx.SQLClient
 }, keyword string, getter interface {
 	GetAttribute(context.Context, path.Path, any) diag.Diagnostics
 }, diags *diag.Diagnostics) {
@@ -2140,7 +2140,7 @@ func intervalDays(value string) types.Int64 {
 	return types.Int64Null()
 }
 
-func resetDefaultDatabaseIfCurrent(ctx context.Context, client *mdsql.Client, database string) {
+func resetDefaultDatabaseIfCurrent(ctx context.Context, client providerctx.SQLClient, database string) {
 	current, err := client.ScalarString(ctx, "SELECT current_database()")
 	if err != nil || !strings.EqualFold(current, database) {
 		return

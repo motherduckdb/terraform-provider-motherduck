@@ -8,7 +8,7 @@ GOLANGCI_LINT_VERSION := v2.12.2
 GOVULNCHECK := $(TOOLS_DIR)/govulncheck
 GOVULNCHECK_VERSION := v1.6.0
 
-.PHONY: build clean-generated clean-tool-cache docs docs-check fmt fmt-check lint pre-push-check release-check release-package-local shellcheck test-examples test-import-validation test-invalid-configuration test-missing-credentials test-repository-hygiene test-scripts test-unit test-integration test-acceptance test-live-blueprint-sql-only test-live-blueprint-writer-path test-live-canonical-values test-live-cleanup-audit test-live-complex test-live-database-drop-with-objects test-live-database-drift test-live-database-options test-live-dive test-live-dive-flight-blueprint test-live-ducklake-database test-live-flight test-live-guide test-live-object-storage-listing test-live-preview-function-diagnostics test-live-provider-config test-live-provider-single-attach test-live-quoted-identifiers test-live-quoted-identifiers-import test-live-read-only-sql-catalog test-live-rest-edge test-live-rest-helper test-live-rest-permission-diagnostics test-live-rest-token-matrix test-live-schema-cascade test-live-secret-metadata-drift test-live-secret-raw-sql test-live-share-grant-drift test-live-share-modes test-live-share-option-drift test-live-snapshot-drift test-live-sql-drift test-live-sql-edge test-live-sql-import test-live-sql-stable test-live-table-replace test-live-table-types test-live-table-unmanaged-view test-live-view-drift test-terraform-versions test-terraform-versions-blueprint test-terraform-versions-lifecycle tools tools-ci tools-docs vulncheck workflow-check $(TFPLUGINDOCS) $(ACTIONLINT) $(GOLANGCI_LINT) $(GOVULNCHECK)
+.PHONY: build clean-generated clean-tool-cache docs docs-check fmt fmt-check lint pre-push-check release-check release-package-local shellcheck static-check test-contract test-examples test-import-validation test-invalid-configuration test-missing-credentials test-repository-hygiene test-scripts test-unit test-integration test-acceptance test-live-required test-live-blueprint-sql-only test-live-blueprint-writer-path test-live-canonical-values test-live-cleanup-audit test-live-complex test-live-database-drop-with-objects test-live-database-drift test-live-database-options test-live-dive test-live-dive-flight-blueprint test-live-ducklake-database test-live-flight test-live-guide test-live-object-storage-listing test-live-preview-function-diagnostics test-live-provider-config test-live-provider-single-attach test-live-quoted-identifiers test-live-quoted-identifiers-import test-live-read-only-sql-catalog test-live-rest-edge test-live-rest-helper test-live-rest-permission-diagnostics test-live-rest-token-matrix test-live-schema-cascade test-live-secret-metadata-drift test-live-secret-raw-sql test-live-share-grant-drift test-live-share-modes test-live-share-option-drift test-live-snapshot-drift test-live-sql-drift test-live-sql-edge test-live-sql-import test-live-sql-stable test-live-table-replace test-live-table-types test-live-table-unmanaged-view test-live-view-drift test-terraform-versions test-terraform-versions-blueprint test-terraform-versions-lifecycle tools tools-ci tools-docs vulncheck workflow-check $(TFPLUGINDOCS) $(ACTIONLINT) $(GOLANGCI_LINT) $(GOVULNCHECK)
 
 tools: tools-docs
 
@@ -96,10 +96,15 @@ release-check:
 	cd dist/release-check && shasum -a 256 *.zip > terraform-provider-motherduck_0.0.0_SHA256SUMS
 	cd dist/release-check && shasum -a 256 -c terraform-provider-motherduck_0.0.0_SHA256SUMS
 
-pre-push-check: fmt-check lint vulncheck workflow-check shellcheck test-scripts test-unit docs-check test-examples test-import-validation test-invalid-configuration test-missing-credentials test-live-rest-helper test-repository-hygiene build
+static-check: fmt-check lint vulncheck workflow-check shellcheck test-scripts docs-check test-examples test-import-validation test-invalid-configuration test-missing-credentials test-live-rest-helper test-repository-hygiene build
+
+pre-push-check: static-check test-unit test-contract
 
 test-unit:
-	go test ./...
+	go test -race -shuffle=on -count=1 -cover ./...
+
+test-contract:
+	go test -tags=contract -count=1 -cover ./internal/provider ./internal/ephemeral
 
 test-scripts:
 	bash -n scripts/*.sh scripts/lib/*.sh
@@ -107,11 +112,15 @@ test-scripts:
 	./scripts/test-version-matrix-unit.sh
 
 test-integration:
-	MD_TF_ACC=1 go test ./internal/client/... ./internal/resources/... ./internal/datasources/...
-	TF_ACC=1 MD_TF_ACC=1 go test ./internal/acceptance/...
+	@if [ -z "$${MOTHERDUCK_TOKEN:-}" ]; then echo "MOTHERDUCK_TOKEN is required for SQL integration tests" >&2; exit 1; fi
+	MD_TF_ACC=1 go test -tags=acceptance -count=1 ./internal/client/sql
 
 test-acceptance:
-	TF_ACC=1 MD_TF_ACC=1 go test ./internal/acceptance/...
+	@if [ -z "$${MOTHERDUCK_TOKEN:-}" ]; then echo "MOTHERDUCK_TOKEN is required for Terraform acceptance tests" >&2; exit 1; fi
+	TF_ACC=1 MD_TF_ACC=1 go test -tags=acceptance -count=1 ./internal/acceptance
+
+test-live-required:
+	./scripts/test-live-required.sh
 
 test-live-cleanup-audit:
 	./scripts/audit-live-test-cleanup.sh

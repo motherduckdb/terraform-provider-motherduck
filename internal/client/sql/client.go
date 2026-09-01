@@ -36,6 +36,14 @@ type Row struct {
 	unlock func()
 }
 
+// RowScanner is the narrow result contract consumed by provider resources and
+// data sources. Keeping callers on this interface lets hermetic contract tests
+// supply deterministic rows without replacing the production database/sql
+// implementation.
+type RowScanner interface {
+	Scan(dest ...any) error
+}
+
 type contextConnector struct {
 	*duckdb.Connector
 	initialize func(context.Context, driver.ExecerContext) error
@@ -183,7 +191,7 @@ func (c *Client) WithDatabaseUse(ctx context.Context, database string, fn func(e
 	return runErr
 }
 
-func (c *Client) QueryRow(ctx context.Context, query string, args ...any) *Row {
+func (c *Client) QueryRow(ctx context.Context, query string, args ...any) RowScanner {
 	if !c.Available() {
 		return &Row{err: ErrMissingToken}
 	}

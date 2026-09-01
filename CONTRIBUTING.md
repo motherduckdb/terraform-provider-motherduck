@@ -67,21 +67,22 @@ Offline checks:
 
 ```bash
 make test-unit
+make test-contract
 make test-examples
 make test-invalid-configuration
 make test-missing-credentials
 make workflow-check
 ```
 
-Live checks use credentials from the environment:
+The required live gate uses the SQL credential and fails rather than skipping when it is missing:
 
 ```bash
-MOTHERDUCK_TOKEN=... make test-integration
-MOTHERDUCK_TOKEN=... make test-acceptance
-MOTHERDUCK_TOKEN=... make test-terraform-versions
+MOTHERDUCK_TOKEN=... make test-live-required
 ```
 
-Add `MOTHERDUCK_ADMIN_TOKEN` for REST administration lifecycle coverage. The admin token must belong to a MotherDuck organization admin; regular read-write tokens can run SQL checks but cannot create service accounts or access tokens.
+`make test-unit` uses the race detector, randomized ordering, and coverage summaries. `make test-contract` runs real Terraform protocol lifecycles against strict in-memory SQL and REST clients. Coverage is diagnostic; contracts gate observable state and backend side effects. Credentialed Go tests use the `acceptance` build tag and are only run by explicit live targets.
+
+The hosted environment does not have an organization-admin token. REST administration behavior is covered by hermetic protocol contracts; admin-only Go acceptance tests require both the `acceptance` and `admin_acceptance` build tags, and admin-only live scripts must be run explicitly in an environment that supplies `MOTHERDUCK_ADMIN_TOKEN`. `make test-terraform-versions` and the hosted exact-main and release gates run SQL-only live coverage.
 
 Use focused live smoke tests for changed surfaces instead of running every live fixture on every edit. The broad stable SQL gate is:
 
@@ -101,9 +102,9 @@ Live smoke logs and temporary provider mirrors are written under ignored `test-r
 
 CI has three workflows:
 
-- `.github/workflows/ci.yml`: pull-request and `main` checks. It runs the local pre-push gate, release packaging check, and offline Terraform compatibility matrix.
-- `.github/workflows/live-smoke.yml`: scheduled and manual live checks against a real MotherDuck account when repository secrets are configured.
-- `.github/workflows/release.yml`: tag-driven release workflow for provider packages and GitHub releases.
+- `.github/workflows/ci.yml`: pull-request and `main` checks. Static checks, hermetic behavior contracts, release packaging, and the offline Terraform compatibility matrix run as separate jobs.
+- `.github/workflows/live-smoke.yml`: trusted exact-main, scheduled, and manual live checks using the protected `motherduck-live` environment. Missing credentials fail.
+- `.github/workflows/release.yml`: tag-driven release workflow that requires the live SQL contract before building provider packages.
 
 Actions are pinned to immutable SHAs with version comments. When updating an action, verify the latest upstream tag, replace the SHA, and run:
 

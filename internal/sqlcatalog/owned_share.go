@@ -19,7 +19,7 @@ type OwnedShare struct {
 }
 
 type ownedShareClient interface {
-	QueryRow(context.Context, string, ...any) *mdsql.Row
+	QueryRow(context.Context, string, ...any) mdsql.RowScanner
 }
 
 func ReadOwnedShare(ctx context.Context, client ownedShareClient, name string) (OwnedShare, error) {
