@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
 
@@ -451,7 +451,7 @@ func (r *guideResource) readGuide(ctx context.Context, model *guideModel, diags 
 
 func (r *guideResource) setGuideAccess(
 	ctx context.Context,
-	client *mdsql.Client,
+	client providerctx.SQLClient,
 	id, access types.String,
 	roleNames types.Set,
 	diags *diag.Diagnostics,
@@ -479,7 +479,7 @@ func (r *guideResource) setGuideAccess(
 
 func (r *guideResource) readGuideRoleNames(
 	ctx context.Context,
-	client *mdsql.Client,
+	client providerctx.SQLClient,
 	id types.String,
 	diags *diag.Diagnostics,
 ) types.Set {

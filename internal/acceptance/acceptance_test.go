@@ -1,3 +1,5 @@
+//go:build acceptance
+
 package acceptance
 
 import (
@@ -28,7 +30,7 @@ var protoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, erro
 func TestSQLAcceptanceDatabaseLifecycle(t *testing.T) {
 	requireAcceptance(t)
 	if os.Getenv("MOTHERDUCK_TOKEN") == "" {
-		t.Skip("set MOTHERDUCK_TOKEN to run MotherDuck SQL acceptance tests")
+		t.Fatal("MOTHERDUCK_TOKEN is required for MotherDuck SQL acceptance tests")
 	}
 
 	runScript(t, "scripts/test-live-database-drop-with-objects.sh")
@@ -37,7 +39,7 @@ func TestSQLAcceptanceDatabaseLifecycle(t *testing.T) {
 func TestRESTAcceptanceAdminLifecycle(t *testing.T) {
 	requireAcceptance(t)
 	if os.Getenv("MOTHERDUCK_ADMIN_TOKEN") == "" {
-		t.Skip("set MOTHERDUCK_ADMIN_TOKEN to run MotherDuck REST acceptance tests")
+		t.Fatal("MOTHERDUCK_ADMIN_TOKEN is required for MotherDuck REST acceptance tests")
 	}
 
 	runScript(t, "scripts/test-live-rest-token-matrix.sh")
@@ -51,7 +53,7 @@ var allowedAcceptanceScripts = map[string]struct{}{
 func TestPluginTestingDatabaseLifecycle(t *testing.T) {
 	requireAcceptance(t)
 	if os.Getenv("MOTHERDUCK_TOKEN") == "" {
-		t.Skip("set MOTHERDUCK_TOKEN to run MotherDuck SQL acceptance tests")
+		t.Fatal("MOTHERDUCK_TOKEN is required for MotherDuck SQL acceptance tests")
 	}
 
 	databaseName := fmt.Sprintf("tf_acc_database_%d", time.Now().UTC().UnixNano())
@@ -88,7 +90,7 @@ resource "motherduck_database" "test" {
 func TestPluginTestingSQLObjectLifecycle(t *testing.T) {
 	requireAcceptance(t)
 	if os.Getenv("MOTHERDUCK_TOKEN") == "" {
-		t.Skip("set MOTHERDUCK_TOKEN to run MotherDuck SQL acceptance tests")
+		t.Fatal("MOTHERDUCK_TOKEN is required for MotherDuck SQL acceptance tests")
 	}
 
 	databaseName := fmt.Sprintf("tf_acc_sql_%d", time.Now().UTC().UnixNano())
@@ -179,7 +181,7 @@ resource "motherduck_view" "test" {
 func requireAcceptance(t *testing.T) {
 	t.Helper()
 	if os.Getenv("TF_ACC") == "" {
-		t.Skip("set TF_ACC=1 to run acceptance tests")
+		t.Fatal("TF_ACC=1 is required for acceptance tests")
 	}
 }
 

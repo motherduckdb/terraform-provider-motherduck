@@ -60,9 +60,39 @@ jobs:
       - name: Run release preflight checks
         run: make pre-push-check release-check
 
+  live-contracts:
+    name: Live release contracts
+    needs: preflight
+    runs-on: ubuntu-latest
+    environment: motherduck-live
+    env:
+      MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+      MOTHERDUCK_ADMIN_TOKEN: ${{ secrets.MOTHERDUCK_ADMIN_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.15.9
+          terraform_wrapper: false
+
+      - name: Run required SQL and REST contracts
+        run: make test-live-required
+
   build:
     name: Build ${{ matrix.goos }}_${{ matrix.goarch }}
-    needs: preflight
+    needs:
+      - preflight
+      - live-contracts
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -132,6 +162,7 @@ jobs:
     name: Publish GitHub release
     needs:
       - preflight
+      - live-contracts
       - build
     runs-on: ubuntu-latest
     permissions:
