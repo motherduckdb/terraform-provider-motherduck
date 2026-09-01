@@ -7,11 +7,6 @@ if [[ -z "${MOTHERDUCK_TOKEN:-}" ]]; then
   echo "MOTHERDUCK_TOKEN is required for the live contract gate." >&2
   exit 1
 fi
-if [[ -z "${MOTHERDUCK_ADMIN_TOKEN:-}" ]]; then
-  echo "MOTHERDUCK_ADMIN_TOKEN is required for the live contract gate." >&2
-  exit 1
-fi
-
 audit_on_exit() {
   local exit_status=$?
   if ! "${ROOT_DIR}/scripts/audit-live-test-cleanup.sh"; then

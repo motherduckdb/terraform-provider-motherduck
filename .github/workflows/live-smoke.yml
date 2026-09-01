@@ -42,7 +42,6 @@ jobs:
     environment: motherduck-live
     env:
       MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
-      MOTHERDUCK_ADMIN_TOKEN: ${{ secrets.MOTHERDUCK_ADMIN_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,7 +59,7 @@ jobs:
           terraform_version: 1.15.9
           terraform_wrapper: false
 
-      - name: Run required SQL and REST contracts
+      - name: Run required SQL contracts
         run: make test-live-required
 
   prepare-matrix:
@@ -131,7 +130,6 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
     env:
       MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
-      MOTHERDUCK_ADMIN_TOKEN: ${{ secrets.MOTHERDUCK_ADMIN_TOKEN }}
       TF_VERSIONS: ${{ matrix.cli == 'terraform' && matrix.version || '' }}
       TOFU_VERSIONS: ${{ matrix.cli == 'opentofu' && matrix.version || '' }}
       TF_VERSION_SQL_LIFECYCLE: ${{ matrix.sql_lifecycle && '1' || '0' }}
@@ -154,11 +152,6 @@ jobs:
             echo "MOTHERDUCK_TOKEN is required for live smoke." >&2
             exit 1
           fi
-          if [[ -z "${MOTHERDUCK_ADMIN_TOKEN}" ]]; then
-            echo "MOTHERDUCK_ADMIN_TOKEN is required for live smoke." >&2
-            exit 1
-          fi
-
       - name: Run Terraform and OpenTofu live contracts
         run: make test-terraform-versions
 

@@ -41,17 +41,15 @@ make docs
 Live checks use credentials from environment variables:
 
 - `MOTHERDUCK_TOKEN`: SQL and DuckDB-backed resources and data sources.
-- `MOTHERDUCK_ADMIN_TOKEN`: REST-backed administration resources and data sources.
+- `MOTHERDUCK_ADMIN_TOKEN`: optional organization-admin coverage for REST-backed administration resources and data sources. Hosted gates do not have this credential.
 
-Run the required SQL and REST lifecycle gate:
+Run the required SQL lifecycle gate:
 
 ```bash
-MOTHERDUCK_TOKEN=... \
-MOTHERDUCK_ADMIN_TOKEN=... \
-make test-live-required
+MOTHERDUCK_TOKEN=... make test-live-required
 ```
 
-`test-live-required`, `test-integration`, and `test-acceptance` require both variables and fail when either is missing. They run build-tagged SQL integration and Terraform acceptance tests, then audit cleanup. The admin token must belong to a MotherDuck organization admin.
+`test-live-required`, `test-integration`, and `test-acceptance` require `MOTHERDUCK_TOKEN` and fail when it is missing. They run build-tagged SQL integration and Terraform acceptance tests, then audit cleanup. REST administration behavior is required in the hermetic protocol suite; admin-only live scripts remain optional because the hosted environment has no organization-admin token.
 
 Run the broad stable SQL smoke before release candidates or larger SQL lifecycle changes:
 

@@ -74,17 +74,15 @@ make test-missing-credentials
 make workflow-check
 ```
 
-The required live gate uses both credentials and fails rather than skipping when either is missing:
+The required live gate uses the SQL credential and fails rather than skipping when it is missing:
 
 ```bash
-MOTHERDUCK_TOKEN=... \
-MOTHERDUCK_ADMIN_TOKEN=... \
-make test-live-required
+MOTHERDUCK_TOKEN=... make test-live-required
 ```
 
 `make test-unit` uses the race detector, randomized ordering, and coverage summaries. `make test-contract` runs real Terraform protocol lifecycles against strict in-memory SQL and REST clients. Coverage is diagnostic; contracts gate observable state and backend side effects. Credentialed Go tests use the `acceptance` build tag and are only run by explicit live targets.
 
-The admin token must belong to a MotherDuck organization admin. `make test-terraform-versions` still supports SQL-only local exploration, but hosted exact-main and release gates require both credentials.
+The hosted environment does not have an organization-admin token. REST administration behavior is covered by hermetic protocol contracts; admin-only live scripts can still be run explicitly in an environment that supplies `MOTHERDUCK_ADMIN_TOKEN`. `make test-terraform-versions` and the hosted exact-main and release gates run SQL-only live coverage.
 
 Use focused live smoke tests for changed surfaces instead of running every live fixture on every edit. The broad stable SQL gate is:
 
@@ -106,7 +104,7 @@ CI has three workflows:
 
 - `.github/workflows/ci.yml`: pull-request and `main` checks. Static checks, hermetic behavior contracts, release packaging, and the offline Terraform compatibility matrix run as separate jobs.
 - `.github/workflows/live-smoke.yml`: trusted exact-main, scheduled, and manual live checks using the protected `motherduck-live` environment. Missing credentials fail.
-- `.github/workflows/release.yml`: tag-driven release workflow that requires live SQL and REST contracts before building provider packages.
+- `.github/workflows/release.yml`: tag-driven release workflow that requires the live SQL contract before building provider packages.
 
 Actions are pinned to immutable SHAs with version comments. When updating an action, verify the latest upstream tag, replace the SHA, and run:
 
