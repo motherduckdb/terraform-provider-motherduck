@@ -4,7 +4,10 @@ package ephemeral
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"sync"
 	"testing"
 
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
@@ -19,7 +22,13 @@ import (
 
 func TestDiveEmbedSessionEphemeralContract(t *testing.T) {
 	ctx := context.Background()
-	client := &embedSessionREST{session: "md_embed_contract_session"}
+	backend := &embedSessionREST{}
+	server := httptest.NewServer(http.HandlerFunc(backend.serveHTTP))
+	t.Cleanup(server.Close)
+	client, err := mdrest.New(server.URL, "contract-admin-token")
+	if err != nil {
+		t.Fatal(err)
+	}
 	res := NewDiveEmbedSessionEphemeralResource().(*diveEmbedSessionEphemeralResource)
 	var configureResp tfephemeral.ConfigureResponse
 	res.Configure(ctx, tfephemeral.ConfigureRequest{ProviderData: &providerctx.Context{REST: client}}, &configureResp)
@@ -45,11 +54,12 @@ func TestDiveEmbedSessionEphemeralContract(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("open diagnostics: %v", resp.Diagnostics)
 	}
-	if client.diveID != "00000000-0000-0000-0000-000000000123" {
-		t.Fatalf("dive id = %q", client.diveID)
+	diveID, request := backend.requestSnapshot()
+	if diveID != "00000000-0000-0000-0000-000000000123" {
+		t.Fatalf("dive id = %q", diveID)
 	}
-	if client.request.Username != "contract_reader" || client.request.SessionHint != "stable-reader" {
-		t.Fatalf("embed request = %#v", client.request)
+	if request.Username != "contract_reader" || request.SessionHint != "stable-reader" {
+		t.Fatalf("embed request = %#v", request)
 	}
 	var result diveembed.Model
 	if diags := resp.Result.Get(ctx, &result); diags.HasError() {
@@ -59,7 +69,7 @@ func TestDiveEmbedSessionEphemeralContract(t *testing.T) {
 		t.Fatalf("session = %q, want contract session", got)
 	}
 
-	client.err = errors.New("embed backend unavailable")
+	backend.setFailure(true)
 	errorResp := tfephemeral.OpenResponse{
 		Result: tfsdk.EphemeralResultData{Raw: config.Raw, Schema: schemaResp.Schema},
 	}
@@ -88,44 +98,48 @@ func embedSessionConfig(schema ephschema.Schema) tfsdk.Config {
 }
 
 type embedSessionREST struct {
-	session string
-	err     error
+	mu      sync.Mutex
+	fail    bool
 	diveID  string
 	request mdrest.EmbedSessionRequest
 }
 
-func (*embedSessionREST) Available() bool { return true }
-
-func (c *embedSessionREST) CreateDiveEmbedSession(_ context.Context, diveID string, request mdrest.EmbedSessionRequest) (*mdrest.EmbedSessionResponse, error) {
-	c.diveID = diveID
-	c.request = request
-	if c.err != nil {
-		return nil, c.err
+func (b *embedSessionREST) serveHTTP(w http.ResponseWriter, req *http.Request) {
+	const path = "/v1/dives/00000000-0000-0000-0000-000000000123/embed-session"
+	if req.Method != http.MethodPost || req.URL.Path != path {
+		http.Error(w, "unexpected embed session request", http.StatusInternalServerError)
+		return
 	}
-	return &mdrest.EmbedSessionResponse{Session: c.session}, nil
+	if req.Header.Get("Authorization") != "Bearer contract-admin-token" {
+		http.Error(w, "unexpected authorization", http.StatusUnauthorized)
+		return
+	}
+	var request mdrest.EmbedSessionRequest
+	if err := json.NewDecoder(req.Body).Decode(&request); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	b.mu.Lock()
+	b.diveID = "00000000-0000-0000-0000-000000000123"
+	b.request = request
+	fail := b.fail
+	b.mu.Unlock()
+	if fail {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]string{"code": "UNAVAILABLE", "message": "embed backend unavailable"})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(mdrest.EmbedSessionResponse{Session: "md_embed_contract_session"})
 }
 
-func (*embedSessionREST) ActiveAccounts(context.Context) (*mdrest.ActiveAccountsResponse, error) {
-	return nil, errors.New("unexpected ActiveAccounts call")
+func (b *embedSessionREST) requestSnapshot() (string, mdrest.EmbedSessionRequest) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.diveID, b.request
 }
-func (*embedSessionREST) CreateServiceAccount(context.Context, string) (*mdrest.ServiceAccount, error) {
-	return nil, errors.New("unexpected CreateServiceAccount call")
-}
-func (*embedSessionREST) CreateToken(context.Context, string, mdrest.CreateTokenRequest) (*mdrest.Token, error) {
-	return nil, errors.New("unexpected CreateToken call")
-}
-func (*embedSessionREST) DeleteToken(context.Context, string, string) error {
-	return errors.New("unexpected DeleteToken call")
-}
-func (*embedSessionREST) DeleteUser(context.Context, string) error {
-	return errors.New("unexpected DeleteUser call")
-}
-func (*embedSessionREST) GetDucklingConfig(context.Context, string) (*mdrest.DucklingConfig, error) {
-	return nil, errors.New("unexpected GetDucklingConfig call")
-}
-func (*embedSessionREST) ListTokens(context.Context, string) ([]mdrest.Token, error) {
-	return nil, errors.New("unexpected ListTokens call")
-}
-func (*embedSessionREST) SetDucklingConfig(context.Context, string, mdrest.DucklingConfig) (*mdrest.DucklingConfig, error) {
-	return nil, errors.New("unexpected SetDucklingConfig call")
+
+func (b *embedSessionREST) setFailure(fail bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.fail = fail
 }

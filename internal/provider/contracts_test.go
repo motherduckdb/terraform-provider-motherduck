@@ -8,12 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
@@ -25,24 +26,26 @@ import (
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 )
 
-const contractProviderConfig = `
+func contractProviderConfig(baseURL string) string {
+	return fmt.Sprintf(`
 provider "motherduck" {
   token       = "contract-sql-token"
   admin_token = "contract-admin-token"
+  api_base_url = %q
 }
-`
+`, baseURL)
+}
 
 func TestContractDatabaseLifecycle(t *testing.T) {
 	sqlClient := newContractSQL()
-	restClient := newContractREST()
-	config := contractProviderConfig + `
+	config := contractProviderConfig("http://127.0.0.1") + `
 resource "motherduck_database" "test" {
   name = "contract_database"
 }
 `
 
 	resource.UnitTest(t, resource.TestCase{
-		ProtoV6ProviderFactories: contractProviderFactories(sqlClient, restClient),
+		ProtoV6ProviderFactories: contractProviderFactories(sqlClient),
 		CheckDestroy: func(*terraform.State) error {
 			if sqlClient.databaseExists {
 				return errors.New("contract database still exists after destroy")
@@ -89,8 +92,7 @@ resource "motherduck_database" "test" {
 
 func TestContractTableCanonicalTypesAndDriftReplacement(t *testing.T) {
 	sqlClient := newContractSQL()
-	restClient := newContractREST()
-	config := contractProviderConfig + `
+	config := contractProviderConfig("http://127.0.0.1") + `
 resource "motherduck_table" "test" {
   database = "contract_database"
   schema   = "app"
@@ -103,7 +105,7 @@ resource "motherduck_table" "test" {
 `
 
 	resource.UnitTest(t, resource.TestCase{
-		ProtoV6ProviderFactories: contractProviderFactories(sqlClient, restClient),
+		ProtoV6ProviderFactories: contractProviderFactories(sqlClient),
 		CheckDestroy: func(*terraform.State) error {
 			if sqlClient.tableExists {
 				return errors.New("contract table still exists after destroy")
@@ -144,8 +146,8 @@ resource "motherduck_table" "test" {
 
 func TestContractAccessTokenPreservesSecretAndRecreatesAfterDeletion(t *testing.T) {
 	sqlClient := newContractSQL()
-	restClient := newContractREST()
-	config := contractProviderConfig + `
+	restClient := newContractREST(t)
+	config := contractProviderConfig(restClient.URL()) + `
 resource "motherduck_access_token" "test" {
   username   = "contract_user"
   name       = "contract token"
@@ -154,7 +156,7 @@ resource "motherduck_access_token" "test" {
 `
 
 	resource.UnitTest(t, resource.TestCase{
-		ProtoV6ProviderFactories: contractProviderFactories(sqlClient, restClient),
+		ProtoV6ProviderFactories: contractProviderFactories(sqlClient),
 		CheckDestroy: func(*terraform.State) error {
 			restClient.mu.Lock()
 			defer restClient.mu.Unlock()
@@ -220,15 +222,14 @@ func TestContractOwnedShareTypedNullState(t *testing.T) {
 		nil,
 		"2026-09-01T00:00:00Z",
 	}
-	restClient := newContractREST()
-	config := contractProviderConfig + `
+	config := contractProviderConfig("http://127.0.0.1") + `
 data "motherduck_owned_share" "test" {
   name = "contract_share"
 }
 `
 
 	resource.UnitTest(t, resource.TestCase{
-		ProtoV6ProviderFactories: contractProviderFactories(sqlClient, restClient),
+		ProtoV6ProviderFactories: contractProviderFactories(sqlClient),
 		Steps: []resource.TestStep{{
 			Config: config,
 			Check: resource.ComposeAggregateTestCheckFunc(
@@ -245,7 +246,7 @@ data "motherduck_owned_share" "test" {
 	failingSQL := newContractSQL()
 	failingSQL.ownedShareErr = errors.New("owned share backend unavailable")
 	resource.UnitTest(t, resource.TestCase{
-		ProtoV6ProviderFactories: contractProviderFactories(failingSQL, newContractREST()),
+		ProtoV6ProviderFactories: contractProviderFactories(failingSQL),
 		Steps: []resource.TestStep{{
 			Config:      config,
 			ExpectError: regexp.MustCompile("owned share backend unavailable"),
@@ -253,15 +254,12 @@ data "motherduck_owned_share" "test" {
 	})
 }
 
-func contractProviderFactories(sqlClient providerctx.SQLClient, restClient providerctx.RESTClient) map[string]func() (tfprotov6.ProviderServer, error) {
+func contractProviderFactories(sqlClient providerctx.SQLClient) map[string]func() (tfprotov6.ProviderServer, error) {
 	newSQL := func(context.Context, mdsql.Config) (providerctx.SQLClient, error) {
 		return sqlClient, nil
 	}
-	newREST := func(string, string, string, time.Duration) (providerctx.RESTClient, error) {
-		return restClient, nil
-	}
 	return map[string]func() (tfprotov6.ProviderServer, error){
-		"motherduck": providerserver.NewProtocol6WithError(newWithClients("contract", newSQL, newREST)()),
+		"motherduck": providerserver.NewProtocol6WithError(&motherduckProvider{version: "contract", newSQL: newSQL}),
 	}
 }
 
@@ -455,71 +453,64 @@ type contractREST struct {
 	mu          sync.Mutex
 	token       *mdrest.Token
 	createCount int
+	server      *httptest.Server
 }
 
-func newContractREST() *contractREST    { return &contractREST{} }
-func (c *contractREST) Available() bool { return true }
-
-func (c *contractREST) CreateToken(_ context.Context, username string, req mdrest.CreateTokenRequest) (*mdrest.Token, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if username != "contract_user" || req.Name != "contract token" || req.TokenType != "read_write" {
-		return nil, fmt.Errorf("unexpected token create: username=%q request=%#v", username, req)
-	}
-	c.createCount++
-	token := &mdrest.Token{
-		ID:        fmt.Sprintf("token-%d", c.createCount),
-		Name:      req.Name,
-		Token:     fmt.Sprintf("md_contract_secret_%d", c.createCount),
-		TokenType: req.TokenType,
-		CreatedTS: "2026-09-01T00:00:00Z",
-	}
-	c.token = token
-	copy := *token
-	return &copy, nil
+func newContractREST(t *testing.T) *contractREST {
+	t.Helper()
+	client := &contractREST{}
+	client.server = httptest.NewServer(http.HandlerFunc(client.serveHTTP))
+	t.Cleanup(client.server.Close)
+	return client
 }
 
-func (c *contractREST) ListTokens(_ context.Context, username string) ([]mdrest.Token, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if username != "contract_user" {
-		return nil, fmt.Errorf("unexpected token list username %q", username)
-	}
-	if c.token == nil {
-		return nil, nil
-	}
-	copy := *c.token
-	copy.Token = ""
-	return []mdrest.Token{copy}, nil
-}
+func (c *contractREST) URL() string { return c.server.URL }
 
-func (c *contractREST) DeleteToken(_ context.Context, username, tokenID string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if username != "contract_user" {
-		return fmt.Errorf("unexpected token delete username %q", username)
+func (c *contractREST) serveHTTP(w http.ResponseWriter, req *http.Request) {
+	if got := req.Header.Get("Authorization"); got != "Bearer contract-admin-token" {
+		http.Error(w, "unexpected authorization", http.StatusUnauthorized)
+		return
 	}
-	if c.token != nil && c.token.ID == tokenID {
+
+	switch req.Method + " " + req.URL.Path {
+	case "POST /v1/users/contract_user/tokens":
+		var createReq mdrest.CreateTokenRequest
+		if err := json.NewDecoder(req.Body).Decode(&createReq); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if createReq.Name != "contract token" || createReq.TokenType != "read_write" {
+			http.Error(w, fmt.Sprintf("unexpected token create request: %#v", createReq), http.StatusBadRequest)
+			return
+		}
+		c.mu.Lock()
+		c.createCount++
+		c.token = &mdrest.Token{
+			ID:        fmt.Sprintf("token-%d", c.createCount),
+			Name:      createReq.Name,
+			Token:     fmt.Sprintf("md_contract_secret_%d", c.createCount),
+			TokenType: createReq.TokenType,
+			CreatedTS: "2026-09-01T00:00:00Z",
+		}
+		response := *c.token
+		c.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(response)
+	case "GET /v1/users/contract_user/tokens":
+		c.mu.Lock()
+		response := mdrest.ListTokensResponse{}
+		if c.token != nil {
+			token := *c.token
+			token.Token = ""
+			response.Tokens = []mdrest.Token{token}
+		}
+		c.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(response)
+	case "DELETE /v1/users/contract_user/tokens/token-1", "DELETE /v1/users/contract_user/tokens/token-2":
+		c.mu.Lock()
 		c.token = nil
+		c.mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		http.Error(w, "unexpected REST call "+req.Method+" "+req.URL.Path, http.StatusInternalServerError)
 	}
-	return nil
-}
-
-func (*contractREST) ActiveAccounts(context.Context) (*mdrest.ActiveAccountsResponse, error) {
-	return nil, errors.New("unexpected ActiveAccounts call")
-}
-func (*contractREST) CreateDiveEmbedSession(context.Context, string, mdrest.EmbedSessionRequest) (*mdrest.EmbedSessionResponse, error) {
-	return nil, errors.New("unexpected CreateDiveEmbedSession call")
-}
-func (*contractREST) CreateServiceAccount(context.Context, string) (*mdrest.ServiceAccount, error) {
-	return nil, errors.New("unexpected CreateServiceAccount call")
-}
-func (*contractREST) DeleteUser(context.Context, string) error {
-	return errors.New("unexpected DeleteUser call")
-}
-func (*contractREST) GetDucklingConfig(context.Context, string) (*mdrest.DucklingConfig, error) {
-	return nil, errors.New("unexpected GetDucklingConfig call")
-}
-func (*contractREST) SetDucklingConfig(context.Context, string, mdrest.DucklingConfig) (*mdrest.DucklingConfig, error) {
-	return nil, errors.New("unexpected SetDucklingConfig call")
 }

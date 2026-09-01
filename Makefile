@@ -112,10 +112,12 @@ test-scripts:
 	./scripts/test-version-matrix-unit.sh
 
 test-integration:
-	./scripts/test-live-required.sh
+	@if [ -z "$${MOTHERDUCK_TOKEN:-}" ]; then echo "MOTHERDUCK_TOKEN is required for SQL integration tests" >&2; exit 1; fi
+	MD_TF_ACC=1 go test -tags=acceptance -count=1 ./internal/client/sql
 
 test-acceptance:
-	./scripts/test-live-required.sh
+	@if [ -z "$${MOTHERDUCK_TOKEN:-}" ]; then echo "MOTHERDUCK_TOKEN is required for Terraform acceptance tests" >&2; exit 1; fi
+	TF_ACC=1 MD_TF_ACC=1 go test -tags=acceptance -count=1 ./internal/acceptance
 
 test-live-required:
 	./scripts/test-live-required.sh

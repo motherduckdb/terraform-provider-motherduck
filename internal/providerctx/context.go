@@ -25,25 +25,11 @@ type SQLClient interface {
 	WithDatabaseUse(context.Context, string, func(func(string, ...any) error) error) error
 }
 
-// RESTClient is the provider's complete REST dependency.
-type RESTClient interface {
-	Available() bool
-	ActiveAccounts(context.Context) (*mdrest.ActiveAccountsResponse, error)
-	CreateDiveEmbedSession(context.Context, string, mdrest.EmbedSessionRequest) (*mdrest.EmbedSessionResponse, error)
-	CreateServiceAccount(context.Context, string) (*mdrest.ServiceAccount, error)
-	CreateToken(context.Context, string, mdrest.CreateTokenRequest) (*mdrest.Token, error)
-	DeleteToken(context.Context, string, string) error
-	DeleteUser(context.Context, string) error
-	GetDucklingConfig(context.Context, string) (*mdrest.DucklingConfig, error)
-	ListTokens(context.Context, string) ([]mdrest.Token, error)
-	SetDucklingConfig(context.Context, string, mdrest.DucklingConfig) (*mdrest.DucklingConfig, error)
-}
-
 type SQLClientFactory func(context.Context, mdsql.Config) (SQLClient, error)
 
 type Context struct {
 	SQL          SQLClient
-	REST         RESTClient
+	REST         *mdrest.Client
 	SQLConfig    mdsql.Config
 	NewSQLClient SQLClientFactory
 

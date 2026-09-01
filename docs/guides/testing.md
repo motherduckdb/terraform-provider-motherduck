@@ -49,7 +49,7 @@ Run the required SQL lifecycle gate:
 MOTHERDUCK_TOKEN=... make test-live-required
 ```
 
-`test-live-required`, `test-integration`, and `test-acceptance` require `MOTHERDUCK_TOKEN` and fail when it is missing. They run build-tagged SQL integration and Terraform acceptance tests, then audit cleanup. REST administration behavior is required in the hermetic protocol suite; admin-only live scripts remain optional because the hosted environment has no organization-admin token.
+All three targets require `MOTHERDUCK_TOKEN` and fail when it is missing. `test-integration` runs the Go SQL-client integration tests, `test-acceptance` runs Terraform provider lifecycles, and `test-live-required` runs both followed by a cleanup audit. REST administration behavior is required in the hermetic protocol suite; admin-only Go acceptance tests additionally require the `admin_acceptance` build tag and remain optional because the hosted environment has no organization-admin token.
 
 Run the broad stable SQL smoke before release candidates or larger SQL lifecycle changes:
 

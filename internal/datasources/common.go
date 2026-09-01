@@ -30,7 +30,7 @@ func (d *baseDataSource) Configure(ctx context.Context, req datasource.Configure
 	d.provider = providerData
 }
 
-func (d *baseDataSource) rest(diags *diag.Diagnostics) providerctx.RESTClient {
+func (d *baseDataSource) rest(diags *diag.Diagnostics) *mdrest.Client {
 	if d.provider == nil || d.provider.REST == nil || !d.provider.REST.Available() {
 		diags.AddError("MotherDuck admin token required", mdrest.ErrMissingAdminToken.Error())
 		return nil

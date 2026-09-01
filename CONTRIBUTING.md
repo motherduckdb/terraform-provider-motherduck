@@ -82,7 +82,7 @@ MOTHERDUCK_TOKEN=... make test-live-required
 
 `make test-unit` uses the race detector, randomized ordering, and coverage summaries. `make test-contract` runs real Terraform protocol lifecycles against strict in-memory SQL and REST clients. Coverage is diagnostic; contracts gate observable state and backend side effects. Credentialed Go tests use the `acceptance` build tag and are only run by explicit live targets.
 
-The hosted environment does not have an organization-admin token. REST administration behavior is covered by hermetic protocol contracts; admin-only live scripts can still be run explicitly in an environment that supplies `MOTHERDUCK_ADMIN_TOKEN`. `make test-terraform-versions` and the hosted exact-main and release gates run SQL-only live coverage.
+The hosted environment does not have an organization-admin token. REST administration behavior is covered by hermetic protocol contracts; admin-only Go acceptance tests require both the `acceptance` and `admin_acceptance` build tags, and admin-only live scripts must be run explicitly in an environment that supplies `MOTHERDUCK_ADMIN_TOKEN`. `make test-terraform-versions` and the hosted exact-main and release gates run SQL-only live coverage.
 
 Use focused live smoke tests for changed surfaces instead of running every live fixture on every edit. The broad stable SQL gate is:
 

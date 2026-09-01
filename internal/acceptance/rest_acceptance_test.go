@@ -1,4 +1,4 @@
-//go:build acceptance && admin
+//go:build acceptance && admin_acceptance
 
 package acceptance
 

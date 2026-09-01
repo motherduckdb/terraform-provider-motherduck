@@ -28,10 +28,7 @@ import (
 type motherduckProvider struct {
 	version string
 	newSQL  providerctx.SQLClientFactory
-	newREST restClientFactory
 }
-
-type restClientFactory func(baseURL, token, userAgent string, timeout time.Duration) (providerctx.RESTClient, error)
 
 type providerModel struct {
 	Token           types.String `tfsdk:"token"`
@@ -46,12 +43,8 @@ type providerModel struct {
 const maxDurationSeconds = int64((1<<63 - 1) / int64(time.Second))
 
 func New(version string) func() provider.Provider {
-	return newWithClients(version, nil, nil)
-}
-
-func newWithClients(version string, newSQL providerctx.SQLClientFactory, newREST restClientFactory) func() provider.Provider {
 	return func() provider.Provider {
-		return &motherduckProvider{version: version, newSQL: newSQL, newREST: newREST}
+		return &motherduckProvider{version: version}
 	}
 }
 
@@ -135,13 +128,7 @@ func (p *motherduckProvider) Configure(ctx context.Context, req provider.Configu
 		return
 	}
 
-	newREST := p.newREST
-	if newREST == nil {
-		newREST = func(baseURL, token, userAgent string, timeout time.Duration) (providerctx.RESTClient, error) {
-			return mdrest.New(baseURL, token, mdrest.WithUserAgent(userAgent), mdrest.WithTimeout(timeout))
-		}
-	}
-	restClient, err := newREST(apiBaseURL, adminToken, customUserAgent, time.Duration(requestTimeout)*time.Second)
+	restClient, err := mdrest.New(apiBaseURL, adminToken, mdrest.WithUserAgent(customUserAgent), mdrest.WithTimeout(time.Duration(requestTimeout)*time.Second))
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid MotherDuck API base URL", err.Error())
 		return

@@ -45,7 +45,7 @@ func (r *baseResource) Configure(ctx context.Context, req resource.ConfigureRequ
 	r.provider = providerData
 }
 
-func (r *baseResource) rest(resp *diag.Diagnostics) providerctx.RESTClient {
+func (r *baseResource) rest(resp *diag.Diagnostics) *mdrest.Client {
 	if r.provider == nil || r.provider.REST == nil || !r.provider.REST.Available() {
 		resp.AddError("MotherDuck admin token required", mdrest.ErrMissingAdminToken.Error())
 		return nil
