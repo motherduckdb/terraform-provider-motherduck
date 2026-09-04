@@ -27,6 +27,7 @@ import (
 
 type motherduckProvider struct {
 	version string
+	newSQL  providerctx.SQLClientFactory
 }
 
 type providerModel struct {
@@ -134,7 +135,8 @@ func (p *motherduckProvider) Configure(ctx context.Context, req provider.Configu
 	}
 
 	providerData := &providerctx.Context{
-		REST: restClient,
+		REST:         restClient,
+		NewSQLClient: p.newSQL,
 		SQLConfig: mdsql.Config{
 			Token:           token,
 			Database:        database,

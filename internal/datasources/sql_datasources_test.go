@@ -375,7 +375,7 @@ func TestRowsSpecSchemasExposeOnlyRelevantAttributes(t *testing.T) {
 		"shared_with_me":     {"limit", "name", "offset", "rows", "rows_json"},
 		"attached_databases": {"rows_json"},
 		"dives":              {"include_org_shares", "limit", "offset", "rows_json"},
-		"flight_logs":        {"flight_id", "run_number", "rows_json"},
+		"flight_logs":        {"flight_id", "rows", "rows_json", "run_number"},
 		"flights":            {"limit", "offset", "owner_only", "rows", "rows_json"},
 		"roles":              {"rows", "rows_json"},
 		"role_members":       {"role_name", "rows", "rows_json"},
@@ -481,6 +481,7 @@ func TestStableRowsDataSourcesExposeTypedRows(t *testing.T) {
 		"shared_with_me":     true,
 		"secrets":            true,
 		"flights":            true,
+		"flight_logs":        true,
 		"roles":              true,
 		"role_members":       true,
 		"roles_for_user":     true,
@@ -522,6 +523,35 @@ func TestTypedRowsValueMapsStableColumns(t *testing.T) {
 	}
 	if rows.IsNull() || rows.IsUnknown() {
 		t.Fatal("typed rows should be known")
+	}
+}
+
+func TestFlightLogRowsExposeLineOrientedColumns(t *testing.T) {
+	spec := findSpec(t, "flight_logs")
+	want := map[string]bool{
+		"line_number": false,
+		"reported_at": false,
+		"line":        true,
+	}
+	if len(spec.typedRows) != len(want) {
+		t.Fatalf("typed Flight log columns = %d, want %d", len(spec.typedRows), len(want))
+	}
+	for _, attr := range spec.typedRows {
+		sensitive, ok := want[attr.name]
+		if !ok {
+			t.Fatalf("unexpected typed Flight log column %q", attr.name)
+		}
+		if attr.sensitive != sensitive {
+			t.Fatalf("Flight log column %q sensitive = %t, want %t", attr.name, attr.sensitive, sensitive)
+		}
+	}
+
+	rows, diags := spec.typedRowsValue(`[{"line_number":12,"reported_at":"2026-08-28T12:00:00Z","line":"pipeline complete"}]`)
+	if diags.HasError() {
+		t.Fatalf("typedRowsValue diagnostics: %v", diags)
+	}
+	if rows.IsNull() || rows.IsUnknown() || len(rows.Elements()) != 1 {
+		t.Fatalf("typed Flight log rows = %#v, want one known row", rows)
 	}
 }
 

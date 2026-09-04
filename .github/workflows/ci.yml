@@ -32,17 +32,40 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: 1.15.9
+          terraform_version: 1.16.1
           terraform_wrapper: false
 
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck
 
-      - name: Run local pre-push gate
-        run: make pre-push-check
+      - name: Run static gate
+        run: make static-check
 
       - name: Verify release packaging on the runner platform
         run: make release-check
+
+  behavior-contracts:
+    name: Behavior contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.1
+          terraform_wrapper: false
+
+      - name: Run hermetic behavior contracts
+        run: make test-unit test-contract
 
   terraform-compatibility:
     name: Terraform ${{ matrix.terraform_version }}
@@ -56,6 +79,7 @@ jobs:
           - 1.12.2
           - 1.15.8
           - 1.15.9
+          - 1.16.1
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

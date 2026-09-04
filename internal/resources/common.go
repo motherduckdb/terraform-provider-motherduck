@@ -54,7 +54,7 @@ func (r *baseResource) rest(resp *diag.Diagnostics) *mdrest.Client {
 	return r.provider.REST
 }
 
-func (r *baseResource) sql(ctx context.Context, resp *diag.Diagnostics) *mdsql.Client {
+func (r *baseResource) sql(ctx context.Context, resp *diag.Diagnostics) providerctx.SQLClient {
 	if r.provider == nil {
 		resp.AddError("MotherDuck token required", mdsql.ErrMissingToken.Error())
 		return nil
