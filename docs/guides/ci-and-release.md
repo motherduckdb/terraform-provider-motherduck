@@ -23,6 +23,7 @@ The Terraform compatibility job repeats the offline Terraform checks against sup
 - `1.12.2`
 - `1.15.8`
 - `1.15.9`
+- `1.16.1`
 
 These checks validate examples, invalid-configuration diagnostics, and missing-credential diagnostics without making live MotherDuck calls.
 
@@ -36,9 +37,9 @@ The protected `motherduck-live` GitHub environment supplies:
 
 - `MOTHERDUCK_TOKEN`: read-write MotherDuck token for SQL-backed resources and data sources.
 
-Missing `MOTHERDUCK_TOKEN` fails the job instead of producing a successful skip. The exact-`main` job uses Terraform `1.15.9` and runs `make test-live-required` for SQL, import, no-op-plan, destroy, and cleanup behavior. REST administration behavior is gated hermetically in pull requests; hosted live jobs do not have an organization-admin token.
+Missing `MOTHERDUCK_TOKEN` fails the job instead of producing a successful skip. The exact-`main` job uses Terraform `1.16.1` and runs `make test-live-required` for SQL, import, no-op-plan, destroy, and cleanup behavior. REST administration behavior is gated hermetically in pull requests; hosted live jobs do not have an organization-admin token.
 
-The weekly matrix runs read-only checks on every supported Terraform version and OpenTofu `1.12.6`. SQL lifecycle checks run on Terraform `1.5.7`, Terraform `1.15.9`, and OpenTofu `1.12.6`; the blueprint lifecycle runs on Terraform `1.15.9`. Manual inputs can request lifecycle coverage for every selected version.
+The weekly matrix runs read-only checks on every supported Terraform version and OpenTofu `1.12.6`. SQL lifecycle checks run on Terraform `1.5.7`, Terraform `1.16.1`, and OpenTofu `1.12.6`; the blueprint lifecycle runs on Terraform `1.16.1`. Manual inputs can request lifecycle coverage for every selected version.
 
 ## Releases
 

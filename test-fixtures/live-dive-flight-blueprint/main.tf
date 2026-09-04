@@ -74,6 +74,13 @@ resource "motherduck_flight_run" "pageviews" {
   cancel_on_destroy     = true
 }
 
+data "motherduck_flight_logs" "pageviews" {
+  flight_id  = motherduck_flight.pageviews.id
+  run_number = motherduck_flight_run.pageviews.run_number
+
+  depends_on = [motherduck_flight_run.pageviews]
+}
+
 resource "motherduck_dive" "pageviews" {
   title       = "Wikipedia Pageviews ${local.suffix}"
   api_version = 1
@@ -109,6 +116,16 @@ output "share_url" {
 
 output "flight_run_status" {
   value = motherduck_flight_run.pageviews.status
+}
+
+output "flight_log_line_count" {
+  value     = length(data.motherduck_flight_logs.pageviews.rows)
+  sensitive = true
+}
+
+output "flight_logs_contain_marker" {
+  value     = anytrue([for row in data.motherduck_flight_logs.pageviews.rows : strcontains(row.line, "pageviews blueprint flight")])
+  sensitive = true
 }
 
 output "dive_id" {
