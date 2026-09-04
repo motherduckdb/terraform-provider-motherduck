@@ -98,6 +98,22 @@ if [[ "${normalized_run_status}" != "succeeded" ]]; then
   exit 1
 fi
 
+flight_logs_ready=false
+for _ in {1..12}; do
+  log_line_count="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw flight_log_line_count)"
+  logs_contain_marker="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw flight_logs_contain_marker)"
+  if [[ "${log_line_count}" =~ ^[1-9][0-9]*$ && "${logs_contain_marker}" == "true" ]]; then
+    flight_logs_ready=true
+    break
+  fi
+  sleep 5
+  TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -refresh-only -auto-approve -input=false >/dev/null
+done
+if [[ "${flight_logs_ready}" != "true" ]]; then
+  echo "Expected line-oriented Flight logs to contain the blueprint marker after the run completed" >&2
+  exit 1
+fi
+
 set +e
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
 plan_exit=$?

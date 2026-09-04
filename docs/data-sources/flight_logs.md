@@ -3,12 +3,12 @@
 page_title: "motherduck_flight_logs Data Source - motherduck"
 subcategory: ""
 description: |-
-  Reads logs for one MotherDuck Flight run.
+  Reads line-oriented logs for one MotherDuck Flight run, in the order returned by MotherDuck.
 ---
 
 # motherduck_flight_logs (Data Source)
 
-Reads logs for one MotherDuck Flight run.
+Reads line-oriented logs for one MotherDuck Flight run, in the order returned by MotherDuck.
 
 ## Example Usage
 
@@ -29,4 +29,14 @@ data "motherduck_flight_logs" "daily_load" {
 
 ### Read-Only
 
+- `rows` (Attributes List) Typed catalog rows for stable MotherDuck metadata. `rows_json` remains available for raw server columns. (see [below for nested schema](#nestedatt--rows))
 - `rows_json` (String, Sensitive) Raw MotherDuck catalog rows encoded as JSON. Sensitive because catalog rows can include share URLs and account metadata.
+
+<a id="nestedatt--rows"></a>
+### Nested Schema for `rows`
+
+Read-Only:
+
+- `line` (String, Sensitive) Flight stdout or stderr line.
+- `line_number` (String) Absolute zero-based position of the line in the Flight run log.
+- `reported_at` (String) Timestamp reported for the Flight log line.

@@ -90,10 +90,10 @@ Use focused live smoke tests for changed surfaces instead of running every live 
 MOTHERDUCK_TOKEN=... make test-live-sql-stable
 ```
 
-The Terraform compatibility matrix defaults to Terraform `1.5.7`, `1.8.5`, `1.12.2`, `1.15.8`, and `1.15.9`. Override locally with `TF_VERSIONS`, for example:
+The Terraform compatibility matrix defaults to Terraform `1.5.7`, `1.8.5`, `1.12.2`, `1.15.8`, `1.15.9`, and `1.16.1`. Override locally with `TF_VERSIONS`, for example:
 
 ```bash
-TF_VERSIONS="1.8.5 1.15.9" MOTHERDUCK_TOKEN=... make test-terraform-versions
+TF_VERSIONS="1.8.5 1.16.1" MOTHERDUCK_TOKEN=... make test-terraform-versions
 ```
 
 Live smoke logs and temporary provider mirrors are written under ignored `test-results/` and `tools/`. Treat live logs as account metadata and do not paste raw output into public issues.

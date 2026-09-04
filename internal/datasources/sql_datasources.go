@@ -382,7 +382,11 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_LIST_FLIGHT_RUNS" + sqlbuild.NamedArgs(args), nil
 		}},
-		{name: "flight_logs", description: "Reads logs for one MotherDuck Flight run.", requiredFunction: "md_get_flight_logs", attrs: []string{"flight_id", "run_number"}, requiredAttrs: []string{"flight_id", "run_number"}, build: func(m rowsModel) (string, error) {
+		{name: "flight_logs", description: "Reads line-oriented logs for one MotherDuck Flight run, in the order returned by MotherDuck.", requiredFunction: "md_get_flight_logs", attrs: []string{"flight_id", "run_number"}, requiredAttrs: []string{"flight_id", "run_number"}, typedRows: []typedRowAttribute{
+			{name: "line_number", description: "Absolute zero-based position of the line in the Flight run log."},
+			{name: "reported_at", description: "Timestamp reported for the Flight log line."},
+			{name: "line", description: "Flight stdout or stderr line.", sensitive: true},
+		}, build: func(m rowsModel) (string, error) {
 			if m.FlightID.IsNull() || m.RunNumber.IsNull() {
 				return "", fmt.Errorf("flight_id and run_number are required")
 			}
