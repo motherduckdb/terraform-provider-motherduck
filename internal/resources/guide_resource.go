@@ -3,7 +3,6 @@ package resources
 import (
 	"context"
 	stdsql "database/sql"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -494,12 +493,8 @@ func (r *guideResource) readGuideRoleNames(
 		diags.AddError("Unable to read MotherDuck Guide role audience", err.Error())
 		return types.SetNull(types.StringType)
 	}
-	if !raw.Valid || raw.String == "" || raw.String == "null" {
-		return types.SetValueMust(types.StringType, nil)
-	}
 	var names []string
-	if err := json.Unmarshal([]byte(raw.String), &names); err != nil {
-		diags.AddError("Unable to parse MotherDuck Guide role audience", err.Error())
+	if !decodeNullableJSON(raw, &names, "Unable to parse MotherDuck Guide role audience", diags) {
 		return types.SetNull(types.StringType)
 	}
 	value, valueDiags := types.SetValueFrom(ctx, types.StringType, names)
@@ -773,11 +768,8 @@ type guideReferenceJSON struct {
 
 func guideReferencesFromJSON(ctx context.Context, current types.List, raw stdsql.NullString, diags *diag.Diagnostics) types.List {
 	var references []guideReferenceJSON
-	if raw.Valid && raw.String != "" && raw.String != "null" {
-		if err := json.Unmarshal([]byte(raw.String), &references); err != nil {
-			diags.AddError("Unable to parse MotherDuck Guide references", err.Error())
-			return current
-		}
+	if !decodeNullableJSON(raw, &references, "Unable to parse MotherDuck Guide references", diags) {
+		return current
 	}
 	if len(references) == 0 && current.IsNull() {
 		return types.ListNull(types.ObjectType{AttrTypes: guideReferenceAttrTypes()})

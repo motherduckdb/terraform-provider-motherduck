@@ -3,7 +3,6 @@ package resources
 import (
 	"context"
 	stdsql "database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -1163,11 +1162,8 @@ func optionalConfigOwnedLowerStringFromLive(current types.String, live stdsql.Nu
 
 func optionalStringListFromJSON(ctx context.Context, current types.List, raw stdsql.NullString, field string, diags *diag.Diagnostics) types.List {
 	values := []string{}
-	if raw.Valid && raw.String != "" && raw.String != "null" {
-		if err := json.Unmarshal([]byte(raw.String), &values); err != nil {
-			diags.AddError("Unable to parse MotherDuck Flight "+field, err.Error())
-			return current
-		}
+	if !decodeNullableJSON(raw, &values, "Unable to parse MotherDuck Flight "+field, diags) {
+		return current
 	}
 	if len(values) == 0 && current.IsNull() {
 		return types.ListNull(types.StringType)
@@ -1182,11 +1178,8 @@ func optionalStringListFromJSON(ctx context.Context, current types.List, raw std
 
 func optionalStringMapFromJSON(ctx context.Context, current types.Map, raw stdsql.NullString, field string, diags *diag.Diagnostics) types.Map {
 	values := map[string]string{}
-	if raw.Valid && raw.String != "" && raw.String != "null" {
-		if err := json.Unmarshal([]byte(raw.String), &values); err != nil {
-			diags.AddError("Unable to parse MotherDuck Flight "+field, err.Error())
-			return current
-		}
+	if !decodeNullableJSON(raw, &values, "Unable to parse MotherDuck Flight "+field, diags) {
+		return current
 	}
 	if len(values) == 0 && current.IsNull() {
 		return types.MapNull(types.StringType)
