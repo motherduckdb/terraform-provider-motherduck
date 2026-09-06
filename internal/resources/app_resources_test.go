@@ -26,6 +26,25 @@ type deadlineFlightClient struct {
 	queried bool
 }
 
+func TestFlightRunWaitPolicyDoesNotReplaceExecution(t *testing.T) {
+	var resp resource.SchemaResponse
+	NewFlightRunResource().Schema(t.Context(), resource.SchemaRequest{}, &resp)
+	if resp.Schema.DeprecationMessage == "" {
+		t.Fatal("run resource must explain its deprecation")
+	}
+	if len(resp.Schema.Attributes["wait_for_status"].(schema.StringAttribute).PlanModifiers) != 0 {
+		t.Fatal("wait status must not replace an execution")
+	}
+	for _, name := range []string{"poll_interval_seconds", "timeout_seconds"} {
+		if len(resp.Schema.Attributes[name].(schema.Int64Attribute).PlanModifiers) != 0 {
+			t.Fatalf("%s must not replace an execution", name)
+		}
+	}
+	if len(resp.Schema.Attributes["flight_id"].(schema.StringAttribute).PlanModifiers) == 0 {
+		t.Fatal("changing Flight identity must still replace the run")
+	}
+}
+
 func (c *deadlineFlightClient) Available() bool { return true }
 func (c *deadlineFlightClient) QueryRow(ctx context.Context, _ string, _ ...any) mdsql.RowScanner {
 	c.queried = true

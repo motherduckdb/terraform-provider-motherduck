@@ -1,5 +1,8 @@
 # State, imports, and lifecycle
 
+See [resource scope](resource-scope.md) for the recommended infrastructure-first
+workflow, experimental content resources, and Flight-run deprecation.
+
 Terraform stores desired infrastructure and the provider's observed metadata in
 state. Each remote object should have one resource address and one owner state.
 Managing the same object from two states creates conflicting plans.

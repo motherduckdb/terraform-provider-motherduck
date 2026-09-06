@@ -64,7 +64,7 @@ func (r *diveResource) Metadata(ctx context.Context, req resource.MetadataReques
 func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:             1,
-		MarkdownDescription: "Manages a MotherDuck Dive through public SQL table functions.",
+		MarkdownDescription: "Experimental: manages a MotherDuck Dive through public SQL table functions. Prefer application deployment tooling for Dive content; this surface is outside the provider's stable support commitment.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
@@ -733,6 +733,7 @@ func (r *flightRunResource) Schema(ctx context.Context, req resource.SchemaReque
 	resp.Schema = schema.Schema{
 		Version:             1,
 		MarkdownDescription: "Action-like resource that triggers an on-demand MotherDuck Flight run.",
+		DeprecationMessage:  "Trigger Flight runs through your deployment pipeline or the MotherDuck CLI/SQL interface. Keep Flight definitions and schedules in Terraform only when Terraform owns their lifecycle.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
@@ -770,19 +771,16 @@ func (r *flightRunResource) Schema(ctx context.Context, req resource.SchemaReque
 			"wait_for_status": schema.StringAttribute{
 				Optional:            true,
 				MarkdownDescription: "Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`; if the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`.",
-				PlanModifiers:       stringRequiresReplace(),
 				Validators:          flightRunWaitStatusValidators(),
 			},
 			"poll_interval_seconds": schema.Int64Attribute{
 				Optional:            true,
 				MarkdownDescription: "Polling interval in seconds when `wait_for_status` is set. Defaults to 10 seconds.",
-				PlanModifiers:       int64RequiresReplace(),
 				Validators:          []validator.Int64{tfvalidators.Int64Range("MotherDuck Flight run poll interval", 1, maxDurationSeconds)},
 			},
 			"timeout_seconds": schema.Int64Attribute{
 				Optional:            true,
 				MarkdownDescription: "Maximum number of seconds to wait when `wait_for_status` is set. Defaults to 600 seconds.",
-				PlanModifiers:       int64RequiresReplace(),
 				Validators:          []validator.Int64{tfvalidators.Int64Range("MotherDuck Flight run timeout", 1, maxDurationSeconds)},
 			},
 			"created_at": schema.StringAttribute{

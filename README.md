@@ -1,11 +1,23 @@
 # MotherDuck Terraform Provider
 
 Manage MotherDuck infrastructure with Terraform: SQL-backed databases, schemas,
-tables, views, shares, roles, secrets, snapshots, Guides, Dives, and Flights,
+tables, views, shares, roles, secrets, and snapshots,
 plus REST-backed service accounts, access tokens, and Duckling configuration.
 
 Provider source: `registry.terraform.io/motherduckdb/motherduck`.
 Built with Terraform Plugin Framework, protocol 6, and embedded DuckDB.
+
+## Recommended ownership
+
+Use Terraform to provision infrastructure and access controls. Use your application
+deployment pipeline to publish Flight code, Dive content, and Guides, then trigger
+executions through the CLI or SQL interface.
+
+Flight definitions and schedules remain an optional Terraform deployment path
+when Git/Terraform is their sole owner. Dives and Guides are experimental provider
+surfaces, outside the first release's stable support commitment. Flight-run
+resources are deprecated. Existing configurations remain supported for migration;
+see [resource scope and migration](docs/guides/resource-scope.md).
 
 ## Start here
 
