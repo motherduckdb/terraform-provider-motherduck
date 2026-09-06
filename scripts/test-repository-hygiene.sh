@@ -73,12 +73,21 @@ check_no_search_matches \
   "JWT-like token found outside ignored generated/private paths:" \
   'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
 
-check_no_search_matches \
-  "Unexpected legacy provider reference found outside ignored generated/private paths:" \
-  '[s]nowflake|[s]nowflakedb' \
-  ignore-case
+# Competitor comparisons and source links belong in documentation. Guard the
+# implementation and dependencies against copied provider scaffolding instead.
+set +e
+legacy_references="$(grep -RniE '[s]nowflake|[s]nowflakedb' internal main.go go.mod go.sum)"
+legacy_status=$?
+set -e
+if [[ "${legacy_status}" -eq 0 ]]; then
+  echo "Unexpected legacy provider reference in implementation or dependencies:" >&2
+  printf '%s\n' "${legacy_references}" >&2
+  exit 1
+elif [[ "${legacy_status}" -gt 1 ]]; then
+  exit "${legacy_status}"
+fi
 
-if rg -n 't[.](Skip|Skipf)[(]' internal --glob '*_test.go'; then
+if grep -RnE 't[.](Skip|Skipf)[(]' internal --include='*_test.go'; then
   echo "Go tests must use explicit build tags and hard preconditions instead of reporting skipped gates." >&2
   exit 1
 fi

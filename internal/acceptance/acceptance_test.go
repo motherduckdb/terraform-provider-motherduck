@@ -89,6 +89,30 @@ func TestPluginTestingSQLObjectLifecycle(t *testing.T) {
 	tableName := "facts"
 	viewName := "facts_v"
 	viewQuery := fmt.Sprintf("SELECT id, label FROM %s.%s.%s", databaseName, schemaName, tableName)
+	updatedViewQuery := viewQuery + " WHERE id > 1"
+	probe, err := mdsql.New(t.Context(), mdsql.Config{Token: os.Getenv("MOTHERDUCK_TOKEN")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := probe.Close(); err != nil {
+			t.Errorf("close SQL probe: %v", err)
+		}
+	})
+	checkViewRows := func(want string) resource.TestCheckFunc {
+		return func(*terraform.State) error {
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			got, err := probe.ScalarString(ctx, fmt.Sprintf("SELECT count(*)::VARCHAR FROM %s.%s.%s", databaseName, schemaName, viewName))
+			if err != nil {
+				return err
+			}
+			if got != want {
+				return fmt.Errorf("remote view row count = %s, want %s", got, want)
+			}
+			return nil
+		}
+	}
 	config := fmt.Sprintf(`
 resource "motherduck_database" "test" {
   name = %[1]q
@@ -138,6 +162,15 @@ resource "motherduck_view" "test" {
 					resource.TestCheckResourceAttr("motherduck_schema.test", "name", schemaName),
 					resource.TestCheckResourceAttr("motherduck_table.test", "name", tableName),
 					resource.TestCheckResourceAttr("motherduck_view.test", "name", viewName),
+					func(*terraform.State) error {
+						ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+						defer cancel()
+						if err := probe.AttachDatabase(ctx, databaseName); err != nil {
+							return err
+						}
+						return probe.Exec(ctx, fmt.Sprintf("INSERT INTO %s.%s.%s VALUES (1, 'first'), (2, 'second')", databaseName, schemaName, tableName))
+					},
+					checkViewRows("2"),
 				),
 			},
 			{
@@ -164,9 +197,46 @@ resource "motherduck_view" "test" {
 				ImportState:             true,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"query"},
+				// The server canonicalizes SQL; verify recovered SQL explicitly
+				// instead of silently excluding it from the import contract.
+				ImportStateCheck: checkImportedViewQuery(probe, "2"),
+			},
+			{
+				Config: strings.Replace(config, fmt.Sprintf("%q", viewQuery), fmt.Sprintf("%q", updatedViewQuery), 1),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_view.test", plancheck.ResourceActionUpdate)},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("motherduck_view.test", "query", updatedViewQuery),
+					checkViewRows("1"),
+				),
+			},
+			{
+				ResourceName: "motherduck_view.test", ImportState: true,
+				ImportStateVerify: true, ImportStateVerifyIgnore: []string{"query"},
+				ImportStateCheck: checkImportedViewQuery(probe, "1"),
 			},
 		},
 	})
+}
+
+func checkImportedViewQuery(probe *mdsql.Client, want string) resource.ImportStateCheckFunc {
+	return func(states []*terraform.InstanceState) error {
+		if len(states) != 1 || states[0].Attributes["query"] == "" {
+			return fmt.Errorf("import must recover one view with its SQL")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		got, err := probe.ScalarString(ctx, "SELECT count(*)::VARCHAR FROM ("+states[0].Attributes["query"]+") AS imported_view")
+		if err != nil {
+			return fmt.Errorf("execute imported view SQL: %w", err)
+		}
+		if got != want {
+			return fmt.Errorf("imported SQL returns %s rows, want %s", got, want)
+		}
+		return nil
+	}
 }
 
 func requireAcceptance(t *testing.T) {

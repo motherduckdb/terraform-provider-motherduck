@@ -14,7 +14,7 @@ make release-check
 make test-unit test-contract
 ```
 
-`Static checks` owns formatting, linting, vulnerability, workflow, shell, docs, examples, packaging, repository hygiene, and provider builds. `Behavior contracts` owns race-enabled unit tests and Terraform protocol lifecycles against hermetic SQL and REST clients. A global coverage percentage is not required; each contract must assert externally visible state and exact backend side effects.
+`Static checks` owns formatting, linting, vulnerability, workflow, shell, docs, examples, repository hygiene, and provider builds. Native package jobs own packaging and installation checks without repeating them in the static job. `Behavior contracts` owns race-enabled unit tests and Terraform protocol lifecycles against hermetic SQL and REST clients. A global coverage percentage is not required; each contract must assert externally visible state and exact backend side effects.
 
 The Terraform compatibility job repeats the offline Terraform checks against supported Terraform versions:
 
