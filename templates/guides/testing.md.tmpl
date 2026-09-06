@@ -2,6 +2,9 @@
 
 This guide summarizes the test layers for users and contributors. The full contributor workflow lives in [Contributing](../../CONTRIBUTING.md).
 
+See [testing patterns](testing-patterns.md) for independent SQL checks,
+update/import cycles, and the comparison with other database providers.
+
 ## Offline Checks
 
 Offline checks do not require MotherDuck credentials:
@@ -44,7 +47,7 @@ make docs
 | Protocol contracts | Database and service-account lifecycle/import/drift; table import/type/replacement; token secret preservation/import/recreation; owned-share and ephemeral state | Live API permissions |
 | CLI compatibility | Examples and diagnostics across supported Terraform versions | Every resource lifecycle on every CLI |
 | Native packages | ZIP layout, mirror installation, plugin startup, schema, validation on four platforms | Registry signing or discovery |
-| Required live SQL | Database integration and database/schema/table/view lifecycles and imports with cleanup | All SQL resources or REST administration |
+| Required live SQL | Database/schema/table/view lifecycles and imports, in-place view updates, execution of imported SQL, cleanup | All SQL resources or REST administration |
 | Focused live smokes | The selected service behavior and cleanup | Surfaces not exercised by that fixture |
 
 Contracts run with race detection, randomized ordering, and a five-minute test

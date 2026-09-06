@@ -42,9 +42,6 @@ jobs:
       - name: Run static gate
         run: make static-check
 
-      - name: Verify release packaging on the runner platform
-        run: make release-check
-
   behavior-contracts:
     name: Behavior contracts
     timeout-minutes: 10

@@ -63,6 +63,10 @@ Prefer Terraform resources for durable desired state. Avoid modeling one-off ope
 
 ## Testing
 
+Follow [provider testing patterns](docs/guides/testing-patterns.md): verify remote
+behavior and state, require no-op plans, and import before and after updates.
+Ignored import attributes need a reason and an alternative check when recoverable.
+
 Read the [architecture](docs/guides/provider-architecture.md) before changing
 shared clients and the [release checklist](docs/guides/release-readiness.md)
 before preparing a public version. See [local development](docs/guides/local-development.md)
