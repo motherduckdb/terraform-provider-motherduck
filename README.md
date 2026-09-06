@@ -1,21 +1,33 @@
 # MotherDuck Terraform Provider
 
-Terraform provider for managing MotherDuck organization resources and SQL-backed data infrastructure.
+Manage MotherDuck infrastructure with Terraform: SQL-backed databases, schemas,
+tables, views, shares, roles, secrets, snapshots, Guides, Dives, and Flights,
+plus REST-backed service accounts, access tokens, and Duckling configuration.
 
-The provider uses the public MotherDuck REST API for administration resources and the public MotherDuck SQL/table-function surface for databases, schemas, tables, views, secrets, roles, shares, snapshots, Guides, Dives, and Flights.
+Provider source: `registry.terraform.io/motherduckdb/motherduck`.
+Built with Terraform Plugin Framework, protocol 6, and embedded DuckDB.
 
-## Quick Start
+## Start here
 
-Before the first Registry release, use the [local development setup](docs/guides/local-development.md).
-Example version constraints below do not establish that a version is published.
-Start with the [database walkthrough](docs/guides/getting-started.md).
+| Task | Read |
+| --- | --- |
+| Create your first database | [Walkthrough](docs/guides/getting-started.md) |
+| Run this source before Registry publication | [Local development](docs/guides/local-development.md) |
+| Write production Terraform configuration | [Terraform best practices](docs/guides/terraform-best-practices.md) |
+| Import objects, handle drift, or protect state | [State and lifecycle](docs/guides/state-and-lifecycle.md) |
+| Find attributes, defaults, and examples | [Provider reference](docs/index.md), [resources](docs/resources), [data sources](docs/data-sources) |
+| Change the provider | [Agent instructions](AGENTS.md), [contributing](CONTRIBUTING.md), [architecture](docs/guides/provider-architecture.md) |
+| Add or select tests | [Testing](docs/guides/testing.md), [testing patterns](docs/guides/testing-patterns.md) |
+| Prepare a release | [CI and release](docs/guides/ci-and-release.md), [release readiness](docs/guides/release-readiness.md) |
 
-Use environment variables for credentials:
+## Using the provider
 
-```bash
-export MOTHERDUCK_TOKEN=...
-export MOTHERDUCK_ADMIN_TOKEN=...
-```
+Confirm the available version in the [Terraform Registry](https://registry.terraform.io/providers/motherduckdb/motherduck)
+and [GitHub releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
+Before the first published release, follow the local development guide.
+A version in an example or release-notes filename is not publication evidence.
+
+This root-module example targets the `0.1.x` release line once available:
 
 ```hcl
 terraform {
@@ -24,108 +36,99 @@ terraform {
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = ">= 0.1.0"
+      version = "~> 0.1.0"
     }
   }
 }
 
 provider "motherduck" {}
+
+resource "motherduck_database" "analytics" {
+  name = "analytics"
+}
 ```
 
-`MOTHERDUCK_TOKEN` is used for SQL-backed resources and data sources. `MOTHERDUCK_ADMIN_TOKEN` is used for REST-backed organization administration, including service accounts, access tokens, active-account inspection, and Duckling configuration.
+Supply credentials through your secret manager or environment:
 
-Keep tokens out of Terraform files and committed `.tfvars`. Terraform state can contain sensitive provider-managed values such as generated access tokens and share URLs, so use an encrypted remote backend with tightly scoped access.
+| Credential | Used for |
+| --- | --- |
+| `MOTHERDUCK_TOKEN` | SQL resources and catalog reads |
+| `MOTHERDUCK_ADMIN_TOKEN` | REST organization administration and embed sessions |
 
-## What The Provider Manages
+Supply only the credential needed by the configuration. Keep credentials out of
+committed `.tf` and `.tfvars` files. Terraform's `sensitive` flag masks output;
+it does not encrypt state or saved plans. Use an encrypted backend with locking
+and restricted access, and commit the root module's `.terraform.lock.hcl`.
 
-REST-backed administration:
+Configure providers in the root module and pass them to child modules.
+Provider-level `database` must already exist; use resource-level database
+references when creating a database in the same apply.
 
-- `motherduck_service_account`
-- `motherduck_access_token`
-- `motherduck_duckling_config`
-- `motherduck_active_accounts` and `motherduck_user_tokens` data sources
-- [`motherduck_dive_embed_session` ephemeral resource](docs/ephemeral-resources/dive_embed_session.md), preferred for new configurations because it does not persist the session credential in Terraform state
-- [`motherduck_dive_embed_session` data source](docs/data-sources/dive_embed_session.md), retained for compatibility but persists the sensitive session credential in Terraform state
+## Capabilities and constraints
 
-SQL-backed infrastructure:
+- SQL infrastructure and application resources use public MotherDuck SQL.
+  Function availability depends on the account, region, permissions, and client.
+- REST administration uses the public MotherDuck API and a separate admin token.
+- Catalog data sources expose metadata; some values, including share URLs and
+  Flight output, are sensitive.
+- Prefer the [ephemeral Dive embed session](docs/ephemeral-resources/dive_embed_session.md)
+  on Terraform 1.10 or later. The legacy data source persists its credential.
+- Flight definitions are durable configuration. Creating or replacing a
+  [Flight run](docs/resources/flight_run.md) can execute Python again.
+- General Terraform support starts at 1.5. The tested Terraform/OpenTofu versions
+  are listed in [CI and release](docs/guides/ci-and-release.md).
+- CGO packages target Linux and macOS on amd64 and arm64. Windows is not currently
+  a supported release target.
 
-- `motherduck_database`, `motherduck_schema`, `motherduck_table`, and `motherduck_view`
-- `motherduck_secret`
-- `motherduck_role` and `motherduck_role_grant`
-- `motherduck_share` and `motherduck_share_grant`
-- `motherduck_snapshot`
-- `motherduck_guide`
-- `motherduck_dive`
-- `motherduck_flight` and `motherduck_flight_run`
+For multi-tenant configurations, start with [writer bootstrap](docs/blueprints/writer-bootstrap.md),
+[hypertenancy](docs/blueprints/hypertenancy.md), or
+[read hypertenancy](docs/blueprints/read-hypertenancy.md).
+Review their ownership and credential requirements before applying them.
 
-Catalog and environment data sources:
+## Working in this repository: agents and contributors
 
-- databases, attached databases, snapshots, owned shares, incoming shares, and secrets
-- current user, MotherDuck version, live Duckling size, object-storage buckets, files, roles, and role memberships
-- Guides and Guide grantees, Dives, Flight definitions and owners, Flight versions, Flight runs, and Flight logs
+Read [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md), then the guide
+matching your task above. Inspect current code and Git state before editing;
+use existing conventions and preserve unrelated changes.
 
-Guide, Dive, Flight, and RBAC SQL resources and data sources are enabled by default. Function availability can vary by account, region, permissions, and client version; the provider checks required SQL functions before operations and returns an explicit diagnostic when a surface is not exposed.
+| Source of truth | Location |
+| --- | --- |
+| Registered public surfaces | [Catalog manifest](internal/motherduck/catalog.yaml) and provider registration |
+| Resource state, imports, and CRUD | [Resources](internal/resources) |
+| Data-source schemas and reads | [Data sources](internal/datasources) |
+| Authentication, connections, and request behavior | [Provider configuration](internal/provider/provider.go), [clients](internal/client) |
+| Generated documentation inputs | [Schemas](internal), [templates](templates), [examples](examples) |
+| Test commands and hosted gates | [Makefile](Makefile), [workflows](.github/workflows) |
 
-## Blueprints
+Edit schemas, templates, or examples before regenerating `docs/`.
+Do not hand-edit generated pages. Internal Go packages are implementation details,
+not a supported public library.
 
-The repository includes reusable blueprint modules for common multi-tenant patterns:
+Run commands from the repository root:
 
-- [Writer bootstrap](docs/blueprints/writer-bootstrap.md): the dedicated writer service account and read-write token that own tenant data infrastructure.
-- [Hypertenancy](docs/blueprints/hypertenancy.md): one isolated database, schema, restricted share, reader service account, and reader token per tenant.
-- [Read hypertenancy](docs/blueprints/read-hypertenancy.md): centralized writes through one writer identity, with per-tenant reader databases and restricted shares.
-
-Use these as starting points for production modules. They keep tenant boundaries explicit, generate deterministic names, and avoid putting tenant tokens or share URLs into non-sensitive outputs. Run tenant data planes as the writer identity: MotherDuck databases are writable only by their owner, and only a share's owner can `GRANT READ ON SHARE` to readers.
-
-## Provider Configuration
-
-Common options:
-
-- `database`: attach an existing database during provider SQL initialization.
-- `attach_mode`: use `single` with `database` when the provider should avoid attaching every workspace database; use `workspace` or omit the argument for the default workspace behavior.
-- `api_base_url`: defaults to `https://api.motherduck.com` or `MOTHERDUCK_API_BASE_URL`; set it only for controlled testing or proxying.
-- `custom_user_agent`: adds a custom user agent suffix to both the DuckDB/MotherDuck SQL connection and MotherDuck REST API requests.
-- `request_timeout_seconds`: REST API request timeout in seconds. Defaults to 30.
-
-Provider configuration belongs in the root module. Reusable child modules should receive provider configurations from their caller.
-
-## Native Packages
-
-The provider embeds DuckDB through CGO. Release artifacts are native per-platform builds, so package size and platform availability follow the tested runner matrix: Linux amd64/arm64 and macOS amd64/arm64. Windows packages are not published until there is a tested native Windows CGO build path.
-
-## Documentation
-
-- [Create your first database](docs/guides/getting-started.md)
-- [Local development](docs/guides/local-development.md)
-- [State, imports, and lifecycle](docs/guides/state-and-lifecycle.md)
-- [Provider architecture](docs/guides/provider-architecture.md)
-- [Official release readiness](docs/guides/release-readiness.md)
-
-- [Generated provider docs](docs/index.md)
-- [Terraform best practices](docs/guides/terraform-best-practices.md)
-- [Testing overview](docs/guides/testing.md)
-- [CI and release](docs/guides/ci-and-release.md)
-- [Contributing](CONTRIBUTING.md)
-
-Generated resource and data-source docs are built from the Terraform schema and examples under `examples/`.
-
-## Development
-
-Local development requires Go and Terraform. Run the default local gate before pushing:
-
-```bash
-make pre-push-check
+```shell
+make test-unit       # Hermetic Go tests, race detection, randomized order
+make test-contract   # Terraform lifecycle against strict local backends
+make docs            # Regenerate reference after schema/template/example changes
+make pre-push-check  # Required before opening or updating a PR
+make release-check   # Required for release scripts/workflows/packaging changes
 ```
 
-Run the release packaging check before changing release automation:
+For SQL changes, run `make test-live-required` with `MOTHERDUCK_TOKEN` supplied
+through managed injection. It creates test infrastructure and audits cleanup.
+Select additional live tests using the testing guide; live operations can incur
+costs. A skipped feature or a filter matching zero tests is not successful
+coverage. Never include token-backed logs or complete state in public PRs.
 
-```bash
-make release-check
-```
+Preserve public schemas and import formats unless a breaking change is intended
+and documented. Verify observable state and remote effects, including no-op
+refresh and cleanup, rather than adding tests that merely mirror the code.
 
-The release workflow is tag-driven. Pushing a semantic version tag such as `v0.1.0` runs the release preflight, builds provider packages, signs checksums, and creates the GitHub release.
+Report the exact commit and checks completed, and distinguish local validation,
+PR status, merge, and publication. Publish only through the documented release
+workflow when release authorization and prerequisites are satisfied.
 
-See [Contributing](CONTRIBUTING.md) for the repository layout, test targets, CI policy, and release process.
+## Security and license
 
-## License
-
-This repository is licensed under the [Apache License 2.0](LICENSE).
+Report vulnerabilities privately using [SECURITY.md](SECURITY.md).
+Licensed under [Apache 2.0](LICENSE).
