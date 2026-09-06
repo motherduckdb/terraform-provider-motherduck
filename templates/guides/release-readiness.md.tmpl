@@ -1,51 +1,35 @@
-# Prepare an official provider release
+# Prepare a GitHub release
 
-This checklist separates repository readiness from publication. Follow
-HashiCorp's [publishing requirements](https://developer.hashicorp.com/terraform/registry/providers/publishing).
+Current distribution is GitHub Releases only. The provider is not published in
+the Terraform Registry. Users install through the [filesystem mirror guide](github-installation.md).
 
-## Before the first tag
+## Validate the candidate
 
-1. Confirm the public repository name is `terraform-provider-motherduck` and
-   the intended Registry namespace is `motherduckdb`.
-2. Prepare Registry publisher access and the GPG public key. Complete provider
-   registration once a signed GitHub release exists. Confirm organization
-   ownership and any desired partner status separately.
-3. Configure `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` as release secrets.
-   Never put private keys in source or test artifacts.
-4. Configure `MOTHERDUCK_TOKEN` in the protected `motherduck-live` environment,
-   limited to trusted main and release tags.
-5. Verify historical release notes against public commits and PRs. Notes from
-   earlier repository history are not evidence of published versions. Select the
-   initial version from actual Registry/tag history, not fixture version numbers.
-6. Preview every generated surface in the
-   [Registry documentation preview](https://developer.hashicorp.com/terraform/registry/providers/docs).
+1. Prepare version-specific release notes with public change and verification links.
+2. Run `make pre-push-check` and `make release-check`.
+3. Merge a reviewed PR after all required checks pass.
+4. Verify CI and live SQL tests on the exact merged commit.
+5. Confirm the protected `motherduck-live` environment supplies the SQL test token.
+6. Tag that commit with a semantic version and push the tag.
 
-## Verify a candidate
-
-Require static checks, behavior contracts, supported Terraform lanes, and all
-four native package jobs before merging. Repository branch protection must name
-the package jobs; YAML alone does not make them required.
-
-Wait for live database/schema/table/view checks on the exact merged commit. Run focused smokes for changed
-surfaces and the stable SQL suite. Before the initial official release, also
-validate service-account, token, and Duckling lifecycles with an authorized
-admin token. Hermetic HTTP tests do not prove deployed API compatibility or
-account permissions. Record the commit, CLI versions, checks, and cleanup
-results; keep sensitive logs private.
-
-Prepare accurate `release-notes/vX.Y.Z.md` with public evidence links. Tag the
-validated commit using semantic versioning, then push the tag. The release
-workflow checks live SQL and installs native packages before publication.
+The tag workflow runs preflight, live tests, and native installation tests, then
+publishes four ZIPs, checksums, a protocol manifest, and GitHub build-provenance
+attestations. It does not require GPG credentials or publish to the Registry.
 
 ## Verify publication
 
-Expect four platform ZIPs, a versioned manifest declaring protocol `6.0`,
-SHA-256 checksums covering ZIPs and manifest, and a binary detached GPG signature.
-Check the signature against the Registry public key and install the published
-version with `terraform init` in a fresh directory.
+Check that the tag matches the tested commit, the release workflow succeeds,
+and all four platform ZIPs are present. Download a ZIP and checksums into a fresh
+directory, verify its digest and provenance, then install it with the documented
+filesystem mirror and run Terraform schema discovery and validation.
 
-Do not overwrite published artifacts or reuse a version: lock files depend on
-immutable checksums. Publish a new version to correct a published release.
+Do not overwrite published artifacts or reuse a version. Correct a release by
+publishing a new version because dependency lock files depend on immutable digests.
 
-A green CI run does not prove Registry registration, signing-key ownership,
-partner verification, or live behavior outside the test cases that ran.
+## Future Registry publication
+
+Registry distribution is a separate decision. Before enabling it, configure
+publisher access and GPG signing, follow
+[HashiCorp's publishing requirements](https://developer.hashicorp.com/terraform/registry/providers/publishing),
+and test installation from the Registry. GitHub provenance does not substitute
+for the Registry's detached GPG signature requirement.

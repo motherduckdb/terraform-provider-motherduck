@@ -50,9 +50,8 @@ The weekly matrix runs read-only checks on every supported Terraform version and
 
 ## Releases
 
-Use the [official release readiness checklist](release-readiness.md) before
-creating the first tag. Repository checks do not configure Registry ownership,
-signing credentials, or partner verification.
+Releases are published to GitHub only. Follow the [release checklist](release-readiness.md)
+and [installation guide](github-installation.md). The provider is not in the Terraform Registry.
 
 `.github/workflows/release.yml` runs when a semantic version tag is pushed:
 
@@ -70,17 +69,13 @@ The release workflow:
 5. Downloads all platform packages and per-build digests into one release job.
 6. Verifies the per-build digests.
 7. Creates registry SHA256 checksums.
-8. Signs the checksum file with the configured GPG key.
+8. Includes checksums without a GPG signature for GitHub-only distribution.
 9. Adds the Terraform Registry manifest.
 10. Publishes GitHub build-provenance attestations for package and release artifacts.
 11. Creates the GitHub release for the tag.
 
-Terraform Registry publishing expects versioned GitHub releases with provider zip files, checksums, and a detached signature. The repository owner must also register the provider and GPG public key in the Terraform Registry before users can install `source = "motherduckdb/motherduck"` from the registry.
-
-Release secrets:
-
-- `GPG_PRIVATE_KEY`: private key used only by the release workflow to sign checksum files.
-- `GPG_PASSPHRASE`: passphrase for `GPG_PRIVATE_KEY`.
+Future Terraform Registry publication requires its own registration and GPG signing setup.
+These are not prerequisites for the current GitHub-only releases.
 
 Initial release targets:
 

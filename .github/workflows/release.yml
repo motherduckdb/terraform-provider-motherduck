@@ -28,17 +28,7 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ github.ref_name }}
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          if [[ -z "${GPG_PRIVATE_KEY}" ]]; then
-            echo "GPG_PRIVATE_KEY secret is required for Terraform Registry releases." >&2
-            exit 1
-          fi
-          if [[ -z "${GPG_PASSPHRASE}" ]]; then
-            echo "GPG_PASSPHRASE secret is required for Terraform Registry releases." >&2
-            exit 1
-          fi
           if [[ ! -f "release-notes/${VERSION}.md" ]]; then
             echo "Release notes file release-notes/${VERSION}.md is required." >&2
             exit 1
@@ -196,19 +186,10 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Import GPG key
-        id: gpg
-        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
-        with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
-
-      - name: Create checksums and signature
+      - name: Verify packages and create checksums
         shell: bash
         env:
           VERSION: ${{ github.ref_name }}
-          GPG_FINGERPRINT: ${{ steps.gpg.outputs.fingerprint }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           version="${VERSION#v}"
           manifest="terraform-provider-motherduck_${version}_manifest.json"
@@ -232,17 +213,6 @@ jobs:
           done
           sha256sum "${packages[@]}" "${manifest}" > "${checksum}"
           sha256sum -c "${checksum}"
-          if [[ -z "${GPG_PASSPHRASE}" ]]; then
-            echo "GPG_PASSPHRASE secret is required for Terraform Registry releases." >&2
-            exit 1
-          fi
-          printf '%s' "${GPG_PASSPHRASE}" | gpg --batch \
-            --local-user "${GPG_FINGERPRINT}" \
-            --pinentry-mode loopback \
-            --passphrase-fd 0 \
-            --output "${checksum}.sig" \
-            --detach-sign "${checksum}"
-          gpg --verify "${checksum}.sig" "${checksum}"
 
       - name: Attest release artifacts
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2

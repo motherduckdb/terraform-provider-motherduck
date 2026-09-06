@@ -131,12 +131,11 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The release workflow runs the full preflight gate, builds native packages, creates checksums, signs the checksum file, adds the Terraform Registry manifest, and creates the GitHub release.
-
-Repository release secrets:
-
-- `GPG_PRIVATE_KEY`: private key used by the release workflow to sign checksum files.
-- `GPG_PASSPHRASE`: passphrase for `GPG_PRIVATE_KEY`.
+The release workflow runs the preflight and live gates, builds and installs native
+packages, verifies checksums, attaches a protocol manifest and GitHub provenance,
+and creates a GitHub release. GitHub-only distribution does not require GPG.
+Users install packages through a [filesystem mirror](docs/guides/github-installation.md).
+Registry publication is a separate future step with additional signing requirements.
 
 The provider embeds DuckDB through CGO, so release targets are built on native operating system runners. Add a platform only after proving that runner can build the package and Terraform can initialize the produced provider binary.
 

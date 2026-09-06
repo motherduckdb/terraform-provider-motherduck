@@ -4,7 +4,10 @@ Manage MotherDuck infrastructure with Terraform: SQL-backed databases, schemas,
 tables, views, shares, roles, secrets, and snapshots,
 plus REST-backed service accounts, access tokens, and Duckling configuration.
 
-Provider source: `registry.terraform.io/motherduckdb/motherduck`.
+Distribution: [GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
+**This provider is not published in the Terraform Registry.**
+Its Terraform source address remains `registry.terraform.io/motherduckdb/motherduck`
+for identity and future compatibility; install it through a filesystem mirror.
 Built with Terraform Plugin Framework, protocol 6, and embedded DuckDB.
 
 ## Recommended ownership
@@ -23,6 +26,7 @@ see [resource scope and migration](docs/guides/resource-scope.md).
 
 | Task | Read |
 | --- | --- |
+| Install a GitHub release | [GitHub installation](docs/guides/github-installation.md) |
 | Create your first database | [Walkthrough](docs/guides/getting-started.md) |
 | Run this source before Registry publication | [Local development](docs/guides/local-development.md) |
 | Write production Terraform configuration | [Terraform best practices](docs/guides/terraform-best-practices.md) |
@@ -34,12 +38,12 @@ see [resource scope and migration](docs/guides/resource-scope.md).
 
 ## Using the provider
 
-Confirm the available version in the [Terraform Registry](https://registry.terraform.io/providers/motherduckdb/motherduck)
-and [GitHub releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
-Before the first published release, follow the local development guide.
-A version in an example or release-notes filename is not publication evidence.
+Download a version from [GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases)
+and follow the [filesystem mirror installation guide](docs/guides/github-installation.md)
+before running `terraform init`. Terraform does not automatically download this
+provider from GitHub based on its source address.
 
-This root-module example targets the `0.1.x` release line once available:
+After installing the package in your mirror, use this root-module configuration:
 
 ```hcl
 terraform {

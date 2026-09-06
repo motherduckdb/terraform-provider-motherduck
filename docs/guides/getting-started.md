@@ -9,10 +9,8 @@ Use Terraform 1.5 or later, a MotherDuck account with permission to create
 databases, and a SQL token supplied as `MOTHERDUCK_TOKEN`. An organization admin
 token is not needed for this walkthrough.
 
-Before Registry publication, install a development build using the
-[local development guide](local-development.md). The version below is an example
-constraint for the first release, not a claim that a package is published.
-After publication, select an available version in the Terraform Registry.
+Install a [GitHub release through a filesystem mirror](github-installation.md) first.
+For source builds, use [local development](local-development.md).
 
 ## Create a working directory
 
@@ -46,7 +44,7 @@ the database being created; provider initialization happens before creation.
 
 ## Plan and apply
 
-For a Registry installation, run `terraform init` first and commit
+For a GitHub release installed through a filesystem mirror, run `terraform init` first and commit
 `.terraform.lock.hcl`. Development overrides use the separate setup in the
 local development guide.
 
