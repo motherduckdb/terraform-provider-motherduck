@@ -3,12 +3,12 @@
 page_title: "motherduck_dive Resource - motherduck"
 subcategory: ""
 description: |-
-  Manages a MotherDuck Dive through public SQL table functions.
+  Experimental: manages a MotherDuck Dive through public SQL table functions. Prefer application deployment tooling for Dive content; this surface is outside the provider's stable support commitment.
 ---
 
 # motherduck_dive (Resource)
 
-Manages a MotherDuck Dive through public SQL table functions.
+Experimental: manages a MotherDuck Dive through public SQL table functions. Prefer application deployment tooling for Dive content; this surface is outside the provider's stable support commitment.
 
 ## Example Usage
 

@@ -81,7 +81,7 @@ func (r *guideResource) Metadata(ctx context.Context, req resource.MetadataReque
 func (r *guideResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:             1,
-		MarkdownDescription: "Manages a versioned MotherDuck Guide through the public Guide SQL functions.",
+		MarkdownDescription: "Experimental: manages a versioned MotherDuck Guide through public SQL functions. Prefer application deployment tooling for Guide content; this surface is outside the provider's stable support commitment.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,

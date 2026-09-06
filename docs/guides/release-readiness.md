@@ -7,8 +7,9 @@ HashiCorp's [publishing requirements](https://developer.hashicorp.com/terraform/
 
 1. Confirm the public repository name is `terraform-provider-motherduck` and
    the intended Registry namespace is `motherduckdb`.
-2. Register the provider and GPG public key with the Terraform Registry.
-   Confirm organization ownership and any desired partner status separately.
+2. Prepare Registry publisher access and the GPG public key. Complete provider
+   registration once a signed GitHub release exists. Confirm organization
+   ownership and any desired partner status separately.
 3. Configure `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` as release secrets.
    Never put private keys in source or test artifacts.
 4. Configure `MOTHERDUCK_TOKEN` in the protected `motherduck-live` environment,
