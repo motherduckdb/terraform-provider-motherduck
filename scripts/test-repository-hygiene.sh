@@ -76,7 +76,7 @@ check_no_search_matches \
 # Competitor comparisons and source links belong in documentation. Guard the
 # implementation and dependencies against copied provider scaffolding instead.
 set +e
-legacy_references="$(rg -n -i '[s]nowflake|[s]nowflakedb' internal main.go go.mod go.sum)"
+legacy_references="$(grep -RniE '[s]nowflake|[s]nowflakedb' internal main.go go.mod go.sum)"
 legacy_status=$?
 set -e
 if [[ "${legacy_status}" -eq 0 ]]; then
@@ -87,7 +87,7 @@ elif [[ "${legacy_status}" -gt 1 ]]; then
   exit "${legacy_status}"
 fi
 
-if rg -n 't[.](Skip|Skipf)[(]' internal --glob '*_test.go'; then
+if grep -RnE 't[.](Skip|Skipf)[(]' internal --include='*_test.go'; then
   echo "Go tests must use explicit build tags and hard preconditions instead of reporting skipped gates." >&2
   exit 1
 fi
