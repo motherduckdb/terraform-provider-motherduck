@@ -1,0 +1,10 @@
+-- Run by the writer's pipeline after ingestion; only one publisher at a time.
+-- Terraform owns the table definition; this transaction updates its data.
+BEGIN TRANSACTION;
+DELETE FROM "${marts_database}".main.daily_revenue;
+INSERT INTO "${marts_database}".main.daily_revenue (order_date, order_count, revenue)
+SELECT order_date, count(*), sum(amount)
+FROM "${transform_database}".main.orders_latest
+WHERE status = 'completed' AND amount >= 0 AND order_date IS NOT NULL
+GROUP BY order_date;
+COMMIT;

@@ -73,6 +73,9 @@ write_plan_vars() {
   local work_dir="$2"
 
   case "${relative_dir}" in
+    examples/warehouses/layered)
+      printf '%s\n' 'reader_username = "svc_example_dwh_dev_bi"' > "${work_dir}/terraform.tfvars"
+      ;;
     examples/blueprints/hypertenancy)
       cat > "${work_dir}/terraform.tfvars" <<'HCL'
 database_prefix = "tenant_example"
@@ -203,7 +206,7 @@ while IFS= read -r example_dir; do
   safe_name="${relative_dir//\//__}"
   work_dir="${result_dir}/${safe_name}"
   mkdir -p "${work_dir}"
-  find "${example_dir}" -maxdepth 1 -type f -name '*.tf' -exec cp {} "${work_dir}/" \;
+  find "${example_dir}" -maxdepth 1 -type f \( -name '*.tf' -o -name '*.sql.tftpl' \) -exec cp {} "${work_dir}/" \;
 
   if ! grep -R 'source[[:space:]]*=[[:space:]]*"motherduckdb/motherduck"' "${work_dir}"/*.tf >/dev/null 2>&1; then
     cat > "${work_dir}/terraform-provider-override.tf" <<HCL
@@ -276,6 +279,26 @@ HCL
         exit 1
       fi
       assert_invalid_blueprint_vars "${relative_dir}" "${work_dir}"
+      ;;
+    examples/warehouses/bootstrap)
+      TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan" |
+        jq -e '[.resource_changes[] | select(.type == "motherduck_service_account") | .change.after.username] | sort == ["svc_example_dwh_dev_bi", "svc_example_dwh_dev_writer", "svc_example_dwh_prod_bi", "svc_example_dwh_prod_writer"]' >/dev/null
+      ;;
+    examples/warehouses/simple|examples/warehouses/layered)
+      prod_vars=(-var=environment=prod)
+      if [[ "${relative_dir}" == examples/warehouses/layered ]]; then
+        prod_vars+=(-var=reader_username=svc_example_dwh_prod_bi)
+      fi
+      MOTHERDUCK_TOKEN=dummy-sql-token MOTHERDUCK_ADMIN_TOKEN=dummy-admin-token \
+        TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" \
+        plan -refresh=false -input=false "${prod_vars[@]}" -out="${work_dir}/prod.tfplan" >/dev/null
+      TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/prod.tfplan" > "${work_dir}/prod-plan.json"
+      if [[ "${relative_dir}" == examples/warehouses/simple ]]; then
+        jq -e '.planned_values.outputs.database_name.value == "example_dwh_prod_simple"' "${work_dir}/prod-plan.json" >/dev/null
+      else
+        jq -e '.resource_changes[] | select(.type == "motherduck_share") | .change.after.access == "restricted" and .change.after.source_database == "example_dwh_prod_marts"' "${work_dir}/prod-plan.json" >/dev/null
+        jq -e '.resource_changes[] | select(.type == "motherduck_share_grant") | .change.after.username == "svc_example_dwh_prod_bi"' "${work_dir}/prod-plan.json" >/dev/null
+      fi
       ;;
   esac
 done < <(find "${ROOT_DIR}/examples" -type f -name '*.tf' -exec dirname {} \; | sort -u)

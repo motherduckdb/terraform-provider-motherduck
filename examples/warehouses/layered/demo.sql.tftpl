@@ -1,0 +1,8 @@
+-- EMPTY disposable warehouse only; do not seed production.
+INSERT INTO "${raw_database}".main.orders
+  (order_id, order_date, amount, status, source_revision)
+VALUES ('o1', DATE '2026-01-01', 100.00, 'completed', 1),
+       ('o1', DATE '2026-01-01', 120.00, 'completed', 2),
+       ('o2', DATE '2026-01-01', 25.00, 'completed', 1),
+       ('o3', DATE '2026-01-02', 50.00, 'cancelled', 1);
+-- Run refresh_marts.sql.tftpl next. Expect 2 completed orders and 145.00.

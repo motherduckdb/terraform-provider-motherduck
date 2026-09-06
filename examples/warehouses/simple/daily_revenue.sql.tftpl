@@ -1,0 +1,4 @@
+SELECT order_date, count(*) AS order_count, sum(amount) AS revenue
+FROM "${database}".raw.orders
+WHERE status = 'completed' AND amount >= 0 AND order_date IS NOT NULL
+GROUP BY order_date
