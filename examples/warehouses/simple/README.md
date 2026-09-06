@@ -4,8 +4,9 @@ A small warehouse owned by one environment writer:
 `raw.orders` → `analytics.daily_revenue`, inside one database.
 
 This is a schema/layout example, not a BI security boundary. Raw and analytics
-schemas share database ownership. Use the layered example when only curated
-data should be shared with another account.
+schemas share database ownership. The BI read-scaling token belongs to the
+writer and can read both schemas. For curated-only access, use the
+[separate-reader alternative](../README.md#alternative-separate-readers-with-curated-shares).
 
 ## Apply
 
@@ -39,3 +40,7 @@ NOT NULL constraints: enforce source uniqueness and required values at ingestion
 Outputs: `database_name`, `revenue_relation`, and `demo_sql`.
 For prod, use a separate root/state and prod writer token with `prod.tfvars`.
 See the [lifecycle cautions](../README.md) before schema changes or destruction.
+
+After apply, use the matching environment's BI token to query `revenue_relation`
+directly. No share attachment is required. Allow for read-replica synchronization
+after loading data and verify BI writes fail.
