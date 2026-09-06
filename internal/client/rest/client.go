@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 )
 
 const DefaultBaseURL = "https://api.motherduck.com"
@@ -270,7 +271,7 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request, payload []b
 				return nil, err
 			}
 			if attempt < attempts-1 {
-				if sleepErr := sleepWithContext(ctx, retryDelay(attempt+1)); sleepErr != nil {
+				if sleepErr := retry.Sleep(ctx, retryDelay(attempt+1)); sleepErr != nil {
 					return nil, sleepErr
 				}
 			}
@@ -285,7 +286,7 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request, payload []b
 		}
 		_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, maxErrorBodyBytes))
 		_ = res.Body.Close()
-		if err := sleepWithContext(ctx, delay); err != nil {
+		if err := retry.Sleep(ctx, delay); err != nil {
 			return nil, err
 		}
 	}
@@ -328,17 +329,6 @@ func retryAfterDelay(value string) time.Duration {
 		}
 	}
 	return 0
-}
-
-func sleepWithContext(ctx context.Context, delay time.Duration) error {
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
 }
 
 func pathWithCursor(path, cursor string) string {

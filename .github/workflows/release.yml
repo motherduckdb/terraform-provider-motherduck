@@ -16,6 +16,7 @@ concurrency:
 jobs:
   preflight:
     name: Preflight
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -62,6 +63,7 @@ jobs:
 
   live-contracts:
     name: Live release contracts
+    timeout-minutes: 30
     needs: preflight
     runs-on: ubuntu-latest
     environment: motherduck-live
@@ -89,6 +91,7 @@ jobs:
 
   build:
     name: Build ${{ matrix.goos }}_${{ matrix.goarch }}
+    timeout-minutes: 20
     needs:
       - preflight
       - live-contracts
@@ -107,10 +110,10 @@ jobs:
           - runner: ubuntu-24.04-arm
             goos: linux
             goarch: arm64
-          - runner: macos-latest
+          - runner: macos-15-intel
             goos: darwin
             goarch: amd64
-          - runner: macos-latest
+          - runner: macos-15
             goos: darwin
             goarch: arm64
     steps:
@@ -132,6 +135,18 @@ jobs:
           DIST_DIR: ${{ github.workspace }}/dist
         run: ./scripts/package-release.sh
 
+      - name: Setup Terraform for artifact verification
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.1
+          terraform_wrapper: false
+
+      - name: Install and start release artifact
+        env:
+          VERSION: ${{ github.ref_name }}
+          TARGET: ${{ matrix.goos }}_${{ matrix.goarch }}
+        run: bash scripts/test-release-package.sh "${GITHUB_WORKSPACE}/dist/terraform-provider-motherduck_${VERSION#v}_${TARGET}.zip" "${VERSION}"
+
       - name: Create package digest
         shell: bash
         env:
@@ -139,8 +154,8 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           cd dist
-          sha256sum -- *.zip > "provider_${GOOS}_${GOARCH}.sha256"
-          sha256sum -c "provider_${GOOS}_${GOARCH}.sha256"
+          shasum -a 256 -- *.zip > "provider_${GOOS}_${GOARCH}.sha256"
+          shasum -a 256 -c "provider_${GOOS}_${GOARCH}.sha256"
 
       - name: Attest package provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -159,6 +174,7 @@ jobs:
 
   release:
     name: Publish GitHub release
+    timeout-minutes: 10
     needs:
       - preflight
       - live-contracts
@@ -207,22 +223,26 @@ jobs:
           fi
           sha256sum -c "${digest_files[@]}"
           packages=(terraform-provider-motherduck_"${version}"_*.zip)
-          if [[ "${#packages[@]}" -eq 0 ]]; then
-            echo "No provider packages found for version ${version}." >&2
+          if [[ "${#packages[@]}" -ne 4 ]]; then
+            echo "Expected exactly four provider packages for version ${version}." >&2
             exit 1
           fi
+          for target in linux_amd64 linux_arm64 darwin_amd64 darwin_arm64; do
+            test -f "terraform-provider-motherduck_${version}_${target}.zip"
+          done
           sha256sum "${packages[@]}" "${manifest}" > "${checksum}"
           sha256sum -c "${checksum}"
           if [[ -z "${GPG_PASSPHRASE}" ]]; then
             echo "GPG_PASSPHRASE secret is required for Terraform Registry releases." >&2
             exit 1
           fi
-          gpg --batch \
+          printf '%s' "${GPG_PASSPHRASE}" | gpg --batch \
             --local-user "${GPG_FINGERPRINT}" \
             --pinentry-mode loopback \
-            --passphrase "${GPG_PASSPHRASE}" \
+            --passphrase-fd 0 \
             --output "${checksum}.sig" \
             --detach-sign "${checksum}"
+          gpg --verify "${checksum}.sig" "${checksum}"
 
       - name: Attest release artifacts
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2

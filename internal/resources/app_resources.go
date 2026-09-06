@@ -850,6 +850,8 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 	wantStatus := normalizeFlightRunStatus(model.WaitForStatus.ValueString())
 	pollInterval := time.Duration(int64ValueOrDefault(model.PollIntervalSeconds, 10)) * time.Second
 	timeout := time.Duration(int64ValueOrDefault(model.TimeoutSeconds, 600)) * time.Second
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	deadline := time.Now().Add(timeout)
 
 	for {

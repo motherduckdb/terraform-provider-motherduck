@@ -3,6 +3,8 @@ package motherduck
 import (
 	"context"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -22,6 +24,28 @@ func TestCatalogMentionsRegisteredProviderSurfaces(t *testing.T) {
 		t.Fatalf("parsing catalog manifest: %v", err)
 	}
 	catalogResources, catalogDataSources, catalogEphemeralResources := catalogSurfaces(catalog)
+	for kind, surfaces := range map[string]map[string]bool{
+		"resources":           catalogResources,
+		"data-sources":        catalogDataSources,
+		"ephemeral-resources": catalogEphemeralResources,
+	} {
+		for name := range surfaces {
+			page := filepath.Join("..", "..", "docs", kind, strings.TrimPrefix(name, "motherduck_")+".md")
+			body, err := os.ReadFile(page) // #nosec G304 -- paths come from the checked-in provider catalog, not external input.
+			if err != nil {
+				t.Errorf("missing documentation for %s: %v", name, err)
+				continue
+			}
+			for _, section := range []string{"## Example Usage", "## Schema"} {
+				if !strings.Contains(string(body), section) {
+					t.Errorf("%s lacks %s", page, section)
+				}
+			}
+			if kind == "resources" && !strings.Contains(string(body), "## Import") {
+				t.Errorf("%s must document import or explicitly explain why it is unsupported", page)
+			}
+		}
+	}
 
 	providerInstance := provider.New("test")()
 	registeredResources := map[string]bool{}

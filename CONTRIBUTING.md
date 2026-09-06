@@ -63,6 +63,11 @@ Prefer Terraform resources for durable desired state. Avoid modeling one-off ope
 
 ## Testing
 
+Read the [architecture](docs/guides/provider-architecture.md) before changing
+shared clients and the [release checklist](docs/guides/release-readiness.md)
+before preparing a public version. See [local development](docs/guides/local-development.md)
+for running a provider before Registry publication.
+
 Offline checks:
 
 ```bash

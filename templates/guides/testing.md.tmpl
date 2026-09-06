@@ -36,7 +36,28 @@ Regenerate docs after changing schemas, templates, or examples:
 make docs
 ```
 
-## Live Checks
+## Coverage and test design
+
+| Layer | What it proves | What it does not prove |
+| --- | --- | --- |
+| Unit and embedded DuckDB | Validation, serialization, cancellation, SQL behavior | MotherDuck service availability |
+| Protocol contracts | Database and service-account lifecycle/import/drift; table import/type/replacement; token secret preservation/import/recreation; owned-share and ephemeral state | Live API permissions |
+| CLI compatibility | Examples and diagnostics across supported Terraform versions | Every resource lifecycle on every CLI |
+| Native packages | ZIP layout, mirror installation, plugin startup, schema, validation on four platforms | Registry signing or discovery |
+| Required live SQL | Database integration and database/schema/table/view lifecycles and imports with cleanup | All SQL resources or REST administration |
+| Focused live smokes | The selected service behavior and cleanup | Surfaces not exercised by that fixture |
+
+Contracts run with race detection, randomized ordering, and a five-minute test
+timeout. For a new resource, assert initial creation, an empty plan after refresh,
+imported state, configuration updates or replacement, external deletion, and
+final remote cleanup. Assert exact writes so accidental duplicate creates fail.
+Use a strict local HTTP server for REST and the existing SQL seam for protocol
+tests. Never count a missing credential or skipped optional feature as coverage.
+
+Regression tests should fail on the original bug. Use benchmarks to establish
+performance changes; do not use noisy wall-clock thresholds as ordinary PR gates.
+
+## Live test credentials
 
 Live checks use credentials from environment variables:
 

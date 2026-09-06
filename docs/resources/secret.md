@@ -55,3 +55,13 @@ variable "aws_secret_access_key" {
 - `id` (String) Secret resource ID. This is the secret name.
 - `scope` (String) Secret scope reported by DuckDB.
 - `storage` (String) Secret storage backend reported by DuckDB.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+terraform import motherduck_secret.s3 'storage_credentials'
+```

@@ -1,0 +1,24 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: ""
+description: |-
+  Runs a MotherDuck Flight and optionally waits for completion.
+---
+
+# {{.Name}} ({{.Type}})
+
+A Flight run is an operation recorded in Terraform state. Creating or replacing
+this resource can execute the Flight again. Use the Flight definition's schedule
+for recurring execution.
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_flight_run/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import is not supported. Create a new run resource only when another execution
+is intended. Destroying a run removes its Terraform record and requests
+cancellation only when `cancel_on_destroy` is enabled.

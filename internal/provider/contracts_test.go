@@ -127,6 +127,21 @@ resource "motherduck_table" "test" {
 				),
 			},
 			{
+				ResourceName:      "motherduck_table.test",
+				ImportState:       true,
+				ImportStateId:     "contract_database.app.facts",
+				ImportStateVerify: true,
+				// Imported metadata uses INTEGER; the configured INT spelling is
+				// intentionally preserved only in the original managed state.
+				ImportStateVerifyIgnore: []string{"columns"},
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 || states[0].Attributes["columns.id"] != "INTEGER" || states[0].Attributes["columns.label"] != "VARCHAR" {
+						return errors.New("import did not recover canonical column types")
+					}
+					return nil
+				},
+			},
+			{
 				Config: config,
 				PreConfig: func() {
 					sqlClient.mu.Lock()

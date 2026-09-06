@@ -4,12 +4,46 @@ import (
 	"context"
 	stdsql "database/sql"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
 )
+
+func TestWithDatabaseUseRestoresAfterCancellation(t *testing.T) {
+	db, err := stdsql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	db.SetMaxOpenConns(1)
+	client := &Client{db: db}
+	if err := client.Exec(t.Context(), "ATTACH ':memory:' AS other"); err != nil {
+		t.Fatal(err)
+	}
+	before, err := client.ScalarString(t.Context(), "SELECT current_database()")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	err = client.WithDatabaseUse(ctx, "other", func(exec func(string, ...any) error) error {
+		cancel()
+		return exec("SELECT 1")
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v", err)
+	}
+	after, err := client.ScalarString(t.Context(), "SELECT current_database()")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after != before {
+		t.Fatalf("database leaked: got %q, want %q", after, before)
+	}
+}
 
 func TestNewWithoutTokenIsUnavailable(t *testing.T) {
 	client, err := New(context.Background(), Config{})
@@ -130,5 +164,38 @@ func TestNormalizeValue(t *testing.T) {
 				t.Fatalf("normalizeValue() = %#v, want %#v", got, tc.want)
 			}
 		})
+	}
+}
+
+func BenchmarkQueryRowsJSON(b *testing.B) {
+	db, err := stdsql.Open("duckdb", "")
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { _ = db.Close() })
+	client := &Client{db: db}
+	query := `SELECT i AS "ID", 'row-' || i AS "NAME" FROM range(1000) t(i)`
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		if _, err := client.QueryRowsJSON(b.Context(), query); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestQueryRowsJSONKeepsDistinctRows(t *testing.T) {
+	db, err := stdsql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	client := &Client{db: db}
+	got, err := client.QueryRowsJSON(t.Context(), `SELECT i AS "ID", CASE WHEN i = 1 THEN NULL ELSE 'row-' || i END AS "NAME" FROM range(3) t(i) ORDER BY i`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `[{"id":0,"name":"row-0"},{"id":1,"name":null},{"id":2,"name":"row-2"}]`; got != want {
+		t.Fatalf("rows = %s, want %s", got, want)
 	}
 }
