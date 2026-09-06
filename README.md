@@ -28,6 +28,7 @@ see [resource scope and migration](docs/guides/resource-scope.md).
 | --- | --- |
 | Install a GitHub release | [GitHub installation](docs/guides/github-installation.md) |
 | Create your first database | [Walkthrough](docs/guides/getting-started.md) |
+| Build a warehouse with service-account environments | [Warehouse examples](examples/warehouses/README.md) |
 | Run this source before Registry publication | [Local development](docs/guides/local-development.md) |
 | Write production Terraform configuration | [Terraform best practices](docs/guides/terraform-best-practices.md) |
 | Import objects, handle drift, or protect state | [State and lifecycle](docs/guides/state-and-lifecycle.md) |

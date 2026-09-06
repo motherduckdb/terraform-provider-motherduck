@@ -1,0 +1,7 @@
+-- Run manually against an EMPTY disposable example warehouse only.
+INSERT INTO "${database}".raw.orders (order_id, order_date, amount, status)
+VALUES ('o1', DATE '2026-01-01', 100.00, 'completed'),
+       ('o2', DATE '2026-01-01', 25.00, 'completed'),
+       ('o3', DATE '2026-01-02', 50.00, 'cancelled');
+-- Expect: 2026-01-01, 2 orders, 125.00 revenue.
+SELECT * FROM "${database}".analytics.daily_revenue;

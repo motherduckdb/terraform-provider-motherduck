@@ -1,0 +1,16 @@
+models:
+  - name: orders
+    stage: raw
+    definition: main.tf
+    materialization: terraform_table
+    depends_on: []
+  - name: orders_latest
+    stage: transform
+    definition: orders_latest.sql.tftpl
+    materialization: terraform_view
+    depends_on: [orders]
+  - name: daily_revenue
+    stage: marts
+    definition: refresh_marts.sql.tftpl
+    materialization: pipeline_insert_into_terraform_table
+    depends_on: [orders_latest]

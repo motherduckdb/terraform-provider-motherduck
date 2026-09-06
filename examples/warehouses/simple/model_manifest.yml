@@ -1,0 +1,11 @@
+models:
+  - name: orders
+    stage: raw
+    definition: main.tf
+    materialization: terraform_table
+    depends_on: []
+  - name: daily_revenue
+    stage: analytics
+    definition: daily_revenue.sql.tftpl
+    materialization: terraform_view
+    depends_on: [orders]
