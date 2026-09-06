@@ -29,7 +29,14 @@ These checks validate examples, invalid-configuration diagnostics, and missing-c
 
 The live-smoke workflow also runs the provider against OpenTofu. The default OpenTofu version is `1.12.6`; override it with the `opentofu_versions` manual workflow input or `TOFU_VERSIONS` locally.
 
-## Live Smoke
+## Native package checks
+
+Four native package jobs run on Linux amd64/arm64 and macOS Intel/ARM runners.
+Each builds the release ZIP, installs it through a filesystem mirror, starts the
+plugin through Terraform schema discovery, and validates its configuration.
+Static and CLI jobs have bounded runtimes; behavior tests run with race detection.
+
+## Trusted live checks
 
 `.github/workflows/live-smoke.yml` runs a trusted live contract on every push to `main`, runs the compatibility matrix weekly, and can be started manually. Pull-request code never receives live credentials.
 
@@ -42,6 +49,10 @@ Missing `MOTHERDUCK_TOKEN` fails the job instead of producing a successful skip.
 The weekly matrix runs read-only checks on every supported Terraform version and OpenTofu `1.12.6`. SQL lifecycle checks run on Terraform `1.5.7`, Terraform `1.16.1`, and OpenTofu `1.12.6`; the blueprint lifecycle runs on Terraform `1.16.1`. Manual inputs can request lifecycle coverage for every selected version.
 
 ## Releases
+
+Use the [official release readiness checklist](release-readiness.md) before
+creating the first tag. Repository checks do not configure Registry ownership,
+signing credentials, or partner verification.
 
 `.github/workflows/release.yml` runs when a semantic version tag is pushed:
 

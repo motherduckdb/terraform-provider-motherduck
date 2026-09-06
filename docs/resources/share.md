@@ -55,3 +55,9 @@ resource "motherduck_share_grant" "reader" {
 - `created_ts` (String) Share creation timestamp reported by MotherDuck.
 - `id` (String) Share resource ID. This is the share name.
 - `url` (String, Sensitive) Share URL reported by MotherDuck. This is sensitive because unrestricted share URLs can grant access.
+
+## Import
+
+```shell
+terraform import motherduck_share.analytics analytics_share
+```

@@ -6,6 +6,10 @@ The provider uses the public MotherDuck REST API for administration resources an
 
 ## Quick Start
 
+Before the first Registry release, use the [local development setup](docs/guides/local-development.md).
+Example version constraints below do not establish that a version is published.
+Start with the [database walkthrough](docs/guides/getting-started.md).
+
 Use environment variables for credentials:
 
 ```bash
@@ -89,6 +93,12 @@ Provider configuration belongs in the root module. Reusable child modules should
 The provider embeds DuckDB through CGO. Release artifacts are native per-platform builds, so package size and platform availability follow the tested runner matrix: Linux amd64/arm64 and macOS amd64/arm64. Windows packages are not published until there is a tested native Windows CGO build path.
 
 ## Documentation
+
+- [Create your first database](docs/guides/getting-started.md)
+- [Local development](docs/guides/local-development.md)
+- [State, imports, and lifecycle](docs/guides/state-and-lifecycle.md)
+- [Provider architecture](docs/guides/provider-architecture.md)
+- [Official release readiness](docs/guides/release-readiness.md)
 
 - [Generated provider docs](docs/index.md)
 - [Terraform best practices](docs/guides/terraform-best-practices.md)

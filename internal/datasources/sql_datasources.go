@@ -847,7 +847,7 @@ func (s rowSpec) typedRowsValue(rowsJSON string) (types.List, diag.Diagnostics) 
 	}
 	objectType := types.ObjectType{AttrTypes: attrTypes}
 
-	var rawRows []map[string]any
+	var rawRows []map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(rowsJSON), &rawRows); err != nil {
 		diags.AddError("Unable to decode typed MotherDuck rows", err.Error())
 		return types.ListNull(objectType), diags
@@ -874,23 +874,15 @@ func (s rowSpec) typedRowsValue(rowsJSON string) (types.List, diag.Diagnostics) 
 	return listValue, diags
 }
 
-func typedRowStringValue(value any) types.String {
-	switch v := value.(type) {
-	case nil:
+func typedRowStringValue(value json.RawMessage) types.String {
+	if len(value) == 0 || string(value) == "null" {
 		return types.StringNull()
-	case string:
-		return types.StringValue(v)
-	case bool:
-		return types.StringValue(fmt.Sprintf("%t", v))
-	case float64:
-		return types.StringValue(fmt.Sprintf("%v", v))
-	default:
-		payload, err := json.Marshal(v)
-		if err != nil {
-			return types.StringValue(fmt.Sprintf("%v", v))
-		}
-		return types.StringValue(string(payload))
 	}
+	var text string
+	if json.Unmarshal(value, &text) == nil {
+		return types.StringValue(text)
+	}
+	return types.StringValue(string(value))
 }
 
 func appendRowLimitOffset(query string, model rowsModel) string {

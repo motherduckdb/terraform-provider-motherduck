@@ -79,3 +79,13 @@ Required:
 
 - `alias` (String) Alias exposed to the Dive content.
 - `url` (String, Sensitive) MotherDuck share URL to mount into the Dive. This value is sensitive and can be sourced from `motherduck_share.url`.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+terraform import motherduck_dive.revenue '11111111-1111-4111-8111-111111111111'
+```

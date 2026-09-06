@@ -50,3 +50,13 @@ Optional:
 - `delete` (String) Optional timeout for dropping a MotherDuck database.
 - `read` (String) Optional timeout for refreshing MotherDuck database metadata.
 - `update` (String) Optional timeout for updating database options such as snapshot retention.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+terraform import motherduck_database.analytics 'analytics'
+```

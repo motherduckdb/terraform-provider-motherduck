@@ -5,7 +5,10 @@ import (
 	stdsql "database/sql"
 	"errors"
 	"testing"
+	"time"
 
+	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -16,6 +19,40 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
+
+type deadlineFlightClient struct {
+	providerctx.SQLClient
+	t       *testing.T
+	queried bool
+}
+
+func (c *deadlineFlightClient) Available() bool { return true }
+func (c *deadlineFlightClient) QueryRow(ctx context.Context, _ string, _ ...any) mdsql.RowScanner {
+	c.queried = true
+	deadline, ok := ctx.Deadline()
+	if !ok || time.Until(deadline) > 2*time.Second {
+		c.t.Error("Flight status query must inherit the configured two-second deadline")
+	}
+	return failedFlightRow{}
+}
+
+type failedFlightRow struct{}
+
+func (failedFlightRow) Scan(...any) error { return context.DeadlineExceeded }
+
+func TestFlightWaitBoundsStatusQuery(t *testing.T) {
+	client := &deadlineFlightClient{t: t}
+	r := &flightRunResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	model := flightRunModel{
+		Status: types.StringValue("RUNNING"), WaitForStatus: types.StringValue("succeeded"),
+		TimeoutSeconds: types.Int64Value(2), PollIntervalSeconds: types.Int64Value(1),
+	}
+	var diags diag.Diagnostics
+	r.waitForFlightRun(context.Background(), &model, &diags)
+	if !client.queried || !diags.HasError() {
+		t.Fatal("expected failed status query")
+	}
+}
 
 type recordingDiveStatusClient struct {
 	query string

@@ -18,3 +18,9 @@ The computed `url` attribute is sensitive. Treat share URLs as access-bearing in
 {{tffile "examples/resources/motherduck_share/resource.tf"}}
 
 {{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+```shell
+terraform import motherduck_share.analytics analytics_share
+```

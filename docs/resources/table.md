@@ -48,3 +48,13 @@ resource "motherduck_table" "events" {
 ### Read-Only
 
 - `id` (String) Table resource ID in `<database>.<schema>.<table>` form.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+terraform import motherduck_table.events 'analytics.app.events'
+```

@@ -35,3 +35,13 @@ resource "motherduck_access_token" "app" {
 ### Read-Only
 
 - `id` (String) Service account ID. This is the service account username returned by MotherDuck.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+terraform import motherduck_service_account.app 'service_account'
+```

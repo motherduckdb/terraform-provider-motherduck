@@ -45,3 +45,13 @@ resource "motherduck_access_token" "app" {
 - `id` (String) Access token ID assigned by MotherDuck.
 - `read_only` (Boolean) Whether the token is read-only according to MotherDuck.
 - `token` (String, Sensitive) Token secret, returned only at creation time.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+terraform import motherduck_access_token.app 'service_account/token_id'
+```

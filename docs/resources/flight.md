@@ -55,3 +55,13 @@ resource "motherduck_flight" "heartbeat" {
 - `id` (String) Flight ID assigned by MotherDuck.
 - `status` (String) Current Flight status reported by MotherDuck.
 - `updated_at` (String) Flight update timestamp reported by MotherDuck.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+terraform import motherduck_flight.heartbeat '11111111-1111-4111-8111-111111111111'
+```

@@ -92,9 +92,10 @@ release-package-local:
 
 release-check:
 	rm -rf dist/release-check dist/release-sign-test dist/release-check-darwin-amd64
-	VERSION=0.0.0 DIST_DIR=$$(pwd)/dist/release-check ./scripts/package-release.sh
-	cd dist/release-check && shasum -a 256 *.zip > terraform-provider-motherduck_0.0.0_SHA256SUMS
-	cd dist/release-check && shasum -a 256 -c terraform-provider-motherduck_0.0.0_SHA256SUMS
+	VERSION=0.0.1 DIST_DIR=$$(pwd)/dist/release-check ./scripts/package-release.sh
+	cd dist/release-check && shasum -a 256 *.zip > terraform-provider-motherduck_0.0.1_SHA256SUMS
+	cd dist/release-check && shasum -a 256 -c terraform-provider-motherduck_0.0.1_SHA256SUMS
+	bash ./scripts/test-release-package.sh "$(CURDIR)/dist/release-check/terraform-provider-motherduck_0.0.1_$$(go env GOOS)_$$(go env GOARCH).zip" 0.0.1
 
 static-check: fmt-check lint vulncheck workflow-check shellcheck test-scripts docs-check test-examples test-import-validation test-invalid-configuration test-missing-credentials test-live-rest-helper test-repository-hygiene build
 
@@ -104,7 +105,7 @@ test-unit:
 	go test -race -shuffle=on -count=1 -cover ./...
 
 test-contract:
-	go test -tags=contract -count=1 -cover ./internal/provider ./internal/ephemeral
+	go test -race -shuffle=on -timeout=5m -tags=contract -count=1 -cover ./internal/provider ./internal/ephemeral
 
 test-scripts:
 	bash -n scripts/*.sh scripts/lib/*.sh

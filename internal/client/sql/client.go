@@ -175,8 +175,8 @@ func (c *Client) WithDatabaseUse(ctx context.Context, database string, fn func(e
 	defer c.mu.Unlock()
 
 	previous, err := c.scalarStringLocked(ctx, "SELECT current_database()")
-	if err != nil || strings.TrimSpace(previous) == "" {
-		previous = "memory"
+	if err != nil {
+		return fmt.Errorf("read current database: %w", err)
 	}
 	if err := c.execLocked(ctx, "USE "+sqlbuild.QuoteIdentifier(database)); err != nil {
 		return err
@@ -184,7 +184,10 @@ func (c *Client) WithDatabaseUse(ctx context.Context, database string, fn func(e
 	runErr := fn(func(query string, args ...any) error {
 		return c.execLocked(ctx, query, args...)
 	})
-	restoreErr := c.execLocked(ctx, "USE "+sqlbuild.QuoteIdentifier(previous))
+	// Restoration must survive cancellation of the operation that changed USE.
+	restoreCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	restoreErr := c.execLocked(restoreCtx, "USE "+sqlbuild.QuoteIdentifier(previous))
 	if restoreErr != nil {
 		return errors.Join(runErr, fmt.Errorf("restore previous database %q: %w", previous, restoreErr))
 	}
@@ -229,22 +232,21 @@ func (c *Client) QueryRowsJSON(ctx context.Context, query string, args ...any) (
 		return "", err
 	}
 	out := make([]map[string]any, 0)
+	values := make([]any, len(cols))
+	targets := make([]any, len(cols))
+	typeNames := make([]string, len(cols))
+	for i := range cols {
+		cols[i] = strings.ToLower(cols[i])
+		targets[i] = &values[i]
+		typeNames[i] = columnTypes[i].DatabaseTypeName()
+	}
 	for rows.Next() {
-		values := make([]any, len(cols))
-		targets := make([]any, len(cols))
-		for i := range values {
-			targets[i] = &values[i]
-		}
 		if err := rows.Scan(targets...); err != nil {
 			return "", err
 		}
 		row := make(map[string]any, len(cols))
 		for i, col := range cols {
-			databaseTypeName := ""
-			if i < len(columnTypes) {
-				databaseTypeName = columnTypes[i].DatabaseTypeName()
-			}
-			row[strings.ToLower(col)] = normalizeValue(values[i], databaseTypeName)
+			row[col] = normalizeValue(values[i], typeNames[i])
 		}
 		out = append(out, row)
 	}

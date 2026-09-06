@@ -555,6 +555,17 @@ func TestFlightLogRowsExposeLineOrientedColumns(t *testing.T) {
 	}
 }
 
+func TestTypedRowsPreserveLargeInteger(t *testing.T) {
+	rows, diags := findSpec(t, "flight_logs").typedRowsValue(`[{"line_number":9007199254740993}]`)
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	got := rows.Elements()[0].(types.Object).Attributes()["line_number"]
+	if !got.Equal(types.StringValue("9007199254740993")) {
+		t.Fatalf("integer lost precision: %v", got)
+	}
+}
+
 func TestRowsJSONIsSensitive(t *testing.T) {
 	for _, spec := range rowSpecs() {
 		t.Run(spec.name, func(t *testing.T) {

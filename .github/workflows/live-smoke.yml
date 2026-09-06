@@ -37,6 +37,7 @@ concurrency:
 jobs:
   exact-main:
     name: Live exact-main
+    timeout-minutes: 30
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: motherduck-live
@@ -122,6 +123,7 @@ jobs:
 
   live-smoke:
     name: Live MotherDuck smoke (${{ matrix.cli }} ${{ matrix.version }})
+    timeout-minutes: 45
     needs: prepare-matrix
     runs-on: ubuntu-latest
     environment: motherduck-live
@@ -157,6 +159,7 @@ jobs:
 
   cleanup:
     name: Audit live cleanup
+    timeout-minutes: 15
     needs: live-smoke
     if: always() && github.event_name != 'push'
     runs-on: ubuntu-latest
