@@ -19,13 +19,3 @@ variable "name_prefix" {
     error_message = "name_prefix must start with a lowercase letter and use at most 40 lowercase letters, digits, or underscores."
   }
 }
-
-variable "reader_username" {
-  description = "Existing BI account from bootstrap for this environment only."
-  type        = string
-  nullable    = false
-  validation {
-    condition     = length(trimspace(var.reader_username)) > 0
-    error_message = "reader_username must be nonempty."
-  }
-}

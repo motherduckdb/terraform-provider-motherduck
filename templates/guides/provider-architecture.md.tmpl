@@ -27,6 +27,11 @@ lazily so REST-only operations do not need a SQL connection. SQL access is
 serialized because operations can temporarily change the selected database.
 Increasing the pool size without redesigning those session boundaries is unsafe.
 
+When no database is configured, a SQL client connects to the saved workspace.
+On a fresh empty account, that first connection can create the platform default
+`my_db`. Configure an existing database explicitly and use single-database mode
+when the connection must avoid workspace initialization.
+
 Resources own Terraform state semantics. Clients should report service outcomes;
 they should not decide that permission failures mean a Terraform resource was
 deleted. New abstractions should have a concrete caller or test need.

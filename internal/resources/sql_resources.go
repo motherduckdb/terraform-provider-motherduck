@@ -1047,18 +1047,21 @@ func (r *shareResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			},
 			"access": schema.StringAttribute{
 				Optional:            true,
+				Computed:            true,
 				MarkdownDescription: "Share access mode: `organization`, `restricted`, or `unrestricted`.",
 				PlanModifiers:       stringRequiresReplace(),
 				Validators:          shareAccessValidators(),
 			},
 			"visibility": schema.StringAttribute{
 				Optional:            true,
+				Computed:            true,
 				MarkdownDescription: "Share visibility mode: `discoverable` or `hidden`.",
 				PlanModifiers:       stringRequiresReplace(),
 				Validators:          shareVisibilityValidators(),
 			},
 			"update_mode": schema.StringAttribute{
 				Optional:            true,
+				Computed:            true,
 				MarkdownDescription: "Share update mode: `manual` or `automatic`.",
 				PlanModifiers:       stringRequiresReplace(),
 				Validators:          shareUpdateModeValidators(),
@@ -1242,18 +1245,17 @@ func (r *shareResource) readShare(ctx context.Context, model *shareModel, diags 
 	return true
 }
 
-// applyOwnedShare maps an OWNED_SHARES row onto the share model. The
-// `access`, `visibility`, and `update_mode` attributes are optional-only and
-// config-owned: OWNED_SHARES always reports server defaults for omitted
-// options, so refreshing them into state when the configuration omits them
-// would produce an inconsistent result after apply.
+// applyOwnedShare maps an OWNED_SHARES row onto the share model. Share option
+// attributes are optional+computed so imports can discover their live values
+// and omitted options can retain the server defaults without planning a
+// replacement.
 func applyOwnedShare(ctx context.Context, model *shareModel, share sqlcatalog.OwnedShare, diags *diag.Diagnostics) {
 	model.ID = types.StringValue(model.Name.ValueString())
 	model.URL = nullString(share.URL)
 	model.SourceDatabase = nullString(share.SourceDatabase)
-	model.Access = optionalConfigOwnedLowerStringFromLive(model.Access, share.Access)
-	model.Visibility = optionalConfigOwnedLowerStringFromLive(model.Visibility, share.Visibility)
-	model.UpdateMode = optionalConfigOwnedLowerStringFromLive(model.UpdateMode, share.UpdateMode)
+	model.Access = lowerNullString(share.Access)
+	model.Visibility = lowerNullString(share.Visibility)
+	model.UpdateMode = lowerNullString(share.UpdateMode)
 	model.IncludePattern = optionalStringListFromJSON(ctx, model.IncludePattern, share.IncludePattern, "include_pattern", diags)
 	model.CreatedTS = nullString(share.CreatedTS)
 }

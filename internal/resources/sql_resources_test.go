@@ -389,7 +389,7 @@ func TestApplyOwnedShare(t *testing.T) {
 		share sqlcatalog.OwnedShare
 		want  shareModel
 	}{
-		"omitted options stay null despite server defaults": {
+		"omitted options read back server defaults": {
 			model: shareModel{
 				Name:       types.StringValue("share_name"),
 				Access:     types.StringNull(),
@@ -397,11 +397,7 @@ func TestApplyOwnedShare(t *testing.T) {
 				UpdateMode: types.StringNull(),
 			},
 			share: liveDefaults,
-			want: shareModel{
-				Access:     types.StringNull(),
-				Visibility: types.StringNull(),
-				UpdateMode: types.StringNull(),
-			},
+			want:  shareModel{Access: types.StringValue("organization"), Visibility: types.StringValue("discoverable"), UpdateMode: types.StringValue("automatic")},
 		},
 		"configured options refresh lowercased from live": {
 			model: shareModel{
@@ -473,15 +469,21 @@ func TestApplyOwnedShareImportThenConfiguredRoundTrip(t *testing.T) {
 		CreatedTS:      sqlNullString("2026-01-01 00:00:00"),
 	}
 
-	// Import: only name is known, so config-owned options stay null.
+	// Import: only name is known, so live option values populate computed state.
 	imported := shareModel{Name: types.StringValue("share_name")}
 	var diags diag.Diagnostics
 	applyOwnedShare(ctx, &imported, live, &diags)
 	if diags.HasError() {
 		t.Fatalf("import applyOwnedShare diagnostics: %v", diags)
 	}
-	if !imported.Access.IsNull() || !imported.Visibility.IsNull() || !imported.UpdateMode.IsNull() {
-		t.Fatalf("imported options should stay null, got %#v %#v %#v", imported.Access, imported.Visibility, imported.UpdateMode)
+	if got, want := imported.Access, types.StringValue("restricted"); !got.Equal(want) {
+		t.Fatalf("imported access = %#v, want %#v", got, want)
+	}
+	if got, want := imported.Visibility, types.StringValue("hidden"); !got.Equal(want) {
+		t.Fatalf("imported visibility = %#v, want %#v", got, want)
+	}
+	if got, want := imported.UpdateMode, types.StringValue("manual"); !got.Equal(want) {
+		t.Fatalf("imported update_mode = %#v, want %#v", got, want)
 	}
 	if got, want := imported.SourceDatabase, types.StringValue("source_db"); !got.Equal(want) {
 		t.Fatalf("source_database = %#v, want %#v", got, want)
@@ -519,6 +521,23 @@ func TestShareURLIsSensitive(t *testing.T) {
 	}
 	if !attr.Sensitive {
 		t.Fatal("share url must be sensitive because unrestricted share URLs can grant access")
+	}
+}
+
+func TestShareOptionsAreOptionalComputed(t *testing.T) {
+	var resp resource.SchemaResponse
+	NewShareResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("schema diagnostics: %v", resp.Diagnostics)
+	}
+	for _, name := range []string{"access", "visibility", "update_mode"} {
+		attr, ok := resp.Schema.Attributes[name].(resourceschema.StringAttribute)
+		if !ok {
+			t.Fatalf("%s attribute = %T, want schema.StringAttribute", name, resp.Schema.Attributes[name])
+		}
+		if !attr.Optional || !attr.Computed {
+			t.Fatalf("%s must be optional and computed for import-safe live defaults", name)
+		}
 	}
 }
 

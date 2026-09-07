@@ -115,6 +115,7 @@ test-scripts:
 	./scripts/test-terraform-test-unit.sh
 	./scripts/test-live-common-unit.sh
 	./scripts/test-live-rest-helper.sh
+	./scripts/test-live-rest-admin-gates.sh
 	./scripts/test-gates-unit.sh
 
 test-integration:

@@ -37,18 +37,3 @@ resource "motherduck_table" "daily_revenue" {
     revenue     = "DECIMAL(18,2)"
   }
 }
-
-resource "motherduck_share" "marts" {
-  name            = "${var.name_prefix}_${var.environment}_marts_read"
-  source_database = motherduck_database.layer["marts"].name
-  access          = "restricted"
-  visibility      = "hidden"
-  update_mode     = "automatic"
-  depends_on      = [motherduck_table.daily_revenue]
-}
-
-resource "motherduck_share_grant" "bi" {
-  share        = motherduck_share.marts.name
-  grantee_type = "user"
-  username     = var.reader_username
-}

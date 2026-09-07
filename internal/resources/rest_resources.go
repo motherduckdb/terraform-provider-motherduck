@@ -45,7 +45,7 @@ func (r *serviceAccountResource) Metadata(ctx context.Context, req resource.Meta
 func (r *serviceAccountResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:             1,
-		MarkdownDescription: "Creates a MotherDuck service account through the public REST API.",
+		MarkdownDescription: "Creates a MotherDuck service account through the public REST API. Deleting the account permanently deletes the account and all data it owns, so destroy dependent databases and other data first.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,

@@ -90,6 +90,8 @@ Live checks use credentials from environment variables:
 - `MOTHERDUCK_TOKEN`: SQL and DuckDB-backed resources and data sources.
 - `MOTHERDUCK_ADMIN_TOKEN`: optional organization-admin coverage for REST-backed administration resources and data sources. Hosted gates do not have this credential.
 
+Admin-only live smoke scripts fail when the token authenticates but lacks organization-admin permissions. The Terraform version matrix remains SQL-only in that case, and the permission-diagnostics smoke uses the same response to test the provider's 403 diagnostic.
+
 Run the required SQL lifecycle gate:
 
 ```bash

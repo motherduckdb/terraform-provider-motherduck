@@ -114,6 +114,11 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		}
 		if cfg.Database != "" {
 			queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"+cfg.Database))
+		} else {
+			// Initialize the default workspace explicitly. Without this attach,
+			// the first md_user() query can be answered by local DuckDB as
+			// "duckdb" even though the MotherDuck token is configured.
+			queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"))
 		}
 		for _, query := range queries {
 			tflog.Debug(initCtx, "running MotherDuck SQL boot query", map[string]any{"query": redactToken(query, cfg.Token)})

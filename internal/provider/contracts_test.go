@@ -269,6 +269,128 @@ data "motherduck_owned_share" "test" {
 	})
 }
 
+func TestContractShareDefaultsDriftAndReplacement(t *testing.T) {
+	sqlClient := newContractSQL()
+	config := contractProviderConfig("http://127.0.0.1") + `
+resource "motherduck_share" "test" {
+  name            = "contract_share"
+  source_database = "analytics"
+}
+`
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(sqlClient),
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("motherduck_share.test", "access", "organization"),
+					resource.TestCheckResourceAttr("motherduck_share.test", "visibility", "discoverable"),
+					resource.TestCheckResourceAttr("motherduck_share.test", "update_mode", "automatic"),
+				),
+			},
+			{
+				PreConfig: func() {
+					sqlClient.mu.Lock()
+					sqlClient.ownedShare = contractShareRow("RESTRICTED", "HIDDEN", "MANUAL")
+					sqlClient.mu.Unlock()
+				},
+				Config: config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("motherduck_share.test", "access", "restricted"),
+					resource.TestCheckResourceAttr("motherduck_share.test", "visibility", "hidden"),
+					resource.TestCheckResourceAttr("motherduck_share.test", "update_mode", "manual"),
+				),
+			},
+			{
+				Config: strings.Replace(config, "source_database = \"analytics\"", "source_database = \"analytics\"\n  access = \"restricted\"\n  visibility = \"hidden\"\n  update_mode = \"manual\"", 1),
+				PreConfig: func() {
+					sqlClient.mu.Lock()
+					sqlClient.ownedShare = contractShareRow("ORGANIZATION", "DISCOVERABLE", "AUTOMATIC")
+					sqlClient.mu.Unlock()
+				},
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_share.test", plancheck.ResourceActionReplace)},
+				},
+			},
+		},
+	})
+}
+
+func TestContractShareImportWithConfiguredOptionsIsNoop(t *testing.T) {
+	sqlClient := newContractSQL()
+	config := contractProviderConfig("http://127.0.0.1") + `
+resource "motherduck_share" "test" {
+  name            = "contract_share"
+  source_database = "analytics"
+  access          = "restricted"
+  visibility      = "hidden"
+  update_mode     = "manual"
+}
+`
+	sourceConfig := strings.Replace(config, `resource "motherduck_share" "test"`, `resource "motherduck_share" "source"`, 1)
+	combinedConfig := contractProviderConfig("http://127.0.0.1") + `
+resource "motherduck_share" "source" {
+  name            = "contract_share"
+  source_database = "analytics"
+  access          = "restricted"
+  visibility      = "hidden"
+  update_mode     = "manual"
+}
+
+resource "motherduck_share" "test" {
+  name            = "contract_share"
+  source_database = "analytics"
+  access          = "restricted"
+  visibility      = "hidden"
+  update_mode     = "manual"
+}
+`
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(sqlClient),
+		CheckDestroy: func(*terraform.State) error {
+			if sqlClient.ownedShare != nil {
+				return errors.New("contract share still exists after destroy")
+			}
+			if got := sqlClient.countCalls(`exec CREATE SHARE "contract_share" FROM "analytics" (ACCESS RESTRICTED, VISIBILITY HIDDEN, UPDATE MANUAL)`); got != 1 {
+				return fmt.Errorf("share creates = %d, want 1 (import must not recreate)", got)
+			}
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{Config: sourceConfig, ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{
+				ResourceName:       "motherduck_share.test",
+				ImportState:        true,
+				ImportStatePersist: true,
+				ImportStateId:      "contract_share",
+				ImportStateVerify:  true,
+				Config:             combinedConfig,
+				PreConfig: func() {
+					sqlClient.mu.Lock()
+					sqlClient.ownedShare = contractShareRow("RESTRICTED", "HIDDEN", "MANUAL")
+					sqlClient.mu.Unlock()
+				},
+			},
+			{
+				Config: combinedConfig,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
+		},
+	})
+}
+
+func contractShareRow(access, visibility, updateMode string) []any {
+	return []any{"md:_share/contract", "analytics", access, visibility, updateMode, nil, "2026-09-01T00:00:00Z"}
+}
+
 func contractProviderFactories(sqlClient providerctx.SQLClient) map[string]func() (tfprotov6.ProviderServer, error) {
 	newSQL := func(context.Context, mdsql.Config) (providerctx.SQLClient, error) {
 		return sqlClient, nil
@@ -304,7 +426,7 @@ func (c *contractSQL) Close() error    { return nil }
 
 func (c *contractSQL) AttachDatabase(_ context.Context, database string) error {
 	c.record("attach", database)
-	if database != "contract_database" {
+	if database != "contract_database" && database != "analytics" {
 		return fmt.Errorf("unexpected database attach %q", database)
 	}
 	return nil
@@ -343,6 +465,18 @@ func (c *contractSQL) Exec(_ context.Context, query string, args ...any) error {
 		}
 		c.tableExists = false
 		c.tableColumns = map[string]string{}
+	case `CREATE SHARE "contract_share" FROM "analytics"`:
+		if c.ownedShare != nil {
+			return errors.New("duplicate share create")
+		}
+		c.ownedShare = contractShareRow("ORGANIZATION", "DISCOVERABLE", "AUTOMATIC")
+	case `CREATE SHARE "contract_share" FROM "analytics" (ACCESS RESTRICTED, VISIBILITY HIDDEN, UPDATE MANUAL)`:
+		if c.ownedShare != nil {
+			return errors.New("duplicate share create")
+		}
+		c.ownedShare = contractShareRow("RESTRICTED", "HIDDEN", "MANUAL")
+	case `DROP SHARE IF EXISTS "contract_share"`:
+		c.ownedShare = nil
 	case "USE memory":
 	default:
 		return fmt.Errorf("unexpected SQL exec %q", query)

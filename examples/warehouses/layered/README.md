@@ -1,4 +1,4 @@
-# Layered warehouse with curated BI sharing
+# Layered warehouse with BI read scaling
 
 One environment writer owns three databases:
 
@@ -6,16 +6,15 @@ One environment writer owns three databases:
 - transform: a view selecting the latest source revision per order;
 - marts: a physical daily-revenue table, refreshed by the writer pipeline.
 
-Only marts is published through a hidden, restricted, automatically updated
-share. The explicit reader is that environment's BI service account. No raw or
-transform share is created. Materializing the marts table keeps consumer queries
-independent of cross-database views and source data permissions.
+BI uses the environment writer's read-scaling token and queries marts directly.
+It can also read raw and transform; this layout is not a curated-only access
+boundary. The physical marts table keeps dashboard queries independent of the
+cross-database transformation view.
 
 ## Apply
 
-Follow the [bootstrap and ownership procedure](../README.md). Set
-`reader_username` to the corresponding BI account; it is required and has no
-default that could accidentally grant a prod share to a dev reader.
+Follow the [bootstrap and ownership procedure](../README.md). Use the matching
+environment's writer token and variables.
 
 ```shell
 terraform init
@@ -24,10 +23,9 @@ terraform apply warehouse.tfplan
 terraform plan -var-file=dev.tfvars -detailed-exitcode
 ```
 
-There are eight managed resources: three databases, two tables, one view, one
-share, and one grant. The final plan should return 0. For prod, use a separate
-root/state, prod writer token, and `prod.tfvars`. Adjust the sample reader
-usernames if bootstrap used a different prefix.
+There are six managed resources: three databases, two tables, and one view.
+The final plan should return 0. For prod, use a separate root/state, prod writer
+token, and `prod.tfvars`.
 
 ## Ingest and refresh
 
@@ -51,15 +49,17 @@ Reject duplicate revisions and invalid required values in the ingestion pipeline
 
 ## Consumer verification
 
-Securely provide `marts_share_url` to the BI client. Using the BI account token,
-attach that exact share URL under an alias such as `reporting`, then query
-`reporting.main.daily_revenue`. Consumer attachment is a separate SQL/client
-operation; the grant alone does not attach a database.
+Configure BI with the matching writer's `dev_bi` or `prod_bi` read-scaling token.
+Query `<marts_database>.main.daily_revenue` directly, using the `databases` output
+to select the name. No share grant or attachment is needed. Read replicas are
+eventually consistent, so allow synchronization time after refreshing marts.
 
-Verify that reads succeed and writes fail. Verify raw/transform and the other
-environment cannot be accessed without explicit grants. An automatic share
-does not schedule ingestion or marts refresh.
+Verify reads succeed and writes fail. Raw/transform reads in the same environment
+are expected; the other environment should remain inaccessible unless explicitly
+shared. For curated-only access, follow the
+[separate-reader alternative](../README.md#alternative-separate-readers-with-curated-shares),
+including its initial attachment using the reader's read-write token.
 
-Outputs: `databases`, sensitive `marts_share_url`, `refresh_sql`, `demo_sql`.
+Outputs: `databases`, `refresh_sql`, `demo_sql`.
 The manifest documents the dependency order. Follow the common guide to destroy
 warehouse resources before deleting their service accounts.
