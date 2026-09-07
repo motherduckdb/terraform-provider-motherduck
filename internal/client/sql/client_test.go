@@ -152,6 +152,31 @@ func TestOneTimeInitializerRetriesFailureAndSkipsReconnectBootstrap(t *testing.T
 	}
 }
 
+func TestOneTimeInitializerDoesNotReplaySetupAfterAttachFailure(t *testing.T) {
+	setupCalls, tokenCalls, attachCalls := 0, 0, 0
+	initializer := &oneTimeInitializer{steps: []func(context.Context, driver.ExecerContext) error{
+		func(context.Context, driver.ExecerContext) error { setupCalls++; return nil },
+		func(context.Context, driver.ExecerContext) error { tokenCalls++; return nil },
+		func(context.Context, driver.ExecerContext) error {
+			attachCalls++
+			if attachCalls == 1 {
+				return errors.New("attach canceled after remote attach")
+			}
+			return nil
+		},
+	}}
+	execer := &recordingExecer{}
+	if err := initializer.run(context.Background(), execer); err == nil {
+		t.Fatal("first attach should fail")
+	}
+	if err := initializer.run(context.Background(), execer); err != nil {
+		t.Fatal(err)
+	}
+	if setupCalls != 1 || tokenCalls != 1 || attachCalls != 2 {
+		t.Fatalf("bootstrap calls = setup:%d token:%d attach:%d, want 1,1,2", setupCalls, tokenCalls, attachCalls)
+	}
+}
+
 type recordingExecer struct {
 	contexts []context.Context
 }

@@ -66,8 +66,10 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 	if i.initialized {
 		return nil
 	}
+	initCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
 	for i.next < len(i.steps) {
-		if err := i.steps[i.next](ctx, execer); err != nil {
+		if err := i.steps[i.next](initCtx, execer); err != nil {
 			return err
 		}
 		i.next++
@@ -146,11 +148,14 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	steps := make([]func(context.Context, driver.ExecerContext) error, 0, len(queries))
 	for _, query := range queries {
 		query := query
+		attachAttempted := false
 		steps = append(steps, func(ctx context.Context, execer driver.ExecerContext) error {
-			initCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-			defer cancel()
-			tflog.Debug(initCtx, "running MotherDuck SQL boot query", map[string]any{"query": redactToken(query, cfg.Token)})
-			if _, err := execer.ExecContext(initCtx, query, nil); err != nil {
+			if strings.HasPrefix(query, "ATTACH ") && attachAttempted {
+				query = strings.Replace(query, "ATTACH ", "ATTACH IF NOT EXISTS ", 1)
+			}
+			attachAttempted = true
+			tflog.Debug(ctx, "running MotherDuck SQL boot query", map[string]any{"query": redactToken(query, cfg.Token)})
+			if _, err := execer.ExecContext(ctx, query, nil); err != nil {
 				return fmt.Errorf("running boot query %q: %s", redactToken(query, cfg.Token), redactToken(err.Error(), cfg.Token))
 			}
 			return nil
