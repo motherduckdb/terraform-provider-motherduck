@@ -152,7 +152,6 @@ func TestOneTimeInitializerDoesNotReplaySetupAfterAttachFailure(t *testing.T) {
 }
 
 type recordingExecer struct {
-	contexts       []context.Context
 	queries        []string
 	failAttachOnce bool
 }
