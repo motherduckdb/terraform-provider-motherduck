@@ -14,6 +14,7 @@ PROVIDER_VERSION="${PROVIDER_VERSION:-0.1.1}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d%H%M%S)_$$}"
 TERRAFORM_BIN="${TERRAFORM_BIN:-terraform}"
 require_safe_run_id "${RUN_ID}"
+RUN_ID="${RUN_ID//-/_}"
 
 if [[ -z "${MOTHERDUCK_ADMIN_TOKEN:-}" ]]; then
   echo "MOTHERDUCK_ADMIN_TOKEN is required for warehouse example smoke tests" >&2
@@ -98,12 +99,12 @@ for environment in dev prod; do
 done
 
 check_bi_access() {
-  local token="$1" relation="$2" log_prefix="$3"
+  local token="$1" writer_token="$2" read_relation="$3" write_relation="$4" log_prefix="$5"
   local read_status=1 read_output write_status=0
   for _ in 1 2 3 4 5 6; do
     set +e
     read_output="$(MOTHERDUCK_TOKEN="${token}" go run "${ROOT_DIR}/internal/dev/mdexec" -scalar \
-      "SELECT count(*)::VARCHAR FROM ${relation}" 2>"${result_dir}/${log_prefix}-read.err")"
+      "SELECT count(*)::VARCHAR FROM ${read_relation}" 2>"${result_dir}/${log_prefix}-read.err")"
     read_status=$?
     set -e
     if [[ "${read_status}" -eq 0 ]]; then
@@ -113,19 +114,71 @@ check_bi_access() {
     sleep 10
   done
   if [[ "${read_status}" -ne 0 ]]; then
-    echo "BI read did not become available for ${relation}" >&2
+    echo "BI read did not become available for ${read_relation}" >&2
     return 1
   fi
+  local probe_id="bi_probe_${RUN_ID}"
+  local writer_insert="INSERT INTO ${write_relation} (order_id, order_date, amount, status) VALUES ('${probe_id}', DATE '2026-01-01', 1.00, 'completed')"
+  if [[ "${write_relation}" == *"_marts"* ]]; then
+    writer_insert="INSERT INTO ${write_relation} (order_date, order_count, revenue) VALUES (DATE '2026-01-01', 1, 1.00)"
+  elif [[ "${write_relation}" != *"_simple"* ]]; then
+    writer_insert="INSERT INTO ${write_relation} (order_id, order_date, amount, status, source_revision) VALUES ('${probe_id}', DATE '2026-01-01', 1.00, 'completed', 1)"
+  fi
+  local before_count after_writer_count after_bi_count
+  before_count="$(MOTHERDUCK_TOKEN="${writer_token}" go run "${ROOT_DIR}/internal/dev/mdexec" -scalar "SELECT count(*)::VARCHAR FROM ${write_relation}")"
+  MOTHERDUCK_TOKEN="${writer_token}" go run "${ROOT_DIR}/internal/dev/mdexec" -sql "${writer_insert}" >"${result_dir}/${log_prefix}-writer-write.txt" 2>&1
+  after_writer_count="$(MOTHERDUCK_TOKEN="${writer_token}" go run "${ROOT_DIR}/internal/dev/mdexec" -scalar "SELECT count(*)::VARCHAR FROM ${write_relation}")"
+  [[ "${after_writer_count}" -eq $((before_count + 1)) ]] || { echo "writer write did not add one row" >&2; return 1; }
   set +e
   MOTHERDUCK_TOKEN="${token}" go run "${ROOT_DIR}/internal/dev/mdexec" -sql \
-    "INSERT INTO ${relation} VALUES (DATE '2026-01-01', 1, 1.00)" \
+    "${writer_insert}" \
     >"${result_dir}/${log_prefix}-write.txt" 2>&1
   write_status=$?
   set -e
   if [[ "${write_status}" -eq 0 ]]; then
-    echo "BI write unexpectedly succeeded for ${relation}" >&2
+    echo "BI write unexpectedly succeeded for ${write_relation}" >&2
     return 1
   fi
+  after_bi_count="$(MOTHERDUCK_TOKEN="${writer_token}" go run "${ROOT_DIR}/internal/dev/mdexec" -scalar "SELECT count(*)::VARCHAR FROM ${write_relation}")"
+  [[ "${after_bi_count}" -eq "${after_writer_count}" ]] || { echo "BI write changed rowcount" >&2; return 1; }
+}
+
+check_cross_environment_denied() {
+  local token="$1" relation="$2" log_prefix="$3" status
+  set +e
+  MOTHERDUCK_TOKEN="${token}" go run "${ROOT_DIR}/internal/dev/mdexec" -scalar \
+    "SELECT count(*)::VARCHAR FROM ${relation}" >"${result_dir}/${log_prefix}.txt" 2>&1
+  status=$?
+  set -e
+  if [[ "${status}" -eq 0 ]]; then
+    echo "cross-environment BI read unexpectedly succeeded for ${relation}" >&2
+    return 1
+  fi
+}
+
+check_account_status() {
+  local expected="$1"
+  shift
+  local username status
+  for username in "$@"; do
+    status="$(CHECK_USERNAME="${username}" CHECK_EXPECTED="${expected}" python3 - <<'PY'
+import os
+import urllib.error
+import urllib.parse
+import urllib.request
+
+url = os.environ.get("MOTHERDUCK_API_BASE_URL", "https://api.motherduck.com").rstrip("/")
+url += "/v1/users/" + urllib.parse.quote(os.environ["CHECK_USERNAME"], safe="") + "/instances"
+request = urllib.request.Request(url, headers={"Authorization": "Bearer " + os.environ["MOTHERDUCK_ADMIN_TOKEN"]})
+try:
+    with urllib.request.urlopen(request, timeout=30) as response:
+        print(response.status)
+except urllib.error.HTTPError as error:
+    print(error.code)
+PY
+    )"
+    [[ "${status}" == "${expected}" ]] || { echo "account ${username} returned HTTP ${status}, expected ${expected}" >&2; return 1; }
+  done
 }
 
 destroy_status=0
@@ -180,12 +233,11 @@ cleanup() {
       >"${result_dir}/bootstrap-destroy.log" 2>&1 || destroy_status=$?
   fi
   if [[ "${destroy_status}" -eq 0 ]]; then
-    for username in "tf_audit_wh_${RUN_ID}_dev_writer" "tf_audit_wh_${RUN_ID}_prod_writer"; do
-      status="$(curl -sS -o /dev/null -w '%{http_code}' \
-        -H "Authorization: Bearer ${MOTHERDUCK_ADMIN_TOKEN}" \
-        -H 'Accept: application/json' "${MOTHERDUCK_API_BASE_URL:-https://api.motherduck.com}/v1/users/${username}/instances")"
-      [[ "${status}" == "404" ]] || { echo "cleanup readback for ${username} returned HTTP ${status}" >&2; destroy_status=1; }
-    done
+    check_account_status 404 \
+      "tf_audit_wh_${RUN_ID}_dev_writer" "tf_audit_wh_${RUN_ID}_prod_writer" \
+      "tf_audit_rest_${RUN_ID}_service_account" "tf_audit_rest_${RUN_ID}_access_token" \
+      "tf_audit_rest_${RUN_ID}_duckling_config" "tf_audit_bp_writer_${RUN_ID}" \
+      "tf_audit_reader_${RUN_ID}_acme" "tf_audit_reader_rh_${RUN_ID}_acme" || destroy_status=1
   fi
   return "${destroy_status}"
 }
@@ -241,9 +293,17 @@ for environment in dev prod; do
   done
 done
 
-check_bi_access "${dev_bi_token}" "tf_audit_wh_${RUN_ID}_dev_simple.analytics.daily_revenue" dev-bi-simple
-check_bi_access "${prod_bi_token}" "tf_audit_wh_${RUN_ID}_prod_simple.analytics.daily_revenue" prod-bi-simple
-check_bi_access "${dev_bi_token}" "tf_audit_wh_${RUN_ID}_dev_marts.main.daily_revenue" dev-bi-layered
-check_bi_access "${prod_bi_token}" "tf_audit_wh_${RUN_ID}_prod_marts.main.daily_revenue" prod-bi-layered
+check_account_status 200 \
+  "tf_audit_wh_${RUN_ID}_dev_writer" "tf_audit_wh_${RUN_ID}_prod_writer" \
+  "tf_audit_rest_${RUN_ID}_service_account" "tf_audit_rest_${RUN_ID}_access_token" \
+  "tf_audit_rest_${RUN_ID}_duckling_config" "tf_audit_bp_writer_${RUN_ID}" \
+  "tf_audit_reader_${RUN_ID}_acme" "tf_audit_reader_rh_${RUN_ID}_acme"
+
+check_bi_access "${dev_bi_token}" "${dev_writer_token}" "tf_audit_wh_${RUN_ID}_dev_simple.analytics.daily_revenue" "tf_audit_wh_${RUN_ID}_dev_simple.raw.orders" dev-bi-simple
+check_bi_access "${prod_bi_token}" "${prod_writer_token}" "tf_audit_wh_${RUN_ID}_prod_simple.analytics.daily_revenue" "tf_audit_wh_${RUN_ID}_prod_simple.raw.orders" prod-bi-simple
+check_bi_access "${dev_bi_token}" "${dev_writer_token}" "tf_audit_wh_${RUN_ID}_dev_marts.main.daily_revenue" "tf_audit_wh_${RUN_ID}_dev_marts.main.daily_revenue" dev-bi-layered
+check_bi_access "${prod_bi_token}" "${prod_writer_token}" "tf_audit_wh_${RUN_ID}_prod_marts.main.daily_revenue" "tf_audit_wh_${RUN_ID}_prod_marts.main.daily_revenue" prod-bi-layered
+check_cross_environment_denied "${dev_bi_token}" "tf_audit_wh_${RUN_ID}_prod_simple.analytics.daily_revenue" dev-bi-cross-prod
+check_cross_environment_denied "${prod_bi_token}" "tf_audit_wh_${RUN_ID}_dev_simple.analytics.daily_revenue" prod-bi-cross-dev
 
 echo "warehouse example smoke passed: ${result_dir}"
