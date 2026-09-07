@@ -133,8 +133,17 @@ func TestOneTimeInitializerRetriesFailureAndSkipsReconnectBootstrap(t *testing.T
 	if err := initializer.run(third, execer); err != nil {
 		t.Fatal(err)
 	}
+	if err := initializer.run(context.WithValue(context.Background(), contextKey{}, "fourth"), execer); err != nil {
+		t.Fatal(err)
+	}
 	if initializer.next != 2 || !initializer.initialized {
 		t.Fatalf("initializer state = next:%d initialized:%t, want 2,true", initializer.next, initializer.initialized)
+	}
+	if len(execer.queries) != 6 {
+		t.Fatalf("bootstrap query count = %d, want 6 with no fourth-run replay", len(execer.queries))
+	}
+	if got := execer.contexts[len(execer.contexts)-1].Value(contextKey{}); got != "third" {
+		t.Fatalf("retry context = %v, want third", got)
 	}
 }
 
@@ -164,12 +173,14 @@ func TestOneTimeInitializerDoesNotMaskInitialAttachError(t *testing.T) {
 }
 
 type recordingExecer struct {
+	contexts       []context.Context
 	queries        []string
 	attachFailures int
 	attachError    string
 }
 
-func (r *recordingExecer) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+func (r *recordingExecer) ExecContext(ctx context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+	r.contexts = append(r.contexts, ctx)
 	r.queries = append(r.queries, query)
 	if strings.HasPrefix(query, "ATTACH") && r.attachFailures > 0 {
 		r.attachFailures--
