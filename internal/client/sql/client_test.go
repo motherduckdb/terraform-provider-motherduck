@@ -118,13 +118,15 @@ func TestOneTimeInitializerRetriesFailureAndSkipsReconnectBootstrap(t *testing.T
 	type contextKey struct{}
 	execer := &recordingExecer{}
 	attempts := 0
-	initializer := &oneTimeInitializer{initialize: func(ctx context.Context, _ driver.ExecerContext) error {
-		attempts++
-		execer.contexts = append(execer.contexts, ctx)
-		if attempts == 1 {
-			return errors.New("initialization failed")
-		}
-		return nil
+	initializer := &oneTimeInitializer{steps: []func(context.Context, driver.ExecerContext) error{
+		func(ctx context.Context, _ driver.ExecerContext) error {
+			attempts++
+			execer.contexts = append(execer.contexts, ctx)
+			if attempts == 1 {
+				return errors.New("initialization failed")
+			}
+			return nil
+		},
 	}}
 
 	first := context.WithValue(context.Background(), contextKey{}, "first")

@@ -56,7 +56,8 @@ type contextConnector struct {
 type oneTimeInitializer struct {
 	mu          sync.Mutex
 	initialized bool
-	initialize  func(context.Context, driver.ExecerContext) error
+	next        int
+	steps       []func(context.Context, driver.ExecerContext) error
 }
 
 func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContext) error {
@@ -65,8 +66,11 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 	if i.initialized {
 		return nil
 	}
-	if err := i.initialize(ctx, execer); err != nil {
-		return err
+	for i.next < len(i.steps) {
+		if err := i.steps[i.next](ctx, execer); err != nil {
+			return err
+		}
+		i.next++
 	}
 	i.initialized = true
 	return nil
@@ -123,34 +127,36 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	initialize := &oneTimeInitializer{initialize: func(ctx context.Context, execer driver.ExecerContext) error {
-		initCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-		defer cancel()
-
-		queries := []string{
-			"INSTALL motherduck",
-			"LOAD motherduck",
-			"SET motherduck_token = " + sqlbuild.StringLiteral(cfg.Token),
-		}
-		if cfg.AttachMode != "" {
-			queries = append(queries, "SET motherduck_attach_mode = "+sqlbuild.StringLiteral(cfg.AttachMode))
-		}
-		if cfg.Database != "" {
-			queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"+cfg.Database))
-		} else {
-			// Initialize the default workspace explicitly. Without this attach,
-			// the first md_user() query can be answered by local DuckDB as
-			// "duckdb" even though the MotherDuck token is configured.
-			queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"))
-		}
-		for _, query := range queries {
+	queries := []string{
+		"INSTALL motherduck",
+		"LOAD motherduck",
+		"SET motherduck_token = " + sqlbuild.StringLiteral(cfg.Token),
+	}
+	if cfg.AttachMode != "" {
+		queries = append(queries, "SET motherduck_attach_mode = "+sqlbuild.StringLiteral(cfg.AttachMode))
+	}
+	if cfg.Database != "" {
+		queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"+cfg.Database))
+	} else {
+		// Initialize the default workspace explicitly. Without this attach,
+		// the first md_user() query can be answered by local DuckDB as
+		// "duckdb" even though the MotherDuck token is configured.
+		queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"))
+	}
+	steps := make([]func(context.Context, driver.ExecerContext) error, 0, len(queries))
+	for _, query := range queries {
+		query := query
+		steps = append(steps, func(ctx context.Context, execer driver.ExecerContext) error {
+			initCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+			defer cancel()
 			tflog.Debug(initCtx, "running MotherDuck SQL boot query", map[string]any{"query": redactToken(query, cfg.Token)})
 			if _, err := execer.ExecContext(initCtx, query, nil); err != nil {
 				return fmt.Errorf("running boot query %q: %s", redactToken(query, cfg.Token), redactToken(err.Error(), cfg.Token))
 			}
-		}
-		return nil
-	}}
+			return nil
+		})
+	}
+	initialize := &oneTimeInitializer{steps: steps}
 	connector := &contextConnector{Connector: duckdbConnector, initialize: initialize.run}
 
 	db := sql.OpenDB(connector)
