@@ -76,7 +76,7 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 			// A canceled ATTACH can complete remotely before reporting an
 			// error. Retry the immutable attach statement idempotently so the
 			// next connection does not need to guess whether it attached.
-			if strings.HasPrefix(query, "ATTACH ") {
+			if strings.HasPrefix(query, "ATTACH ") && strings.Contains(err.Error(), "Your MotherDuck databases are already attached") {
 				retryQuery := strings.Replace(query, "ATTACH ", "ATTACH IF NOT EXISTS ", 1)
 				if _, retryErr := execer.ExecContext(initCtx, retryQuery, nil); retryErr == nil {
 					i.next++

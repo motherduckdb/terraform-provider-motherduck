@@ -117,7 +117,7 @@ func TestContextConnectorInitializesWithCurrentConnectContext(t *testing.T) {
 
 func TestOneTimeInitializerRetriesFailureAndSkipsReconnectBootstrap(t *testing.T) {
 	type contextKey struct{}
-	execer := &recordingExecer{attachFailures: 4}
+	execer := &recordingExecer{attachFailures: 4, attachError: "Your MotherDuck databases are already attached"}
 	queries := []string{"INSTALL motherduck", "ATTACH 'md:'"}
 	initializer := &oneTimeInitializer{queries: queries, token: "test-token"}
 
@@ -140,7 +140,7 @@ func TestOneTimeInitializerRetriesFailureAndSkipsReconnectBootstrap(t *testing.T
 
 func TestOneTimeInitializerDoesNotReplaySetupAfterAttachFailure(t *testing.T) {
 	initializer := &oneTimeInitializer{queries: []string{"SETUP", "TOKEN", "ATTACH 'md:'"}, token: "test-token"}
-	execer := &recordingExecer{attachFailures: 2}
+	execer := &recordingExecer{attachFailures: 2, attachError: "Your MotherDuck databases are already attached"}
 	if err := initializer.run(context.Background(), execer); err == nil {
 		t.Fatal("first attach should fail")
 	}
@@ -152,16 +152,28 @@ func TestOneTimeInitializerDoesNotReplaySetupAfterAttachFailure(t *testing.T) {
 	}
 }
 
+func TestOneTimeInitializerDoesNotMaskInitialAttachError(t *testing.T) {
+	initializer := &oneTimeInitializer{queries: []string{"ATTACH 'md:'"}, token: "test-token"}
+	execer := &recordingExecer{attachFailures: 1, attachError: "authentication failed"}
+	if err := initializer.run(context.Background(), execer); err == nil {
+		t.Fatal("initial attach error should be returned")
+	}
+	if got := fmt.Sprint(execer.queries); got != "[ATTACH 'md:']" {
+		t.Fatalf("bootstrap queries = %s, want no IF NOT EXISTS fallback", got)
+	}
+}
+
 type recordingExecer struct {
 	queries        []string
 	attachFailures int
+	attachError    string
 }
 
 func (r *recordingExecer) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
 	r.queries = append(r.queries, query)
 	if strings.HasPrefix(query, "ATTACH") && r.attachFailures > 0 {
 		r.attachFailures--
-		return nil, errors.New("attach canceled after remote attach")
+		return nil, errors.New(r.attachError)
 	}
 	return driver.RowsAffected(0), nil
 }
