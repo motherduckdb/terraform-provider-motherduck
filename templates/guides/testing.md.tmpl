@@ -2,7 +2,8 @@
 
 This guide summarizes the test layers for users and contributors. The full contributor workflow lives in [Contributing](../../CONTRIBUTING.md).
 
-See [testing patterns](testing-patterns.md) for independent SQL checks,
+See the [fixture guide](../../test-fixtures/README.md) for fixture ownership and
+[testing patterns](testing-patterns.md) for independent SQL checks,
 update/import cycles, and the comparison with other database providers.
 
 ## Offline Checks
@@ -21,17 +22,39 @@ Use narrower targets while iterating:
 make test-unit
 make test-contract
 make static-check
-make test-examples
+make test-cli
 make test-invalid-configuration
 make test-missing-credentials
 make workflow-check
 ```
 
-`make test-unit` runs hermetic Go tests with the race detector, randomized ordering, and package coverage summaries. Coverage is diagnostic information, not a line-percentage gate.
+`make test-unit` runs hermetic Go tests, including embedded DuckDB and direct ephemeral-resource checks, with the race detector, randomized ordering, a five-minute timeout, and package coverage summaries. Coverage is diagnostic information, not a line-percentage gate.
 
-`make test-contract` runs the real Terraform protocol lifecycle against strict fake backends. The contracts cover database create/refresh/import/deletion/recreation/destroy, table type canonicalization and drift replacement, access-token secret preservation and deletion recovery, typed nullable owned-share state, and ephemeral Dive embed sessions. Unexpected backend operations fail the test.
+`make test-contract` runs only `TestContract*` tests in the provider package against the real Terraform protocol. It covers database/table/service-account lifecycles, import, drift repair, token secret preservation, Flight wait policy, nullable owned-share state, and SQL/REST read-error recovery. Unexpected backend operations and duplicate creates fail the test. A backend read error must produce a diagnostic and preserve existing state; recovery must plan no changes. Unit tests are not rerun in this target.
 
-`make test-examples` validates every Terraform directory under `examples/` against a fresh local provider mirror. Resource and blueprint examples also run offline plans with dummy values. Data-source examples stop at validation because Terraform reads data sources during planning.
+`make test-cli` builds the current provider once, then runs example validation/plans,
+invalid-import diagnostics, invalid-configuration diagnostics, and missing-credential
+checks. Each case has its own Terraform directory. The same executable is linked
+into Terraform and OpenTofu filesystem mirrors; tests do not install a published
+provider or implicitly reuse a previous build. Offline cases remove inherited
+MotherDuck credentials, Terraform CLI arguments, variables, and provider reattachment
+settings before executing.
+
+For a narrower iteration, use `make test-examples`, `make test-import-validation`,
+`make test-invalid-configuration`, or `make test-missing-credentials`. Each builds
+its own current provider when run independently. `TERRAFORM_BIN` selects the CLI.
+The invalid-configuration suite checks Terraform's JSON error diagnostics rather
+than matching words from source snippets in rendered terminal output.
+
+Example validation covers every Terraform directory under `examples/`. Resource
+and blueprint examples also run offline plans with dummy values. Data sources and
+ephemeral resources stop at validation because their plan phase calls the service.
+This is intentionally not claimed as live or offline lifecycle coverage.
+
+ShellCheck is required locally as well as in CI (`brew install shellcheck` on macOS,
+or your platform's package manager). `make test-scripts` checks each shell file
+individually and runs offline fault-injection tests for the harness: failed builds,
+credential/CLI isolation, cleanup errors, EXIT status handling, and gate failures.
 
 Regenerate docs after changing schemas, templates, or examples:
 
@@ -44,7 +67,7 @@ make docs
 | Layer | What it proves | What it does not prove |
 | --- | --- | --- |
 | Unit and embedded DuckDB | Validation, serialization, cancellation, SQL behavior | MotherDuck service availability |
-| Protocol contracts | Database and service-account lifecycle/import/drift; table import/type/replacement; token secret preservation/import/recreation; owned-share and ephemeral state | Live API permissions |
+| Protocol contracts | Database and service-account lifecycle/import/drift; table import/type/replacement; token secret preservation/import/recreation; owned-share state and read-error recovery | Live API permissions |
 | CLI compatibility | Examples and diagnostics across supported Terraform versions | Every resource lifecycle on every CLI |
 | Native packages | ZIP layout, mirror installation, plugin startup, schema, validation on four platforms | Registry signing or discovery |
 | Required live SQL | Database/schema/table/view lifecycles and imports, in-place view updates, execution of imported SQL, cleanup | All SQL resources or REST administration |
@@ -104,7 +127,18 @@ MD_TF_ACC_REQUIRE_OBJECT_STORAGE_LISTING=1 MOTHERDUCK_TOKEN=... make test-live-o
 
 ## Terraform Version Matrix
 
-The compatibility matrix validates the provider across supported Terraform versions:
+Run the offline matrix without credentials before changing CLI setup or fixtures:
+
+```bash
+make test-cli-versions
+TF_VERSIONS="1.5.7 1.16.1" TOFU_VERSIONS="1.12.6" make test-cli-versions
+```
+
+It checksum-verifies CLI downloads and runs the same `test-cli` suites on each
+selected CLI, sharing one provider build across the matrix. PR CI includes
+OpenTofu as well as Terraform so CLI-specific validation errors are caught.
+
+The live compatibility matrix additionally reads MotherDuck catalogs:
 
 ```bash
 MOTHERDUCK_TOKEN=... make test-terraform-versions
@@ -141,7 +175,17 @@ Both lifecycle matrices create durable MotherDuck objects while they run and cle
 
 ## Output And Cleanup
 
-Live smoke fixtures write temporary Terraform directories, logs, local provider binaries, and provider mirrors under ignored `test-results/` and `tools/` paths. Treat live output as account metadata because it can include catalog names, share URLs, tenant names, and snapshot metadata even when Terraform masks sensitive values.
+The CLI suite prints one result per group and saves detailed logs under
+`test-results/cli-<run-id>/`; failures print the failed group's log. Live smoke
+fixtures retain Terraform directories and logs under ignored `test-results/`.
+Provider binaries and symlink mirrors live under `tools/`. The stable live SQL
+suite and CLI version matrix explicitly reuse one freshly built provider across
+their child scripts. Resource-specific assertions stay in the individual scripts.
+
+Live scripts use one EXIT cleanup path. Cleanup attempts all named fixture objects,
+propagates failures, and preserves the original test's nonzero exit status. It
+never turns a failed test or failed cleanup into success. An interrupted or failed
+fixture retains state for diagnosis; it is not evidence that cleanup succeeded. Treat live output as account metadata because it can include catalog names, share URLs, tenant names, and snapshot metadata even when Terraform masks sensitive values.
 
 After interrupted live runs, audit common `tf_` leftovers:
 

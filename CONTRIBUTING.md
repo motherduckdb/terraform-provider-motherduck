@@ -48,6 +48,11 @@ make release-check
 
 When updating Go modules, test the DuckDB/MotherDuck path before keeping a `duckdb-go` or `duckdb-go-bindings` bump. Newer embedded DuckDB builds can be published before MotherDuck supports that DuckDB version, so a clean `go test` is not enough; run at least `MOTHERDUCK_TOKEN=... make test-terraform-versions` or a focused live SQL smoke.
 
+ShellCheck is a required local dependency, matching CI. Install it with
+`brew install shellcheck` on macOS or your system package manager. The CLI gate
+builds the provider once and runs isolated fixtures; see [testing](docs/guides/testing.md)
+for narrower commands, logs, and the distinction between validation and live coverage.
+
 ## Adding A Resource Or Data Source
 
 1. Add typed client support in `internal/client/rest` or `internal/client/sql`.
@@ -77,7 +82,7 @@ Offline checks:
 ```bash
 make test-unit
 make test-contract
-make test-examples
+make test-cli
 make test-invalid-configuration
 make test-missing-credentials
 make workflow-check
@@ -89,7 +94,7 @@ The required live gate uses the SQL credential and fails rather than skipping wh
 MOTHERDUCK_TOKEN=... make test-live-required
 ```
 
-`make test-unit` uses the race detector, randomized ordering, and coverage summaries. `make test-contract` runs real Terraform protocol lifecycles against strict in-memory SQL and REST clients. Coverage is diagnostic; contracts gate observable state and backend side effects. Credentialed Go tests use the `acceptance` build tag and are only run by explicit live targets.
+`make test-unit` uses the race detector, randomized ordering, a five-minute timeout, and coverage summaries. `make test-contract` runs only the `TestContract*` Terraform protocol lifecycles against strict in-memory SQL and REST clients. Coverage is diagnostic; contracts gate observable state and backend side effects. Credentialed Go tests use the `acceptance` build tag and are only run by explicit live targets.
 
 The hosted environment does not have an organization-admin token. REST administration behavior is covered by hermetic protocol contracts; admin-only Go acceptance tests require both the `acceptance` and `admin_acceptance` build tags, and admin-only live scripts must be run explicitly in an environment that supplies `MOTHERDUCK_ADMIN_TOKEN`. `make test-terraform-versions` and the hosted exact-main and release gates run SQL-only live coverage.
 

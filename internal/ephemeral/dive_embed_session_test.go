@@ -1,5 +1,3 @@
-//go:build contract
-
 package ephemeral
 
 import (
