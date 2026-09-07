@@ -73,6 +73,16 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 		query := i.queries[i.next]
 		tflog.Debug(initCtx, "running MotherDuck SQL boot query", map[string]any{"query": redactToken(query, i.token)})
 		if _, err := execer.ExecContext(initCtx, query, nil); err != nil {
+			// A canceled ATTACH can complete remotely before reporting an
+			// error. Retry the immutable attach statement idempotently so the
+			// next connection does not need to guess whether it attached.
+			if strings.HasPrefix(query, "ATTACH ") {
+				retryQuery := strings.Replace(query, "ATTACH ", "ATTACH IF NOT EXISTS ", 1)
+				if _, retryErr := execer.ExecContext(initCtx, retryQuery, nil); retryErr == nil {
+					i.next++
+					continue
+				}
+			}
 			return fmt.Errorf("running boot query %q: %s", redactToken(query, i.token), redactToken(err.Error(), i.token))
 		}
 		i.next++
