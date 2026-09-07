@@ -60,9 +60,10 @@ export raw access tokens. Pin both the Pulumi bridge and the wrapped provider;
 the bridge version and provider version are independent.
 
 The provider's service-account and access-token resources require an
-organization admin token. Use a separate bootstrap stack for those resources,
-store the resulting writer token in a secret manager, and inject that token
-into this data-plane stack. If you experiment with deriving a provider token
-from a same-program bootstrap output, verify the behavior with your Pulumi
-version before adopting it because provider configuration timing can affect
-whether the token is known early enough.
+organization admin token. A separate bootstrap stack is usually the clearest
+ownership boundary: store the resulting writer token in a secret manager and
+inject it into this data-plane stack. Pulumi `v3.261.0` was also verified with a
+same-program bootstrap where `motherduck_access_token.token` was passed as an
+`Output` to a second provider, which then created the database. If you use that
+shape, keep both providers explicit and test it with the Pulumi version pinned
+by your project.
