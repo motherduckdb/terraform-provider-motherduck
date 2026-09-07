@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=./scripts/lib/live-common.sh
 source "${ROOT_DIR}/scripts/lib/live-common.sh"
+# shellcheck source=./scripts/lib/terraform-test.sh
+source "${ROOT_DIR}/scripts/lib/terraform-test.sh"
+isolate_live_test_environment
 
 if [[ -z "${MOTHERDUCK_TOKEN:-}" ]]; then
   echo "MOTHERDUCK_TOKEN is required for live example tests." >&2

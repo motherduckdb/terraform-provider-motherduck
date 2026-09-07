@@ -13,6 +13,7 @@
 /tools/bin/
 /terraform-provider-motherduck
 .DS_Store
+__pycache__/
 **/.DS_Store
 *.tfstate
 *.tfstate.*

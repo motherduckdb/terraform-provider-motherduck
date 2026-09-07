@@ -85,6 +85,7 @@ func (r *databaseResource) Schema(ctx context.Context, req resource.SchemaReques
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Database resource ID. This is the database name.",
+				PlanModifiers:       stringUseStateForUnknown(),
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
@@ -365,6 +366,7 @@ func (r *schemaResource) Schema(ctx context.Context, req resource.SchemaRequest,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Schema resource ID in `<database>.<schema>` form.",
 			},
 			"database": schema.StringAttribute{
@@ -659,6 +661,7 @@ func (r *viewResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "View resource ID in `<database>.<schema>.<view>` form.",
 			},
 			"database": schema.StringAttribute{
@@ -814,6 +817,7 @@ func (r *secretResource) Schema(ctx context.Context, req resource.SchemaRequest,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Secret resource ID. This is the secret name.",
 			},
 			"name": schema.StringAttribute{
@@ -968,7 +972,7 @@ func (r *secretResource) createSecret(ctx context.Context, getter interface {
 	}
 	query := fmt.Sprintf("%s %s IN MOTHERDUCK (%s)", createKeyword, sqlbuild.QuoteIdentifier(plan.Name.ValueString()), strings.Join(entries, ", "))
 	if err := client.Exec(ctx, query); err != nil {
-		diags.AddError("Unable to create MotherDuck secret", err.Error())
+		diags.AddError("Unable to create MotherDuck secret", secretWriteDiagnostic(err))
 		return
 	}
 	plan.ID = types.StringValue(plan.Name.ValueString())
@@ -1031,6 +1035,7 @@ func (r *shareResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Share resource ID. This is the share name.",
 			},
 			"name": schema.StringAttribute{

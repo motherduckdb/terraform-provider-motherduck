@@ -85,6 +85,7 @@ func (r *guideResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Guide ID assigned by MotherDuck.",
 			},
 			"topic": schema.StringAttribute{

@@ -32,7 +32,7 @@ resource "motherduck_guide" "revenue" {
   title          = "Revenue metrics"
   description    = "Canonical revenue definitions and source tables"
   access         = "user"
-  change_comment = "initial Terraform import"
+  change_comment = "initial version"
 
   content = <<-MARKDOWN
     # Revenue metrics
@@ -43,9 +43,9 @@ resource "motherduck_guide" "revenue" {
   references = [
     {
       type        = "catalog"
-      url         = "md:analytics"
-      schema      = "main"
-      table       = "invoices"
+      url         = "md:${motherduck_database.analytics.name}"
+      schema      = motherduck_table.invoices.schema
+      table       = motherduck_table.invoices.name
       description = "Authoritative invoice source"
     }
   ]

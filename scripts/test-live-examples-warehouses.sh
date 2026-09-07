@@ -9,18 +9,18 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${ROOT_DIR}/scripts/lib/terraform-test.sh"
 # shellcheck source=scripts/lib/live-common.sh
 source "${ROOT_DIR}/scripts/lib/live-common.sh"
+isolate_live_test_environment
 
 PROVIDER_VERSION="${PROVIDER_VERSION:-0.1.1}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d%H%M%S)_$$}"
 TERRAFORM_BIN="${TERRAFORM_BIN:-terraform}"
 require_safe_run_id "${RUN_ID}"
-RUN_ID="${RUN_ID//-/_}"
+name_suffix="$(printf '%s' "${RUN_ID}" | shasum -a 256 | cut -c1-16)"
 
 if [[ -z "${MOTHERDUCK_ADMIN_TOKEN:-}" ]]; then
   echo "MOTHERDUCK_ADMIN_TOKEN is required for warehouse example smoke tests" >&2
   exit 1
 fi
-command -v curl >/dev/null 2>&1 || { echo "curl is required for cleanup readback" >&2; exit 1; }
 
 result_dir="${ROOT_DIR}/test-results/live-examples-warehouses-${RUN_ID}"
 if [[ -e "${result_dir}" ]]; then
@@ -43,7 +43,7 @@ cp "${ROOT_DIR}/examples/warehouses/bootstrap"/*.tf "${bootstrap_dir}/"
 rest_dir="${result_dir}/rest"
 mkdir -p "${rest_dir}"
 for example in service_account access_token duckling_config; do
-  rest_name="tf_audit_rest_${RUN_ID}_${example}"
+  rest_name="tf_audit_rest_${name_suffix}_${example}"
   mkdir -p "${rest_dir}/${example}"
   cp "${ROOT_DIR}/examples/resources/motherduck_${example}/resource.tf" "${rest_dir}/${example}/"
   sed -i.bak "s/analytics_app/${rest_name}/g" "${rest_dir}/${example}/resource.tf"
@@ -59,7 +59,7 @@ for data_source in user_tokens active_accounts; do
   mkdir -p "${rest_dir}/${data_source}"
   cp "${ROOT_DIR}/examples/data-sources/motherduck_${data_source}/data-source.tf" "${rest_dir}/${data_source}/"
   if [[ "${data_source}" == "user_tokens" ]]; then
-    sed -i.bak "s/analytics_app/tf_audit_rest_${RUN_ID}_service_account/g" "${rest_dir}/${data_source}/data-source.tf"
+    sed -i.bak "s/analytics_app/tf_audit_rest_${name_suffix}_service_account/g" "${rest_dir}/${data_source}/data-source.tf"
     rm -f "${rest_dir}/${data_source}/data-source.tf.bak"
   fi
   cat >"${rest_dir}/${data_source}/provider.tf" <<HCL
@@ -76,16 +76,16 @@ for example in writer-bootstrap hypertenancy read-hypertenancy; do
   cp "${ROOT_DIR}/examples/blueprints/${example}"/*.tf "${blueprint_dir}/${example}/"
 done
 cat >"${blueprint_dir}/hypertenancy/terraform.tfvars" <<HCL
-database_prefix = "tf_audit_bp_${RUN_ID}"
-reader_prefix   = "tf_audit_reader_${RUN_ID}"
-share_prefix    = "tf_audit_share_${RUN_ID}"
+database_prefix = "tf_audit_bp_${name_suffix}"
+reader_prefix   = "tf_audit_reader_${name_suffix}"
+share_prefix    = "tf_audit_share_${name_suffix}"
 tenants = { acme = { display_name = "Acme" } }
 HCL
 cat >"${blueprint_dir}/read-hypertenancy/terraform.tfvars" <<HCL
-expected_writer_username = "tf_audit_bp_writer_${RUN_ID}"
-database_prefix = "tf_audit_rh_${RUN_ID}"
-reader_prefix   = "tf_audit_reader_rh_${RUN_ID}"
-share_prefix    = "tf_audit_share_rh_${RUN_ID}"
+expected_writer_username = "tf_audit_bp_writer_${name_suffix}"
+database_prefix = "tf_audit_rh_${name_suffix}"
+reader_prefix   = "tf_audit_reader_rh_${name_suffix}"
+share_prefix    = "tf_audit_share_rh_${name_suffix}"
 tenants = { acme = { display_name = "Acme" } }
 HCL
 
@@ -117,7 +117,7 @@ check_bi_access() {
     echo "BI read did not become available for ${read_relation}" >&2
     return 1
   fi
-  local probe_id="bi_probe_${RUN_ID}"
+  local probe_id="bi_probe_${name_suffix}"
   local writer_insert="INSERT INTO ${write_relation} (order_id, order_date, amount, status) VALUES ('${probe_id}', DATE '2026-01-01', 1.00, 'completed')"
   if [[ "${write_relation}" == *"_marts"* ]]; then
     writer_insert="INSERT INTO ${write_relation} (order_date, order_count, revenue) VALUES (DATE '2026-01-01', 1, 1.00)"
@@ -139,6 +139,10 @@ check_bi_access() {
     echo "BI write unexpectedly succeeded for ${write_relation}" >&2
     return 1
   fi
+  if ! grep -Fq 'attached in read-only mode' "${result_dir}/${log_prefix}-write.txt"; then
+    echo "BI write failed for a reason other than the expected read-only restriction" >&2
+    return 1
+  fi
   after_bi_count="$(MOTHERDUCK_TOKEN="${writer_token}" go run "${ROOT_DIR}/internal/dev/mdexec" -scalar "SELECT count(*)::VARCHAR FROM ${write_relation}")"
   [[ "${after_bi_count}" -eq "${after_writer_count}" ]] || { echo "BI write changed rowcount" >&2; return 1; }
 }
@@ -152,6 +156,10 @@ check_cross_environment_denied() {
   set -e
   if [[ "${status}" -eq 0 ]]; then
     echo "cross-environment BI read unexpectedly succeeded for ${relation}" >&2
+    return 1
+  fi
+  if ! grep -Fq 'does not exist' "${result_dir}/${log_prefix}.txt"; then
+    echo "Cross-environment probe failed without confirming catalog isolation" >&2
     return 1
   fi
 }
@@ -193,7 +201,7 @@ cleanup() {
       if [[ -d "${work_dir}/.terraform" ]]; then
         MOTHERDUCK_TOKEN="${token}" TF_CLI_CONFIG_FILE="${cli_config}" \
           "${TERRAFORM_BIN}" -chdir="${work_dir}" destroy -auto-approve -input=false \
-          -var="name_prefix=tf_audit_wh_${RUN_ID}" >"${result_dir}/${layout}-${environment}-destroy.log" 2>&1 || child_status=$?
+          -var="name_prefix=tf_audit_wh_${name_suffix}" >"${result_dir}/${layout}-${environment}-destroy.log" 2>&1 || child_status=$?
       fi
     done
   done
@@ -224,20 +232,20 @@ cleanup() {
   fi
   if [[ "${destroy_status}" -eq 0 && -d "${blueprint_dir}/writer-bootstrap/.terraform" ]]; then
     TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${blueprint_dir}/writer-bootstrap" \
-      destroy -auto-approve -input=false -var="writer_username=tf_audit_bp_writer_${RUN_ID}" \
+      destroy -auto-approve -input=false -var="writer_username=tf_audit_bp_writer_${name_suffix}" \
       >"${result_dir}/blueprint-writer-bootstrap-destroy.log" 2>&1 || destroy_status=$?
   fi
   if [[ "${destroy_status}" -eq 0 && -d "${bootstrap_dir}/.terraform" ]]; then
     TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${bootstrap_dir}" \
-      destroy -auto-approve -input=false -var="account_prefix=tf_audit_wh_${RUN_ID}" \
+      destroy -auto-approve -input=false -var="account_prefix=tf_audit_wh_${name_suffix}" \
       >"${result_dir}/bootstrap-destroy.log" 2>&1 || destroy_status=$?
   fi
   if [[ "${destroy_status}" -eq 0 ]]; then
     check_account_status 404 \
-      "tf_audit_wh_${RUN_ID}_dev_writer" "tf_audit_wh_${RUN_ID}_prod_writer" \
-      "tf_audit_rest_${RUN_ID}_service_account" "tf_audit_rest_${RUN_ID}_access_token" \
-      "tf_audit_rest_${RUN_ID}_duckling_config" "tf_audit_bp_writer_${RUN_ID}" \
-      "tf_audit_reader_${RUN_ID}_acme" "tf_audit_reader_rh_${RUN_ID}_acme" || destroy_status=1
+      "tf_audit_wh_${name_suffix}_dev_writer" "tf_audit_wh_${name_suffix}_prod_writer" \
+      "tf_audit_rest_${name_suffix}_service_account" "tf_audit_rest_${name_suffix}_access_token" \
+      "tf_audit_rest_${name_suffix}_duckling_config" "tf_audit_bp_writer_${name_suffix}" \
+      "tf_audit_reader_${name_suffix}_acme" "tf_audit_reader_rh_${name_suffix}_acme" || destroy_status=1
   fi
   return "${destroy_status}"
 }
@@ -245,7 +253,7 @@ trap live_cleanup_on_exit EXIT
 
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${bootstrap_dir}" init -backend=false -input=false >/dev/null
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${bootstrap_dir}" apply -auto-approve -input=false \
-  -var="account_prefix=tf_audit_wh_${RUN_ID}" >"${result_dir}/bootstrap-apply.log" 2>&1
+  -var="account_prefix=tf_audit_wh_${name_suffix}" >"${result_dir}/bootstrap-apply.log" 2>&1
 tokens_json="$("${TERRAFORM_BIN}" -chdir="${bootstrap_dir}" output -json tokens)"
 dev_writer_token="$(jq -r '.dev_writer' <<<"${tokens_json}")"
 prod_writer_token="$(jq -r '.prod_writer' <<<"${tokens_json}")"
@@ -260,21 +268,39 @@ for example in service_account access_token duckling_config; do
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false >"${result_dir}/rest-${example}-plan.log" 2>&1
   if [[ "${example}" == "service_account" || "${example}" == "duckling_config" ]]; then
     state_address="motherduck_${example}.app"
-    import_id="tf_audit_rest_${RUN_ID}_${example}"
+    import_id="tf_audit_rest_${name_suffix}_${example}"
     TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" state rm "${state_address}" >/dev/null
     TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" import -input=false "${state_address}" "${import_id}" >"${result_dir}/rest-${example}-import.log" 2>&1
     TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false >"${result_dir}/rest-${example}-import-plan.log" 2>&1
   fi
   if [[ "${example}" == "access_token" ]]; then
-    token_id="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" state show motherduck_access_token.app | awk '$1 == "id" { print $3; exit }' | tr -d '"')"
+    token_id="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" state show -no-color motherduck_access_token.app | awk '$1 == "id" { print $3; exit }' | tr -d '"')"
     TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" state rm motherduck_access_token.app >/dev/null
-    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" import -input=false motherduck_access_token.app "tf_audit_rest_${RUN_ID}_access_token/${token_id}" >"${result_dir}/rest-access_token-import.log" 2>&1
+    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" import -input=false motherduck_access_token.app "tf_audit_rest_${name_suffix}_access_token/${token_id}" >"${result_dir}/rest-access_token-import.log" 2>&1
     set +e
-    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false >"${result_dir}/rest-access_token-import-plan.log" 2>&1
+    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false -out=import.tfplan >"${result_dir}/rest-access_token-import-plan.log" 2>&1
     token_import_plan_status=$?
     set -e
-    [[ "${token_import_plan_status}" -eq 2 ]] || { echo "expected imported token with configured ttl to require replacement" >&2; return 1; }
-    rg -q 'must be replaced|forces replacement|ttl' "${result_dir}/rest-access_token-import-plan.log"
+    [[ "${token_import_plan_status}" -eq 2 ]] || { echo "expected imported token with configured ttl to require replacement" >&2; exit 1; }
+    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json import.tfplan | python3 -c '
+import json, sys
+changes = json.load(sys.stdin)["resource_changes"]
+c = next(x["change"] for x in changes if x["address"] == "motherduck_access_token.app")
+assert set(c["actions"]) == {"delete", "create"}, "expected token replacement"
+assert c["before"]["ttl"] is None and c["after"]["ttl"] > 0, "expected configured lifetime to cause replacement"
+assert c["before"]["token"] is None, "import must not recover a creation-only token secret"
+for field in ("username", "name", "token_type"):
+    assert c["before"][field] == c["after"][field], "unexpected token identity/configuration change"
+'
+    # Adopting the imported token without a lifetime request must converge and
+    # must not pretend that its creation-only secret was recovered.
+    TOKEN_EXAMPLE_FILE="${work_dir}/resource.tf" python3 - <<'PYTHON'
+import os, re
+from pathlib import Path
+p = Path(os.environ["TOKEN_EXAMPLE_FILE"])
+p.write_text(re.sub(r"(?m)^\s*ttl\s*=.*\n", "", p.read_text()))
+PYTHON
+    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false >"${result_dir}/rest-access_token-adoption-plan.log" 2>&1
   fi
 done
 for data_source in user_tokens active_accounts; do
@@ -285,7 +311,7 @@ done
 
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${blueprint_dir}/writer-bootstrap" init -backend=false -input=false >/dev/null
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${blueprint_dir}/writer-bootstrap" apply -auto-approve -input=false \
-  -var="writer_username=tf_audit_bp_writer_${RUN_ID}" >"${result_dir}/blueprint-writer-bootstrap-apply.log" 2>&1
+  -var="writer_username=tf_audit_bp_writer_${name_suffix}" >"${result_dir}/blueprint-writer-bootstrap-apply.log" 2>&1
 bp_writer_token="$("${TERRAFORM_BIN}" -chdir="${blueprint_dir}/writer-bootstrap" output -raw writer_token)"
 for example in hypertenancy read-hypertenancy; do
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${blueprint_dir}/${example}" init -backend=false -input=false >/dev/null
@@ -304,24 +330,24 @@ for environment in dev prod; do
     TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" init -backend=false -input=false >/dev/null
     MOTHERDUCK_TOKEN="${token}" TF_CLI_CONFIG_FILE="${cli_config}" \
       "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false \
-      -var="name_prefix=tf_audit_wh_${RUN_ID}" >"${result_dir}/${layout}-${environment}-apply.log" 2>&1
+      -var="name_prefix=tf_audit_wh_${name_suffix}" >"${result_dir}/${layout}-${environment}-apply.log" 2>&1
     MOTHERDUCK_TOKEN="${token}" TF_CLI_CONFIG_FILE="${cli_config}" \
       "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false \
-      -var="name_prefix=tf_audit_wh_${RUN_ID}" >"${result_dir}/${layout}-${environment}-plan.log" 2>&1
+      -var="name_prefix=tf_audit_wh_${name_suffix}" >"${result_dir}/${layout}-${environment}-plan.log" 2>&1
   done
 done
 
 check_account_status 200 \
-  "tf_audit_wh_${RUN_ID}_dev_writer" "tf_audit_wh_${RUN_ID}_prod_writer" \
-  "tf_audit_rest_${RUN_ID}_service_account" "tf_audit_rest_${RUN_ID}_access_token" \
-  "tf_audit_rest_${RUN_ID}_duckling_config" "tf_audit_bp_writer_${RUN_ID}" \
-  "tf_audit_reader_${RUN_ID}_acme" "tf_audit_reader_rh_${RUN_ID}_acme"
+  "tf_audit_wh_${name_suffix}_dev_writer" "tf_audit_wh_${name_suffix}_prod_writer" \
+  "tf_audit_rest_${name_suffix}_service_account" "tf_audit_rest_${name_suffix}_access_token" \
+  "tf_audit_rest_${name_suffix}_duckling_config" "tf_audit_bp_writer_${name_suffix}" \
+  "tf_audit_reader_${name_suffix}_acme" "tf_audit_reader_rh_${name_suffix}_acme"
 
-check_bi_access "${dev_bi_token}" "${dev_writer_token}" "tf_audit_wh_${RUN_ID}_dev_simple.analytics.daily_revenue" "tf_audit_wh_${RUN_ID}_dev_simple.raw.orders" dev-bi-simple
-check_bi_access "${prod_bi_token}" "${prod_writer_token}" "tf_audit_wh_${RUN_ID}_prod_simple.analytics.daily_revenue" "tf_audit_wh_${RUN_ID}_prod_simple.raw.orders" prod-bi-simple
-check_bi_access "${dev_bi_token}" "${dev_writer_token}" "tf_audit_wh_${RUN_ID}_dev_marts.main.daily_revenue" "tf_audit_wh_${RUN_ID}_dev_marts.main.daily_revenue" dev-bi-layered
-check_bi_access "${prod_bi_token}" "${prod_writer_token}" "tf_audit_wh_${RUN_ID}_prod_marts.main.daily_revenue" "tf_audit_wh_${RUN_ID}_prod_marts.main.daily_revenue" prod-bi-layered
-check_cross_environment_denied "${dev_bi_token}" "tf_audit_wh_${RUN_ID}_prod_simple.analytics.daily_revenue" dev-bi-cross-prod
-check_cross_environment_denied "${prod_bi_token}" "tf_audit_wh_${RUN_ID}_dev_simple.analytics.daily_revenue" prod-bi-cross-dev
+check_bi_access "${dev_bi_token}" "${dev_writer_token}" "tf_audit_wh_${name_suffix}_dev_simple.analytics.daily_revenue" "tf_audit_wh_${name_suffix}_dev_simple.raw.orders" dev-bi-simple
+check_bi_access "${prod_bi_token}" "${prod_writer_token}" "tf_audit_wh_${name_suffix}_prod_simple.analytics.daily_revenue" "tf_audit_wh_${name_suffix}_prod_simple.raw.orders" prod-bi-simple
+check_bi_access "${dev_bi_token}" "${dev_writer_token}" "tf_audit_wh_${name_suffix}_dev_marts.main.daily_revenue" "tf_audit_wh_${name_suffix}_dev_marts.main.daily_revenue" dev-bi-layered
+check_bi_access "${prod_bi_token}" "${prod_writer_token}" "tf_audit_wh_${name_suffix}_prod_marts.main.daily_revenue" "tf_audit_wh_${name_suffix}_prod_marts.main.daily_revenue" prod-bi-layered
+check_cross_environment_denied "${dev_bi_token}" "tf_audit_wh_${name_suffix}_prod_simple.analytics.daily_revenue" dev-bi-cross-prod
+check_cross_environment_denied "${prod_bi_token}" "tf_audit_wh_${name_suffix}_dev_simple.analytics.daily_revenue" prod-bi-cross-dev
 
 echo "warehouse example smoke passed: ${result_dir}"

@@ -111,12 +111,14 @@ test-contract:
 
 test-scripts:
 	for script in scripts/*.sh scripts/lib/*.sh; do bash -n "$$script" || exit; done
+	python3 -c 'import ast, pathlib; [ast.parse(p.read_text(), filename=str(p)) for p in pathlib.Path("scripts").rglob("*.py")]'
 	./scripts/test-download-checksum-unit.sh
 	./scripts/test-version-matrix-unit.sh
 	./scripts/test-terraform-test-unit.sh
 	./scripts/test-live-common-unit.sh
 	./scripts/test-live-rest-helper.sh
 	./scripts/test-live-examples-runner-unit.sh
+	./scripts/test-live-examples-core-unit.sh
 	./scripts/test-live-rest-admin-gates.sh
 	./scripts/test-gates-unit.sh
 

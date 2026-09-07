@@ -350,6 +350,7 @@ func (r *ducklingConfigResource) Schema(ctx context.Context, req resource.Schema
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Duckling configuration ID. This is the configured username.",
 			},
 			"username": schema.StringAttribute{

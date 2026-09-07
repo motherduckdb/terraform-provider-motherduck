@@ -127,6 +127,45 @@ MD_TF_ACC_REQUIRE_DIVE_FLIGHT_BLUEPRINT=1 MOTHERDUCK_TOKEN=... make test-live-di
 MD_TF_ACC_REQUIRE_OBJECT_STORAGE_LISTING=1 MOTHERDUCK_TOKEN=... make test-live-object-storage-listing
 ```
 
+## Deploy the checked-in examples
+
+Run the example deployment suites with SQL and organization-admin credentials
+injected into the environment:
+
+```bash
+make test-live-examples
+```
+
+The role suite also needs a SQL token with role-administration privileges;
+the REST admin token does not grant SQL permissions. The app suite requires
+Terraform 1.10 or later for the ephemeral embed-session example.
+
+For core object-storage coverage, inject `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY`, and optionally `AWS_SESSION_TOKEN`, and set
+`MD_TF_ACC_OBJECT_STORAGE_PATH` to an S3 prefix containing `fixtures/orders.csv`.
+The credentials need to read that fixture, list the bucket, and create/delete a
+run-scoped probe below the prefix. Missing storage configuration reports
+unavailable coverage; failures with supplied credentials fail the suite.
+
+The suites create disposable service accounts and deploy the files under
+`examples/`. They check the resulting state and permissions, refresh and no-op
+plans, supported updates and imports, and destruction. Each suite supplies only
+the prerequisites and unique names needed to isolate its examples. This catches
+missing dependencies and invalid example configurations that offline validation
+cannot detect.
+
+Use the individual `test-live-examples-core`, `test-live-examples-roles`,
+`test-live-examples-apps`, and `test-live-examples-warehouses` targets while
+iterating. The aggregate target runs every group and returns nonzero if any group
+fails or reports unavailable coverage. Review each group's results rather than
+treating a skipped feature as a passing deployment.
+
+Run these checks in a disposable test organization before release candidates or
+changes to example composition, provider configuration, or resource lifecycles.
+They can create compute and execute Flight code. State and logs stay under the
+ignored `test-results/` directory and must not be published. Destroy data and
+application objects before deleting their owning service accounts.
+
 ## Terraform Version Matrix
 
 Run the offline matrix without credentials before changing CLI setup or fixtures:

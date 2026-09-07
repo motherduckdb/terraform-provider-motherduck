@@ -297,7 +297,7 @@ func rowSpecs() []rowSpec {
 			}
 			return appendRowLimitOffset(query+" ORDER BY name", m), nil
 		}},
-		{name: "shared_with_me", description: "Reads metadata for shares available to the current MotherDuck account.", attrs: []string{"name", "limit", "offset"}, typedRows: []typedRowAttribute{
+		{name: "shared_with_me", description: "Reads metadata for shares discoverable by the current MotherDuck account. Hidden shares can be accessed by URL but are not listed.", attrs: []string{"name", "limit", "offset"}, typedRows: []typedRowAttribute{
 			{name: "name", description: "Share name."},
 			{name: "source_database", source: "source_db_name", description: "Database backing the share."},
 			{name: "owner", description: "Share owner when exposed by MotherDuck."},

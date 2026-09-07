@@ -74,7 +74,7 @@ fi
 [[ ! -e "${test_dir}/called" ]]
 grep -F 'MOTHERDUCK_TOKEN is required' "${test_dir}/missing.log" >/dev/null
 
-if env -u MOTHERDUCK_TOKEN -u MOTHERDUCK_ADMIN_TOKEN LIVE_EXAMPLES_SCRIPT_DIR="${test_dir}/groups" \
+if env -u MOTHERDUCK_ADMIN_TOKEN MOTHERDUCK_TOKEN=stub LIVE_EXAMPLES_SCRIPT_DIR="${test_dir}/groups" \
   "${ROOT_DIR}/scripts/test-live-examples.sh" >"${test_dir}/missing-admin.log" 2>&1; then
   echo 'Aggregator accepted missing admin credentials' >&2
   exit 1

@@ -1,1 +1,1 @@
-terraform import motherduck_secret.s3 'storage_credentials'
+terraform import motherduck_secret.s3 'analytics_s3'

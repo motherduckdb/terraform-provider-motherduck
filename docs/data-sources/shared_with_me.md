@@ -3,16 +3,18 @@
 page_title: "motherduck_shared_with_me Data Source - motherduck"
 subcategory: ""
 description: |-
-  Reads metadata for shares available to the current MotherDuck account.
+  Reads metadata for shares discoverable by the current MotherDuck account. Hidden shares can be accessed by URL but are not listed.
 ---
 
 # motherduck_shared_with_me (Data Source)
 
-Reads metadata for shares available to the current MotherDuck account.
+Reads metadata for shares discoverable by the current MotherDuck account. Hidden shares can be accessed by URL but are not listed.
 
 ## Example Usage
 
 ```terraform
+# The named share must be discoverable. A hidden share is accessed by URL and
+# does not appear in this catalog, even when the caller has a direct grant.
 data "motherduck_shared_with_me" "analytics" {
   name = "analytics_share"
 }

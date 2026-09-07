@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${ROOT_DIR}/scripts/lib/terraform-test.sh"
 # shellcheck source=scripts/lib/live-common.sh
 source "${ROOT_DIR}/scripts/lib/live-common.sh"
+isolate_live_test_environment
 
 PROVIDER_VERSION="${PROVIDER_VERSION:-0.1.1}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d%H%M%S)_$$}"
@@ -80,21 +81,15 @@ cli_config="${work_dir}/terraformrc"
 write_provider_cli_config "${cli_config}"
 run_tf() { TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" "$@"; }
 
-cleanup() {
-  local rc=0
-  if [[ "${KEEP_LIVE_FIXTURE}" != "1" && -d "${work_dir}/.terraform" ]]; then
-    run_tf destroy -auto-approve -input=false >/dev/null || rc=$?
-  fi
-  if [[ "${KEEP_LIVE_FIXTURE}" != "1" && "${rc}" -eq 0 ]]; then
-    local http_code
-    http_code="$(MOTHERDUCK_ADMIN_TOKEN="${MOTHERDUCK_ADMIN_TOKEN}" MOTHERDUCK_API_BASE_URL="${MOTHERDUCK_API_BASE_URL:-https://api.motherduck.com}" ROLE_EXAMPLE_USERNAME="svc_role_example_${suffix}" python3 - <<'PY'
+account_status() {
+  MOTHERDUCK_ADMIN_TOKEN="${MOTHERDUCK_ADMIN_TOKEN}" MOTHERDUCK_API_BASE_URL="${MOTHERDUCK_API_BASE_URL:-https://api.motherduck.com}" ROLE_EXAMPLE_USERNAME="svc_role_example_${suffix}" python3 - <<'PY'
 import os
 import urllib.error
 import urllib.parse
 import urllib.request
 
 base = os.environ["MOTHERDUCK_API_BASE_URL"].rstrip("/")
-url = base + "/v1/users/" + urllib.parse.quote(os.environ["ROLE_EXAMPLE_USERNAME"], safe="")
+url = base + "/v1/users/" + urllib.parse.quote(os.environ["ROLE_EXAMPLE_USERNAME"], safe="") + "/instances"
 request = urllib.request.Request(url, headers={"Authorization": "Bearer " + os.environ["MOTHERDUCK_ADMIN_TOKEN"]})
 try:
     with urllib.request.urlopen(request, timeout=30) as response:
@@ -102,7 +97,16 @@ try:
 except urllib.error.HTTPError as error:
     print(error.code)
 PY
-)" || rc=$?
+}
+
+cleanup() {
+  local rc=0
+  if [[ "${KEEP_LIVE_FIXTURE}" != "1" && -d "${work_dir}/.terraform" ]]; then
+    run_tf destroy -auto-approve -input=false >/dev/null || rc=$?
+  fi
+  if [[ "${KEEP_LIVE_FIXTURE}" != "1" && "${rc}" -eq 0 ]]; then
+    local http_code
+    http_code="$(account_status)" || rc=$?
     if [[ "${http_code:-}" != "404" ]]; then
       echo "expected role example service account cleanup to return 404, got ${http_code:-unknown}" >&2
       rc=1
@@ -116,6 +120,10 @@ echo "==> Live role examples (${RUN_ID})"
 run_tf init -backend=false -input=false >/dev/null
 run_tf validate
 run_tf apply -auto-approve -input=false >/dev/null
+if [[ "$(account_status)" != "200" ]]; then
+  echo "expected created role example account to return HTTP 200" >&2
+  exit 1
+fi
 set +e
 run_tf plan -detailed-exitcode -input=false >/dev/null
 plan_rc=$?

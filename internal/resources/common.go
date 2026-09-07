@@ -34,6 +34,32 @@ type baseResource struct {
 	provider *providerctx.Context
 }
 
+// Secret writes contain credentials in the SQL statement.
+// Parser errors include SQL excerpts, so even a valid diagnostic prefix cannot
+// safely be copied from the error message. Use only structured error categories.
+func secretWriteDiagnostic(err error) string {
+	detail := "MotherDuck rejected the secret definition. Check its type, provider, and parameter names."
+	var duckErr *duckdb.Error
+	if errors.As(err, &duckErr) {
+		switch duckErr.Type {
+		case duckdb.ErrorTypeParser, duckdb.ErrorTypeSyntax:
+			detail = "The secret definition contains invalid SQL syntax. Check delimiters and quoting in secret_sql."
+		case duckdb.ErrorTypeBinder, duckdb.ErrorTypeInvalidConfiguration, duckdb.ErrorTypeInvalidInput:
+			detail = "The secret definition contains invalid or unsupported parameters. Check its type, provider, and parameter names."
+		case duckdb.ErrorTypeCatalog, duckdb.ErrorTypeMissingExtension, duckdb.ErrorTypeAutoLoad, duckdb.ErrorTypeNotImplemented:
+			detail = "The secret type, provider, or storage is unavailable in this connection."
+		case duckdb.ErrorTypePermission:
+			detail = "The current SQL identity does not have permission to write this secret."
+		case duckdb.ErrorTypeConnection, duckdb.ErrorTypeNetwork, duckdb.ErrorTypeHTTP, duckdb.ErrorTypeIO:
+			detail = "The secret could not be written because the connection or remote service request failed."
+		}
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		detail = "The secret write was canceled or timed out."
+	}
+	return detail + " Raw SQL error details are omitted because they can contain credentials."
+}
+
 func (r *baseResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return

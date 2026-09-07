@@ -58,6 +58,14 @@ if prepare_provider_mirror > /dev/null 2>&1; then
   echo 'Missing suite binary was accepted' >&2; exit 1
 fi
 
+export MOTHERDUCK_TOKEN=test-token MOTHERDUCK_ADMIN_TOKEN=test-admin AWS_SESSION_TOKEN=test-aws-session
+export TF_CLI_ARGS=-destroy TF_CLI_ARGS_plan=-destroy TF_VAR_name=unexpected
+export TF_REATTACH_PROVIDERS=unexpected TF_DATA_DIR=unexpected TF_WORKSPACE=unexpected
+export TF_CLI_CONFIG_FILE=unexpected TF_LOG=TRACE TF_LOG_PATH=unexpected
+isolate_live_test_environment
+[[ "${MOTHERDUCK_TOKEN}" == test-token && "${MOTHERDUCK_ADMIN_TOKEN}" == test-admin && "${AWS_SESSION_TOKEN}" == test-aws-session ]]
+[[ -z "${TF_CLI_ARGS+x}${TF_CLI_ARGS_plan+x}${TF_VAR_name+x}${TF_REATTACH_PROVIDERS+x}${TF_DATA_DIR+x}${TF_WORKSPACE+x}${TF_CLI_CONFIG_FILE+x}${TF_LOG+x}${TF_LOG_PATH+x}" ]]
+
 export MOTHERDUCK_TOKEN=test-token MOTHERDUCK_ADMIN_TOKEN=test-admin MOTHERDUCK_API_BASE_URL=https://unexpected.invalid
 export TF_CLI_ARGS=-destroy TF_CLI_ARGS_plan=-destroy TF_VAR_name=unexpected
 export TF_REATTACH_PROVIDERS=unexpected TF_DATA_DIR=unexpected TF_WORKSPACE=unexpected
