@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,8 +117,8 @@ func TestContextConnectorInitializesWithCurrentConnectContext(t *testing.T) {
 
 func TestOneTimeInitializerRetriesFailureAndSkipsReconnectBootstrap(t *testing.T) {
 	type contextKey struct{}
-	execer := &recordingExecer{failAttachOnce: true}
-	queries := []string{"INSTALL motherduck", "ATTACH"}
+	execer := &recordingExecer{attachFailures: 4}
+	queries := []string{"INSTALL motherduck", "ATTACH 'md:'"}
 	initializer := &oneTimeInitializer{queries: queries, token: "test-token"}
 
 	first := context.WithValue(context.Background(), contextKey{}, "first")
@@ -125,8 +126,8 @@ func TestOneTimeInitializerRetriesFailureAndSkipsReconnectBootstrap(t *testing.T
 		t.Fatal("first initialization should fail")
 	}
 	second := context.WithValue(context.Background(), contextKey{}, "second")
-	if err := initializer.run(second, execer); err != nil {
-		t.Fatal(err)
+	if err := initializer.run(second, execer); err == nil {
+		t.Fatal("second initialization should still fail")
 	}
 	third := context.WithValue(context.Background(), contextKey{}, "third")
 	if err := initializer.run(third, execer); err != nil {
@@ -138,28 +139,28 @@ func TestOneTimeInitializerRetriesFailureAndSkipsReconnectBootstrap(t *testing.T
 }
 
 func TestOneTimeInitializerDoesNotReplaySetupAfterAttachFailure(t *testing.T) {
-	initializer := &oneTimeInitializer{queries: []string{"SETUP", "TOKEN", "ATTACH"}, token: "test-token"}
-	execer := &recordingExecer{failAttachOnce: true}
+	initializer := &oneTimeInitializer{queries: []string{"SETUP", "TOKEN", "ATTACH 'md:'"}, token: "test-token"}
+	execer := &recordingExecer{attachFailures: 2}
 	if err := initializer.run(context.Background(), execer); err == nil {
 		t.Fatal("first attach should fail")
 	}
 	if err := initializer.run(context.Background(), execer); err != nil {
 		t.Fatal(err)
 	}
-	if got := fmt.Sprint(execer.queries); got != "[SETUP TOKEN ATTACH ATTACH]" {
+	if got := fmt.Sprint(execer.queries); got != "[SETUP TOKEN ATTACH 'md:' ATTACH IF NOT EXISTS 'md:' ATTACH 'md:']" {
 		t.Fatalf("bootstrap queries = %s, want setup/token once and attach twice", got)
 	}
 }
 
 type recordingExecer struct {
 	queries        []string
-	failAttachOnce bool
+	attachFailures int
 }
 
 func (r *recordingExecer) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
 	r.queries = append(r.queries, query)
-	if query == "ATTACH" && r.failAttachOnce {
-		r.failAttachOnce = false
+	if strings.HasPrefix(query, "ATTACH") && r.attachFailures > 0 {
+		r.attachFailures--
 		return nil, errors.New("attach canceled after remote attach")
 	}
 	return driver.RowsAffected(0), nil
