@@ -333,22 +333,55 @@ resource "motherduck_share" "test" {
   update_mode     = "manual"
 }
 `
+	sourceConfig := strings.Replace(config, `resource "motherduck_share" "test"`, `resource "motherduck_share" "source"`, 1)
+	combinedConfig := contractProviderConfig("http://127.0.0.1") + `
+resource "motherduck_share" "source" {
+  name            = "contract_share"
+  source_database = "analytics"
+  access          = "restricted"
+  visibility      = "hidden"
+  update_mode     = "manual"
+}
+
+resource "motherduck_share" "test" {
+  name            = "contract_share"
+  source_database = "analytics"
+  access          = "restricted"
+  visibility      = "hidden"
+  update_mode     = "manual"
+}
+`
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: contractProviderFactories(sqlClient),
+		CheckDestroy: func(*terraform.State) error {
+			if sqlClient.ownedShare != nil {
+				return errors.New("contract share still exists after destroy")
+			}
+			if got := sqlClient.countCalls(`exec CREATE SHARE "contract_share" FROM "analytics" (ACCESS RESTRICTED, VISIBILITY HIDDEN, UPDATE MANUAL)`); got != 1 {
+				return fmt.Errorf("share creates = %d, want 1 (import must not recreate)", got)
+			}
+			return nil
+		},
 		Steps: []resource.TestStep{
-			{Config: config, ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			{Config: sourceConfig, ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 			{
-				ResourceName:      "motherduck_share.test",
-				ImportState:       true,
-				ImportStateId:     "contract_share",
-				ImportStateVerify: true,
+				ResourceName:       "motherduck_share.test",
+				ImportState:        true,
+				ImportStatePersist: true,
+				ImportStateId:      "contract_share",
+				ImportStateVerify:  true,
+				Config:             combinedConfig,
 				PreConfig: func() {
 					sqlClient.mu.Lock()
 					sqlClient.ownedShare = contractShareRow("RESTRICTED", "HIDDEN", "MANUAL")
 					sqlClient.mu.Unlock()
 				},
-				Config:           config,
-				ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
+			{
+				Config: combinedConfig,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
 			},
 		},
 	})
