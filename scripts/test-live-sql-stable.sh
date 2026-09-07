@@ -13,6 +13,11 @@ if [[ -z "${MOTHERDUCK_TOKEN:-}" ]]; then
   exit 1
 fi
 
+# shellcheck source=scripts/lib/terraform-test.sh
+source "${ROOT_DIR}/scripts/lib/terraform-test.sh"
+prepare_provider_mirror
+export TF_TEST_PROVIDER_BINARY="${provider_binary}"
+
 audit_on_exit() {
   local exit_status=$?
   echo

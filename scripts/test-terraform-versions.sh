@@ -2,6 +2,19 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib/terraform-test.sh
+source "${ROOT_DIR}/scripts/lib/terraform-test.sh"
+mode=live
+if [[ "${1:-}" == --offline ]]; then
+  mode=offline
+  isolate_offline_test_environment
+  shift
+fi
+if [[ "$#" != 0 ]]; then
+  echo "Usage: $0 [--offline]" >&2
+  exit 2
+fi
+
 OS="$(go env GOOS)"
 ARCH="$(go env GOARCH)"
 
@@ -35,58 +48,53 @@ fi
 PROVIDER_VERSION="${PROVIDER_VERSION:-0.1.0}"
 TF_VERSION_SQL_LIFECYCLE="${TF_VERSION_SQL_LIFECYCLE:-0}"
 TF_VERSION_BLUEPRINT_LIFECYCLE="${TF_VERSION_BLUEPRINT_LIFECYCLE:-0}"
-SOURCE_HOSTS=("registry.terraform.io" "registry.opentofu.org")
-SOURCE_NAMESPACE="motherduckdb"
-SOURCE_TYPE="motherduck"
-PROVIDER_SOURCE="${SOURCE_NAMESPACE}/${SOURCE_TYPE}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d%H%M%S)_$$}"
 source "${ROOT_DIR}/scripts/lib/live-common.sh"
 source "${ROOT_DIR}/scripts/lib/download-checksum.sh"
 source "${ROOT_DIR}/scripts/lib/version-matrix.sh"
 require_safe_run_id "${RUN_ID}"
 
-if [[ -z "${MOTHERDUCK_TOKEN:-}" ]]; then
-  echo "MOTHERDUCK_TOKEN is required for SQL smoke tests" >&2
-  exit 1
-fi
+if [[ "${mode}" == live ]]; then
+  if [[ -z "${MOTHERDUCK_TOKEN:-}" ]]; then
+    echo "MOTHERDUCK_TOKEN is required for SQL smoke tests" >&2
+    exit 1
+  fi
 
-if [[ -z "${MOTHERDUCK_ADMIN_TOKEN:-}" ]]; then
-  echo "MOTHERDUCK_ADMIN_TOKEN is not set; running Terraform version matrix in SQL-only mode."
-  rest_admin_available=false
-  rest_admin_skip_reason="MOTHERDUCK_ADMIN_TOKEN is not set"
-else
-  source "${ROOT_DIR}/scripts/lib/live-rest.sh"
-  set +e
-  preflight_rest_admin
-  preflight_exit=$?
-  set -e
-  if [[ "${preflight_exit}" -eq 0 ]]; then
-    rest_admin_available=true
-    rest_admin_skip_reason=""
-  elif [[ "${preflight_exit}" -eq 42 ]]; then
+  if [[ -z "${MOTHERDUCK_ADMIN_TOKEN:-}" ]]; then
+    echo "MOTHERDUCK_ADMIN_TOKEN is not set; running Terraform version matrix in SQL-only mode."
     rest_admin_available=false
-    rest_admin_skip_reason="MOTHERDUCK_ADMIN_TOKEN can authenticate, but is not an organization admin"
+    rest_admin_skip_reason="MOTHERDUCK_ADMIN_TOKEN is not set"
   else
-    exit "${preflight_exit}"
+    source "${ROOT_DIR}/scripts/lib/live-rest.sh"
+    set +e
+    preflight_rest_admin
+    preflight_exit=$?
+    set -e
+    if [[ "${preflight_exit}" -eq 0 ]]; then
+      rest_admin_available=true
+      rest_admin_skip_reason=""
+    elif [[ "${preflight_exit}" -eq 42 ]]; then
+      rest_admin_available=false
+      rest_admin_skip_reason="MOTHERDUCK_ADMIN_TOKEN can authenticate, but is not an organization admin"
+    else
+      exit "${preflight_exit}"
+    fi
   fi
 fi
 
-provider_dir="${PROVIDER_BIN_DIR:-${ROOT_DIR}/tools/provider-bin/${RUN_ID}}"
-mirror_dir="${PROVIDER_MIRROR_DIR:-${ROOT_DIR}/tools/provider-mirror/${RUN_ID}}"
-mkdir -p "${provider_dir}"
-
-provider_binary="${provider_dir}/terraform-provider-${SOURCE_TYPE}_v${PROVIDER_VERSION}"
-GOOS="${OS}" GOARCH="${ARCH}" go build -o "${provider_binary}" "${ROOT_DIR}"
-for source_host in "${SOURCE_HOSTS[@]}"; do
-  mirror_package_dir="${mirror_dir}/${source_host}/${SOURCE_NAMESPACE}/${SOURCE_TYPE}/${PROVIDER_VERSION}/${OS}_${ARCH}"
-  mkdir -p "${mirror_package_dir}"
-  cp "${provider_binary}" "${mirror_package_dir}/"
-done
+prepare_provider_mirror
+export TF_TEST_PROVIDER_BINARY="${provider_binary}"
 
 run_cli_smoke() {
   local cli_name="$1"
   local version="$2"
   local terraform_bin="$3"
+
+  local version_run_id="${RUN_ID}-${cli_name}${version//./}"
+  if [[ "${mode}" == offline ]]; then
+    TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-cli.sh"
+    return
+  fi
 
   local work_dir="${ROOT_DIR}/test-results/${cli_name}-${version}-${RUN_ID}"
   if [[ -e "${work_dir}" ]]; then
@@ -98,24 +106,13 @@ run_cli_smoke() {
   perl -0pi -e "s/version = \"= 0\\.1\\.0\"/version = \"= ${PROVIDER_VERSION}\"/" "${work_dir}/main.tf"
 
   cli_config="${work_dir}/terraformrc"
-  cat > "${cli_config}" <<HCL
-provider_installation {
-  filesystem_mirror {
-    path    = "${mirror_dir}"
-    include = ["${PROVIDER_SOURCE}"]
-  }
-  direct {
-    exclude = ["${PROVIDER_SOURCE}"]
-  }
-}
-HCL
+  write_provider_cli_config "${cli_config}"
 
   echo "==> ${cli_name} ${version}"
   TF_CLI_CONFIG_FILE="${cli_config}" "${terraform_bin}" -chdir="${work_dir}" init -backend=false -input=false
   TF_CLI_CONFIG_FILE="${cli_config}" "${terraform_bin}" -chdir="${work_dir}" validate
   TF_CLI_CONFIG_FILE="${cli_config}" "${terraform_bin}" -chdir="${work_dir}" apply -auto-approve -input=false -var="enable_rest=${rest_admin_available}"
 
-  version_run_id="${RUN_ID}-${cli_name}${version//./}"
   if [[ "${TF_VERSION_SQL_LIFECYCLE}" == "1" ]]; then
     TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-database-drop-with-objects.sh"
   fi

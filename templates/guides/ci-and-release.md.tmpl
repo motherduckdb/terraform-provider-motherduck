@@ -25,7 +25,8 @@ The Terraform compatibility job repeats the offline Terraform checks against sup
 - `1.15.9`
 - `1.16.1`
 
-These checks validate examples, invalid-configuration diagnostics, and missing-credential diagnostics without making live MotherDuck calls.
+Every matrix job runs `make test-cli-versions` with a checksum-verified CLI
+download. OpenTofu `1.12.6` is included alongside Terraform. Each job checks examples, invalid imports, invalid-configuration diagnostics, and missing-credential diagnostics against one freshly built local provider, without making live MotherDuck calls.
 
 The live-smoke workflow also runs the provider against OpenTofu. The default OpenTofu version is `1.12.6`; override it with the `opentofu_versions` manual workflow input or `TOFU_VERSIONS` locally.
 
