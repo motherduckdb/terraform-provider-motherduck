@@ -287,18 +287,18 @@ func rowSpecs() []rowSpec {
 		}, postProcess: sortRowsBy("role_name"), build: func(m rowsModel) (string, error) {
 			return "SHOW ALL ROLES", nil
 		}},
-		{name: "role_members", description: "Lists users and roles directly granted to one MotherDuck role.", requiredFunction: "md_get_role_members", attrs: []string{"role_name"}, requiredAttrs: []string{"role_name"}, typedRows: []typedRowAttribute{
+		{name: "role_members", description: "Lists users and roles directly granted to one MotherDuck role using SHOW USERS OF ROLE and SHOW ROLES OF ROLE.", attrs: []string{"role_name"}, requiredAttrs: []string{"role_name"}, typedRows: []typedRowAttribute{
 			{name: "member_name", description: "User or role principal name."},
 			{name: "member_type", description: "Principal type: user or role."},
 			{name: "email", description: "User email when the member is a user."},
 			{name: "is_service_account", description: "Whether the user member is a service account."},
 			{name: "granted_at", description: "Grant creation timestamp."},
-		}, build: func(m rowsModel) (string, error) {
+		}, postProcess: sortRoleMemberRows, build: func(m rowsModel) (string, error) {
 			if m.RoleName.IsNull() {
 				return "", fmt.Errorf("role_name is required")
 			}
-			role := sqlbuild.StringLiteral(m.RoleName.ValueString())
-			return "SELECT username AS member_name, 'user' AS member_type, email, is_service_account::VARCHAR, granted_at::VARCHAR FROM MD_GET_ROLE_MEMBERS(" + role + ", 'USER') UNION ALL SELECT role_name AS member_name, 'role' AS member_type, NULL::VARCHAR AS email, NULL::VARCHAR AS is_service_account, granted_at::VARCHAR FROM MD_GET_ROLE_MEMBERS(" + role + ", 'ROLE') ORDER BY member_type, member_name", nil
+			role := sqlbuild.QuoteIdentifier(m.RoleName.ValueString())
+			return "SELECT username AS member_name, 'user' AS member_type, email, is_service_account::VARCHAR, granted_at::VARCHAR FROM (SHOW USERS OF ROLE " + role + ") UNION ALL SELECT role_name AS member_name, 'role' AS member_type, NULL::VARCHAR AS email, NULL::VARCHAR AS is_service_account, granted_at::VARCHAR FROM (SHOW ROLES OF ROLE " + role + ") ORDER BY member_type, member_name", nil
 		}},
 		{name: "roles_for_user", description: "Lists roles granted to one MotherDuck user, including inherited membership.", attrs: []string{"username"}, requiredAttrs: []string{"username"}, typedRows: roleMembershipRows(), postProcess: sortRowsBy("role_name"), build: func(m rowsModel) (string, error) {
 			if m.Username.IsNull() {
@@ -600,6 +600,20 @@ func sortRowsBy(field string) func([]map[string]any) []map[string]any {
 		})
 		return rows
 	}
+}
+
+func sortRoleMemberRows(rows []map[string]any) []map[string]any {
+	sort.SliceStable(rows, func(i, j int) bool {
+		leftType, _ := rows[i]["member_type"].(string)
+		rightType, _ := rows[j]["member_type"].(string)
+		if leftType != rightType {
+			return leftType < rightType
+		}
+		leftName, _ := rows[i]["member_name"].(string)
+		rightName, _ := rows[j]["member_name"].(string)
+		return leftName < rightName
+	})
+	return rows
 }
 
 func (d *rowsDataSource) functionAvailable(ctx context.Context, client interface {

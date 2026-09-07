@@ -3,12 +3,12 @@
 page_title: "motherduck_role_members Data Source - motherduck"
 subcategory: ""
 description: |-
-  Lists users and roles directly granted to one MotherDuck role.
+  Lists users and roles directly granted to one MotherDuck role using SHOW USERS OF ROLE and SHOW ROLES OF ROLE.
 ---
 
 # motherduck_role_members (Data Source)
 
-Lists users and roles directly granted to one MotherDuck role.
+Lists users and roles directly granted to one MotherDuck role using SHOW USERS OF ROLE and SHOW ROLES OF ROLE.
 
 ## Example Usage
 

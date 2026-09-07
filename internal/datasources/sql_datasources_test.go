@@ -126,7 +126,6 @@ func TestRowsSpecsDeclareRequiredFunctions(t *testing.T) {
 		"attached_databases": "md_attached_databases",
 		"buckets_for_secret": "md_list_buckets_for_secret",
 		"files":              "md_list_files",
-		"role_members":       "md_get_role_members",
 		"dives":              "md_list_dives",
 		"dive":               "md_get_dive",
 		"dive_versions":      "md_list_dive_versions",
@@ -234,7 +233,7 @@ func TestRowsDataSourceFunctionAvailableDiagnostics(t *testing.T) {
 }
 
 func TestRoleRowsSpecsUseShowCommands(t *testing.T) {
-	for _, name := range []string{"roles", "roles_for_user", "roles_for_role"} {
+	for _, name := range []string{"roles", "role_members", "roles_for_user", "roles_for_role"} {
 		if fn := findSpec(t, name).requiredFunction; fn != "" {
 			t.Fatalf("spec %s requiredFunction = %q, want none because SHOW commands are not functions", name, fn)
 		}
@@ -246,6 +245,14 @@ func TestRoleRowsSpecsUseShowCommands(t *testing.T) {
 	query, err := findSpec(t, "roles").build(rowsModel{})
 	if err != nil || query != "SHOW ALL ROLES" {
 		t.Fatalf("roles build = %q, %v, want SHOW ALL ROLES", query, err)
+	}
+
+	query, err = findSpec(t, "role_members").build(rowsModel{RoleName: types.StringValue("analytics-readers")})
+	if err != nil || query != "SELECT username AS member_name, 'user' AS member_type, email, is_service_account::VARCHAR, granted_at::VARCHAR FROM (SHOW USERS OF ROLE \"analytics-readers\") UNION ALL SELECT role_name AS member_name, 'role' AS member_type, NULL::VARCHAR AS email, NULL::VARCHAR AS is_service_account, granted_at::VARCHAR FROM (SHOW ROLES OF ROLE \"analytics-readers\") ORDER BY member_type, member_name" {
+		t.Fatalf("role_members build = %q, %v", query, err)
+	}
+	if _, err := findSpec(t, "role_members").build(rowsModel{}); err == nil {
+		t.Fatal("role_members should require role_name")
 	}
 
 	query, err = findSpec(t, "roles_for_user").build(rowsModel{Username: types.StringValue(`weird"user`)})
