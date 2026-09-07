@@ -478,6 +478,7 @@ func (r *flightResource) Schema(ctx context.Context, req resource.SchemaRequest,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Flight ID assigned by MotherDuck.",
 			},
 			"name": schema.StringAttribute{

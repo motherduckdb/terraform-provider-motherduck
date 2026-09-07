@@ -45,6 +45,15 @@ func TestFlightRunWaitPolicyDoesNotReplaceExecution(t *testing.T) {
 	}
 }
 
+func TestFlightIDPreservesStateDuringDefinitionUpdates(t *testing.T) {
+	var resp resource.SchemaResponse
+	NewFlightResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+	id, ok := resp.Schema.Attributes["id"].(schema.StringAttribute)
+	if !ok || len(id.PlanModifiers) == 0 {
+		t.Fatal("Flight ID must preserve its known state during in-place definition updates")
+	}
+}
+
 func (c *deadlineFlightClient) Available() bool { return true }
 func (c *deadlineFlightClient) QueryRow(ctx context.Context, _ string, _ ...any) mdsql.RowScanner {
 	c.queried = true
