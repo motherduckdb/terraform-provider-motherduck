@@ -126,6 +126,7 @@ Run commands from the repository root:
 ```shell
 make test-unit       # Hermetic Go tests, race detection, randomized order
 make test-contract   # Terraform lifecycle against strict local backends
+make test-cli        # Examples and diagnostics using one local provider build
 make docs            # Regenerate reference after schema/template/example changes
 make pre-push-check  # Required before opening or updating a PR
 make release-check   # Required for release scripts/workflows/packaging changes

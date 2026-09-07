@@ -2,24 +2,15 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OS="$(go env GOOS)"
-ARCH="$(go env GOARCH)"
+# shellcheck source=scripts/lib/terraform-test.sh
+source "${ROOT_DIR}/scripts/lib/terraform-test.sh"
+isolate_offline_test_environment
 
 PROVIDER_VERSION="${PROVIDER_VERSION:-0.1.0}"
-SOURCE_HOST="registry.terraform.io"
-SOURCE_NAMESPACE="motherduckdb"
-SOURCE_TYPE="motherduck"
-PROVIDER_SOURCE="${SOURCE_NAMESPACE}/${SOURCE_TYPE}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d%H%M%S)_$$}"
 TERRAFORM_BIN="${TERRAFORM_BIN:-terraform}"
 
-provider_dir="${PROVIDER_BIN_DIR:-${ROOT_DIR}/tools/provider-bin/${RUN_ID}}"
-mirror_dir="${PROVIDER_MIRROR_DIR:-${ROOT_DIR}/tools/provider-mirror/${RUN_ID}}"
-mkdir -p "${provider_dir}" "${mirror_dir}/${SOURCE_HOST}/${SOURCE_NAMESPACE}/${SOURCE_TYPE}/${PROVIDER_VERSION}/${OS}_${ARCH}"
-
-provider_binary="${provider_dir}/terraform-provider-${SOURCE_TYPE}_v${PROVIDER_VERSION}"
-GOOS="${OS}" GOARCH="${ARCH}" go build -o "${provider_binary}" "${ROOT_DIR}"
-cp "${provider_binary}" "${mirror_dir}/${SOURCE_HOST}/${SOURCE_NAMESPACE}/${SOURCE_TYPE}/${PROVIDER_VERSION}/${OS}_${ARCH}/"
+prepare_provider_mirror
 
 echo "==> Missing credential diagnostics smoke (${RUN_ID})"
 
@@ -39,17 +30,7 @@ run_case() {
   perl -0pi -e "s/version = \"= 0\\.1\\.0\"/version = \"= ${PROVIDER_VERSION}\"/" "${work_dir}/main.tf"
 
   local cli_config="${work_dir}/terraformrc"
-  cat > "${cli_config}" <<HCL
-provider_installation {
-  filesystem_mirror {
-    path    = "${mirror_dir}"
-    include = ["${PROVIDER_SOURCE}"]
-  }
-  direct {
-    exclude = ["${PROVIDER_SOURCE}"]
-  }
-}
-HCL
+  write_provider_cli_config "${cli_config}"
 
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" init -backend=false -input=false >/dev/null
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" validate >/dev/null

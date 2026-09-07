@@ -12,7 +12,3 @@ terraform {
 provider "motherduck" {}
 
 data "motherduck_current_user" "current" {}
-
-output "current_user" {
-  value = data.motherduck_current_user.current.value
-}

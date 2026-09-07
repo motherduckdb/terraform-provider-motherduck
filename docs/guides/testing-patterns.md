@@ -70,6 +70,26 @@ HTTP recording solve different scale and transport problems. ClickHouse Cloud
 primarily manages cloud services and points database access control to another
 provider.
 
+## Test the failure paths
+
+`internal/provider/read_failure_contract_test.go` demonstrates a failed refresh
+followed by recovery. Inject an SQL error or REST 403, require the diagnostic,
+restore the backend, then require an empty plan and the original resource/token
+identity. A failed read is not proof that the object disappeared. Strict backends
+reject a duplicate create, a wrong lookup argument, or an unrelated delete.
+
+Keep shell scenarios explicit. Use `scripts/lib/terraform-test.sh` for provider
+build/mirror setup and `scripts/lib/live-common.sh` for cleanup. Register
+`trap live_cleanup_on_exit EXIT` once and let it own final cleanup. Within a
+cleanup function, collect each failure with `|| destroy_status=$?` so later
+resources are still attempted, then return the accumulated status. Do not use
+`|| true` to discard cleanup errors.
+
+Harness behavior belongs in small subprocess tests with fake commands. The shell
+unit tests inject a build failure, an invalid later script, a failed docs generator,
+and cleanup failures to prove the gates themselves fail. These tests never use
+MotherDuck credentials.
+
 ## CI and upgrade policy
 
 Keep PR gates deterministic, credential-free, and bounded. Native package jobs

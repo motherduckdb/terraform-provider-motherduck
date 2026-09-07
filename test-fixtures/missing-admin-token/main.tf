@@ -12,7 +12,3 @@ terraform {
 provider "motherduck" {}
 
 data "motherduck_active_accounts" "current" {}
-
-output "accounts_json" {
-  value = data.motherduck_active_accounts.current.accounts_json
-}

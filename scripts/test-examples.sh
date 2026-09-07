@@ -2,19 +2,16 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OS="$(go env GOOS)"
-ARCH="$(go env GOARCH)"
+# shellcheck source=scripts/lib/terraform-test.sh
+source "${ROOT_DIR}/scripts/lib/terraform-test.sh"
+isolate_offline_test_environment
 
 PROVIDER_VERSION="${PROVIDER_VERSION:-0.1.0}"
-SOURCE_HOST="registry.terraform.io"
-SOURCE_NAMESPACE="motherduckdb"
-SOURCE_TYPE="motherduck"
-PROVIDER_SOURCE="${SOURCE_NAMESPACE}/${SOURCE_TYPE}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d%H%M%S)_$$}"
 TERRAFORM_BIN="${TERRAFORM_BIN:-terraform}"
 
 terraform_cli_version() {
-  "${TERRAFORM_BIN}" version -json 2>/dev/null | sed -n 's/.*"terraform_version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+  "${TERRAFORM_BIN}" version -json | jq -er '.terraform_version'
 }
 
 terraform_supports_ephemeral_examples() {
@@ -47,26 +44,11 @@ if [[ -e "${result_dir}" ]]; then
 fi
 mkdir -p "${result_dir}"
 
-provider_dir="${PROVIDER_BIN_DIR:-${ROOT_DIR}/tools/provider-bin/${RUN_ID}}"
 mirror_dir="${result_dir}/provider-mirror"
-mkdir -p "${provider_dir}" "${mirror_dir}/${SOURCE_HOST}/${SOURCE_NAMESPACE}/${SOURCE_TYPE}/${PROVIDER_VERSION}/${OS}_${ARCH}"
-
-provider_binary="${provider_dir}/terraform-provider-${SOURCE_TYPE}_v${PROVIDER_VERSION}"
-GOOS="${OS}" GOARCH="${ARCH}" go build -o "${provider_binary}" "${ROOT_DIR}"
-cp "${provider_binary}" "${mirror_dir}/${SOURCE_HOST}/${SOURCE_NAMESPACE}/${SOURCE_TYPE}/${PROVIDER_VERSION}/${OS}_${ARCH}/"
+prepare_provider_mirror
 
 cli_config="${result_dir}/terraformrc"
-cat > "${cli_config}" <<HCL
-provider_installation {
-  filesystem_mirror {
-    path    = "${mirror_dir}"
-    include = ["${PROVIDER_SOURCE}"]
-  }
-  direct {
-    exclude = ["${PROVIDER_SOURCE}"]
-  }
-}
-HCL
+write_provider_cli_config "${cli_config}"
 
 write_plan_vars() {
   local relative_dir="$1"
@@ -196,6 +178,8 @@ HCL
   fi
 }
 
+validated_count=0
+planned_count=0
 while IFS= read -r example_dir; do
   relative_dir="${example_dir#"${ROOT_DIR}/"}"
   if [[ "${relative_dir}" == examples/ephemeral-resources/* && "${EPHEMERAL_EXAMPLES_SUPPORTED}" != "1" ]]; then
@@ -229,6 +213,7 @@ HCL
   echo "==> Validating ${relative_dir}"
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" init -backend=false -input=false
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" validate
+  validated_count=$((validated_count + 1))
 
   if [[ "${relative_dir}" == examples/data-sources/* ]]; then
     echo "==> Skipping offline plan for ${relative_dir}; Terraform reads data sources during plan"
@@ -255,6 +240,14 @@ HCL
     exit 1
   fi
 
+  planned_count=$((planned_count + 1))
+  # The provider-only example intentionally has no resources. Every managed
+  # example must actually propose a create, not merely produce an empty plan.
+  if [[ "${relative_dir}" != examples/provider ]]; then
+    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan" |
+      jq -e '[.resource_changes[]? | select(.mode == "managed" and .change.actions == ["create"])] | length > 0' >/dev/null
+  fi
+
   case "${relative_dir}" in
     examples/blueprints/hypertenancy|examples/blueprints/read-hypertenancy)
       plan_json="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan")"
@@ -265,7 +258,7 @@ HCL
         "svc_reader_example_north_america" \
         "share_example_acme_primary" \
         "share_example_north_america"; do
-        if [[ "${plan_json}" != *"${expected}"* ]]; then
+        if ! jq -e --arg expected "${expected}" '[.resource_changes[].change.after | .. | strings] | index($expected) != null' <<<"${plan_json}" >/dev/null; then
           echo "Expected blueprint plan for ${relative_dir} to include normalized name ${expected}" >&2
           exit 1
         fi
@@ -274,7 +267,7 @@ HCL
       ;;
     examples/blueprints/writer-bootstrap)
       plan_json="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan")"
-      if [[ "${plan_json}" != *"svc_writer_example"* ]]; then
+      if ! jq -e '.resource_changes[] | select(.type == "motherduck_service_account") | .change.after.username == "svc_writer_example"' <<<"${plan_json}" >/dev/null; then
         echo "Expected blueprint plan for ${relative_dir} to include writer username svc_writer_example" >&2
         exit 1
       fi
@@ -302,3 +295,9 @@ HCL
       ;;
   esac
 done < <(find "${ROOT_DIR}/examples" -type f -name '*.tf' -exec dirname {} \; | sort -u)
+
+if [[ "${validated_count}" == 0 || "${planned_count}" == 0 ]]; then
+  echo "Example discovery produced no validation or plan checks" >&2
+  exit 1
+fi
+echo "Examples: ${validated_count} validated, ${planned_count} planned"

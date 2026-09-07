@@ -2,14 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OS="$(go env GOOS)"
-ARCH="$(go env GOARCH)"
+# shellcheck source=scripts/lib/terraform-test.sh
+source "${ROOT_DIR}/scripts/lib/terraform-test.sh"
 
 PROVIDER_VERSION="${PROVIDER_VERSION:-0.1.0}"
-SOURCE_HOST="registry.terraform.io"
-SOURCE_NAMESPACE="motherduckdb"
-SOURCE_TYPE="motherduck"
-PROVIDER_SOURCE="${SOURCE_NAMESPACE}/${SOURCE_TYPE}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d%H%M%S)_$$}"
 source "${ROOT_DIR}/scripts/lib/live-common.sh"
 require_safe_run_id "${RUN_ID}"
@@ -25,18 +21,14 @@ target_database_name="tf provider single ${RUN_ID}"
 excluded_database_name="tf provider excluded ${RUN_ID}"
 
 cleanup() {
-  go run "${ROOT_DIR}/internal/dev/mdexec" -sql "DROP DATABASE IF EXISTS \"${target_database_name}\" CASCADE" >/dev/null 2>&1 || true
-  go run "${ROOT_DIR}/internal/dev/mdexec" -sql "DROP DATABASE IF EXISTS \"${excluded_database_name}\" CASCADE" >/dev/null 2>&1 || true
+  local destroy_status=0
+  live_drop_database "${target_database_name}" || destroy_status=$?
+  live_drop_database "${excluded_database_name}" || destroy_status=$?
+  return "${destroy_status}"
 }
-trap cleanup EXIT
+trap live_cleanup_on_exit EXIT
 
-provider_dir="${PROVIDER_BIN_DIR:-${ROOT_DIR}/tools/provider-bin/${RUN_ID}}"
-mirror_dir="${PROVIDER_MIRROR_DIR:-${ROOT_DIR}/tools/provider-mirror/${RUN_ID}}"
-mkdir -p "${provider_dir}" "${mirror_dir}/${SOURCE_HOST}/${SOURCE_NAMESPACE}/${SOURCE_TYPE}/${PROVIDER_VERSION}/${OS}_${ARCH}"
-
-provider_binary="${provider_dir}/terraform-provider-${SOURCE_TYPE}_v${PROVIDER_VERSION}"
-GOOS="${OS}" GOARCH="${ARCH}" go build -o "${provider_binary}" "${ROOT_DIR}"
-cp "${provider_binary}" "${mirror_dir}/${SOURCE_HOST}/${SOURCE_NAMESPACE}/${SOURCE_TYPE}/${PROVIDER_VERSION}/${OS}_${ARCH}/"
+prepare_provider_mirror
 
 work_dir="${ROOT_DIR}/test-results/live-provider-single-attach-${RUN_ID}"
 if [[ -e "${work_dir}" ]]; then
@@ -53,17 +45,7 @@ excluded_database_name = "${excluded_database_name}"
 HCL
 
 cli_config="${work_dir}/terraformrc"
-cat > "${cli_config}" <<HCL
-provider_installation {
-  filesystem_mirror {
-    path    = "${mirror_dir}"
-    include = ["${PROVIDER_SOURCE}"]
-  }
-  direct {
-    exclude = ["${PROVIDER_SOURCE}"]
-  }
-}
-HCL
+write_provider_cli_config "${cli_config}"
 
 echo "==> Live provider single-attach smoke (${RUN_ID})"
 go run "${ROOT_DIR}/internal/dev/mdexec" -sql "CREATE DATABASE \"${target_database_name}\""
@@ -114,7 +96,4 @@ fi
 if [[ "${KEEP_LIVE_FIXTURE}" == "1" ]]; then
   trap - EXIT
   echo "Kept live fixture at ${work_dir}"
-else
-  trap - EXIT
-  cleanup
 fi

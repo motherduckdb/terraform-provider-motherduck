@@ -285,13 +285,14 @@ type contractCall struct {
 }
 
 type contractSQL struct {
-	mu             sync.Mutex
-	calls          []contractCall
-	databaseExists bool
-	tableExists    bool
-	tableColumns   map[string]string
-	ownedShare     []any
-	ownedShareErr  error
+	mu              sync.Mutex
+	calls           []contractCall
+	databaseExists  bool
+	databaseReadErr error
+	tableExists     bool
+	tableColumns    map[string]string
+	ownedShare      []any
+	ownedShareErr   error
 }
 
 func newContractSQL() *contractSQL {
@@ -315,13 +316,31 @@ func (c *contractSQL) Exec(_ context.Context, query string, args ...any) error {
 	defer c.mu.Unlock()
 	switch query {
 	case `CREATE DATABASE "contract_database"`:
+		if len(args) != 0 {
+			return fmt.Errorf("unexpected database create args: %#v", args)
+		}
+		if c.databaseExists {
+			return errors.New("duplicate database create")
+		}
 		c.databaseExists = true
 	case `DROP DATABASE IF EXISTS "contract_database"`:
+		if len(args) != 0 {
+			return fmt.Errorf("unexpected database drop args: %#v", args)
+		}
 		c.databaseExists = false
 	case `CREATE TABLE "contract_database"."app"."facts" ("id" INTEGER, "label" VARCHAR)`:
+		if len(args) != 0 {
+			return fmt.Errorf("unexpected table create args: %#v", args)
+		}
+		if c.tableExists {
+			return errors.New("duplicate table create")
+		}
 		c.tableExists = true
 		c.tableColumns = map[string]string{"id": "INTEGER", "label": "VARCHAR"}
 	case `DROP TABLE IF EXISTS "contract_database"."app"."facts"`:
+		if len(args) != 0 {
+			return fmt.Errorf("unexpected table drop args: %#v", args)
+		}
 		c.tableExists = false
 		c.tableColumns = map[string]string{}
 	case "USE memory":
@@ -336,6 +355,9 @@ func (c *contractSQL) Exists(_ context.Context, query string, args ...any) (bool
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if strings.Contains(query, "information_schema.tables") {
+		if len(args) != 4 || args[0] != "contract_database" || args[1] != "app" || args[2] != "facts" || args[3] != "BASE TABLE" {
+			return false, fmt.Errorf("unexpected table exists args: %#v", args)
+		}
 		return c.tableExists, nil
 	}
 	return false, fmt.Errorf("unexpected SQL exists query %q", query)
@@ -347,6 +369,12 @@ func (c *contractSQL) QueryRow(_ context.Context, query string, args ...any) mds
 	defer c.mu.Unlock()
 	switch {
 	case strings.Contains(query, "MD_INFORMATION_SCHEMA.DATABASES"):
+		if len(args) != 1 || args[0] != "contract_database" {
+			return contractRow{err: fmt.Errorf("unexpected database read args: %#v", args)}
+		}
+		if c.databaseReadErr != nil {
+			return contractRow{err: c.databaseReadErr}
+		}
 		if !c.databaseExists {
 			return contractRow{err: stdsql.ErrNoRows}
 		}
@@ -358,6 +386,9 @@ func (c *contractSQL) QueryRow(_ context.Context, query string, args ...any) mds
 			"MOTHERDUCK",
 		}}
 	case strings.Contains(query, "MD_INFORMATION_SCHEMA.OWNED_SHARES"):
+		if len(args) != 1 || args[0] != "contract_share" {
+			return contractRow{err: fmt.Errorf("unexpected share read args: %#v", args)}
+		}
 		if c.ownedShareErr != nil {
 			return contractRow{err: c.ownedShareErr}
 		}
@@ -376,6 +407,9 @@ func (c *contractSQL) QueryRowsJSON(_ context.Context, query string, args ...any
 	defer c.mu.Unlock()
 	if !strings.Contains(query, "information_schema.columns") {
 		return "", fmt.Errorf("unexpected SQL JSON query %q", query)
+	}
+	if len(args) != 3 || args[0] != "contract_database" || args[1] != "app" || args[2] != "facts" {
+		return "", fmt.Errorf("unexpected table column args: %#v", args)
 	}
 	names := make([]string, 0, len(c.tableColumns))
 	for name := range c.tableColumns {
@@ -468,6 +502,7 @@ type contractREST struct {
 	mu          sync.Mutex
 	token       *mdrest.Token
 	createCount int
+	listErr     error
 	server      *httptest.Server
 }
 
@@ -499,6 +534,11 @@ func (c *contractREST) serveHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		c.mu.Lock()
+		if c.token != nil {
+			c.mu.Unlock()
+			http.Error(w, "duplicate token creation", http.StatusConflict)
+			return
+		}
 		c.createCount++
 		c.token = &mdrest.Token{
 			ID:        fmt.Sprintf("token-%d", c.createCount),
@@ -512,6 +552,18 @@ func (c *contractREST) serveHTTP(w http.ResponseWriter, req *http.Request) {
 		_ = json.NewEncoder(w).Encode(response)
 	case "GET /v1/users/contract_user/tokens":
 		c.mu.Lock()
+		if c.listErr != nil {
+			err := c.listErr
+			c.mu.Unlock()
+			var apiErr mdrest.APIError
+			if errors.As(err, &apiErr) {
+				w.WriteHeader(apiErr.StatusCode)
+				_ = json.NewEncoder(w).Encode(apiErr)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
 		response := mdrest.ListTokensResponse{}
 		if c.token != nil {
 			token := *c.token
@@ -520,12 +572,19 @@ func (c *contractREST) serveHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		c.mu.Unlock()
 		_ = json.NewEncoder(w).Encode(response)
-	case "DELETE /v1/users/contract_user/tokens/token-1", "DELETE /v1/users/contract_user/tokens/token-2":
+	default:
+		if !strings.HasPrefix(req.Method+" "+req.URL.Path, "DELETE /v1/users/contract_user/tokens/") {
+			http.Error(w, "unexpected REST call "+req.Method+" "+req.URL.Path, http.StatusInternalServerError)
+			return
+		}
 		c.mu.Lock()
+		if c.token == nil || req.URL.Path != "/v1/users/contract_user/tokens/"+c.token.ID {
+			c.mu.Unlock()
+			http.Error(w, `{"code":"NOT_FOUND","message":"Token not found"}`, http.StatusNotFound)
+			return
+		}
 		c.token = nil
 		c.mu.Unlock()
 		w.WriteHeader(http.StatusNoContent)
-	default:
-		http.Error(w, "unexpected REST call "+req.Method+" "+req.URL.Path, http.StatusInternalServerError)
 	}
 }
