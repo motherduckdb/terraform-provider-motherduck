@@ -30,6 +30,11 @@ Dive mounted resources cannot currently be reconstructed by this implementation
 on refresh/import. Do not rely on complete drift detection for that field.
 Guide audience management also belongs to the same authoritative owner as its
 content until a separately managed, non-overlapping permissions surface exists.
+The public Guide access functions currently document user/private and
+organization audiences. Role audiences remain compatibility fields in the
+provider schema and require the account to expose the Guide grantee functions;
+check function availability before using `access = "role"` or
+`motherduck_guide_grantees`.
 
 ## Move existing content out of Terraform
 

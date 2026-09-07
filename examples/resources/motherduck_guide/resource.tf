@@ -1,13 +1,22 @@
-resource "motherduck_role" "guide_readers" {
-  name = "guide_readers"
+resource "motherduck_database" "analytics" {
+  name = "analytics"
+}
+
+resource "motherduck_table" "invoices" {
+  database = motherduck_database.analytics.name
+  schema   = "main"
+  name     = "invoices"
+  columns = {
+    invoice_id = "INTEGER"
+    amount     = "DOUBLE"
+  }
 }
 
 resource "motherduck_guide" "revenue" {
   topic          = "metrics/revenue"
   title          = "Revenue metrics"
   description    = "Canonical revenue definitions and source tables"
-  access         = "role"
-  role_names     = [motherduck_role.guide_readers.name]
+  access         = "user"
   change_comment = "initial Terraform import"
 
   content = <<-MARKDOWN
