@@ -830,12 +830,28 @@ run_resource_example() {
   assert_resource_remote "${kind}"
   record_coverage "resource_apply_read_write" "examples/resources/motherduck_${kind}" "passed"
 
+  cp "${dir}/resource.tf" "${dir}/resource-before-cycles.txt"
   safe_update_resource "${kind}" "${dir}"
-  run_resource_tf "${kind}" "${dir}" apply -auto-approve -input=false >/dev/null
-  assert_resource_remote "${kind}"
-  refresh_and_noop_resource "${kind}" "${dir}"
-  record_coverage "resource_safe_update_refresh_noop" "examples/resources/motherduck_${kind}" "passed"
+  cp "${dir}/resource.tf" "${dir}/resource-after-cycles.txt"
+  local cycle
+  for ((cycle = 1; cycle <= ${MD_EXAMPLE_UPDATE_CYCLES:-1}; cycle++)); do
+    if ((cycle % 2 == 1)); then
+      cp "${dir}/resource-after-cycles.txt" "${dir}/resource.tf"
+      if [[ "${kind}" == snapshot ]]; then snapshot_current_name="${snapshot_updated_name}"; fi
+    else
+      cp "${dir}/resource-before-cycles.txt" "${dir}/resource.tf"
+      if [[ "${kind}" == snapshot ]]; then snapshot_current_name="${snapshot_name}"; fi
+    fi
+    run_resource_tf "${kind}" "${dir}" apply -auto-approve -input=false >/dev/null
+    assert_resource_remote "${kind}"
+    refresh_and_noop_resource "${kind}" "${dir}"
+    record_coverage "resource_update_cycle_${cycle}_refresh_noop" "examples/resources/motherduck_${kind}" "passed"
+  done
 
+  if [[ "${kind}" == snapshot && "${snapshot_current_name}" != "${snapshot_updated_name}" ]]; then
+    replace_text "${dir}/import.sh" "${snapshot_updated_name}" "${snapshot_current_name}"
+    snapshot_updated_name="${snapshot_current_name}"
+  fi
   import_resource_example "${kind}" "${dir}"
 }
 

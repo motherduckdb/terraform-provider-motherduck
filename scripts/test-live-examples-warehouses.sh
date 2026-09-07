@@ -266,6 +266,20 @@ for example in service_account access_token duckling_config; do
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" init -backend=false -input=false >/dev/null
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false >"${result_dir}/rest-${example}-apply.log" 2>&1
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false >"${result_dir}/rest-${example}-plan.log" 2>&1
+  if [[ "${example}" == "duckling_config" && "${MD_EXAMPLE_UPDATE_CYCLES:-1}" -gt 1 ]]; then
+    for ((cycle = 1; cycle <= MD_EXAMPLE_UPDATE_CYCLES; cycle++)); do
+      cooldown=$((600 + cycle % 2 * 60))
+      CYCLE_COOLDOWN="${cooldown}" perl -0pi -e 's/(cooldown_seconds\s*=\s*)[0-9]+/$1 . $ENV{CYCLE_COOLDOWN}/ge' "${work_dir}/resource.tf"
+      TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false >"${result_dir}/duckling-cycle-${cycle}.log" 2>&1
+    done
+  fi
+  if [[ "${example}" == "access_token" && "${MD_EXAMPLE_UPDATE_CYCLES:-1}" -gt 1 ]]; then
+    # Positive control: changing a token TTL intentionally replaces that token.
+    # The cycle shim permits this initial replacement, then requires empty plans.
+    sed -i.bak 's/2592000/2592060/' "${work_dir}/resource.tf"
+    rm "${work_dir}/resource.tf.bak"
+    MD_CYCLE_ALLOW_REPLACE=1 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false >"${result_dir}/token-planned-replacement.log" 2>&1
+  fi
   if [[ "${example}" == "service_account" || "${example}" == "duckling_config" ]]; then
     state_address="motherduck_${example}.app"
     import_id="tf_audit_rest_${name_suffix}_${example}"
