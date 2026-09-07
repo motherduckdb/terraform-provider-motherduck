@@ -249,9 +249,9 @@ func (r *roleGrantResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			"role_name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Role to grant. Uses the lowercase MotherDuck role-name form: 3 to 255 characters, starting with a letter, containing only letters, digits, hyphens, and underscores.",
+				MarkdownDescription: "Role to grant, including preset roles or existing custom roles. Uses the lowercase MotherDuck role-name form: 3 to 255 characters, starting with a letter, containing only letters, digits, hyphens, and underscores.",
 				PlanModifiers:       stringRequiresReplace(),
-				Validators:          roleNameValidators(),
+				Validators:          roleGrantRoleNameValidators(),
 			},
 			"grantee_name": schema.StringAttribute{
 				Required:            true,
@@ -336,7 +336,7 @@ func (r *roleGrantResource) ImportState(ctx context.Context, req resource.Import
 	if !ok {
 		return
 	}
-	if detail, valid := validateRoleNameValue(parts[0]); !valid {
+	if detail, valid := validateRoleNameValueWithReserved(parts[0], false); !valid {
 		resp.Diagnostics.AddError("Invalid MotherDuck role import ID", detail)
 		return
 	}
