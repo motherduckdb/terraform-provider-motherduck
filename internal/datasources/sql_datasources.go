@@ -176,7 +176,13 @@ func (d *rowsDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	if d.spec.requiredFunction != "" && !d.functionAvailable(ctx, client, &resp.Diagnostics) {
 		return
 	}
-	rowsJSON, ok := d.queryRows(ctx, client, query, &resp.Diagnostics)
+	var rowsJSON string
+	var ok bool
+	if d.spec.name == "role_members" {
+		rowsJSON, ok = d.queryRoleMembers(ctx, client, config.RoleName.ValueString(), &resp.Diagnostics)
+	} else {
+		rowsJSON, ok = d.queryRows(ctx, client, query, &resp.Diagnostics)
+	}
 	if !ok {
 		return
 	}
@@ -191,6 +197,57 @@ func (d *rowsDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 		}
 	}
 	d.setState(ctx, &resp.State, config, rowsJSONValue, typedRows, resp)
+}
+
+func (d *rowsDataSource) queryRoleMembers(ctx context.Context, client interface {
+	QueryRowsJSON(context.Context, string, ...any) (string, error)
+}, roleName string, diags *diag.Diagnostics) (string, bool) {
+	role := sqlbuild.QuoteIdentifier(roleName)
+	usersJSON, ok := d.queryRows(ctx, client, "SHOW USERS OF ROLE "+role, diags)
+	if !ok {
+		return "", false
+	}
+	rolesJSON, ok := d.queryRows(ctx, client, "SHOW ROLES OF ROLE "+role, diags)
+	if !ok {
+		return "", false
+	}
+	var (
+		users []map[string]any
+		roles []map[string]any
+	)
+	if err := json.Unmarshal([]byte(usersJSON), &users); err != nil {
+		diags.AddError("Unable to decode MotherDuck role users", err.Error())
+		return "", false
+	}
+	if err := json.Unmarshal([]byte(rolesJSON), &roles); err != nil {
+		diags.AddError("Unable to decode MotherDuck role members", err.Error())
+		return "", false
+	}
+	rows := make([]map[string]any, 0, len(users)+len(roles))
+	for _, row := range users {
+		rows = append(rows, map[string]any{
+			"member_name":        row["username"],
+			"member_type":        "user",
+			"email":              row["email"],
+			"is_service_account": row["is_service_account"],
+			"granted_at":         row["granted_at"],
+		})
+	}
+	for _, row := range roles {
+		rows = append(rows, map[string]any{
+			"member_name":        row["role_name"],
+			"member_type":        "role",
+			"email":              nil,
+			"is_service_account": nil,
+			"granted_at":         row["granted_at"],
+		})
+	}
+	encoded, err := json.Marshal(sortRoleMemberRows(rows))
+	if err != nil {
+		diags.AddError("Unable to encode MotherDuck role members", err.Error())
+		return "", false
+	}
+	return string(encoded), true
 }
 
 func rowSpecs() []rowSpec {
@@ -293,12 +350,12 @@ func rowSpecs() []rowSpec {
 			{name: "email", description: "User email when the member is a user."},
 			{name: "is_service_account", description: "Whether the user member is a service account."},
 			{name: "granted_at", description: "Grant creation timestamp."},
-		}, postProcess: sortRoleMemberRows, build: func(m rowsModel) (string, error) {
+		}, build: func(m rowsModel) (string, error) {
 			if m.RoleName.IsNull() {
 				return "", fmt.Errorf("role_name is required")
 			}
 			role := sqlbuild.QuoteIdentifier(m.RoleName.ValueString())
-			return "SELECT username AS member_name, 'user' AS member_type, email, is_service_account::VARCHAR, granted_at::VARCHAR FROM (SHOW USERS OF ROLE " + role + ") UNION ALL SELECT role_name AS member_name, 'role' AS member_type, NULL::VARCHAR AS email, NULL::VARCHAR AS is_service_account, granted_at::VARCHAR FROM (SHOW ROLES OF ROLE " + role + ") ORDER BY member_type, member_name", nil
+			return "SHOW USERS OF ROLE " + role, nil
 		}},
 		{name: "roles_for_user", description: "Lists roles granted to one MotherDuck user, including inherited membership.", attrs: []string{"username"}, requiredAttrs: []string{"username"}, typedRows: roleMembershipRows(), postProcess: sortRowsBy("role_name"), build: func(m rowsModel) (string, error) {
 			if m.Username.IsNull() {
