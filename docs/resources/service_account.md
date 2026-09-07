@@ -3,12 +3,12 @@
 page_title: "motherduck_service_account Resource - motherduck"
 subcategory: ""
 description: |-
-  Creates a MotherDuck service account through the public REST API.
+  Creates a MotherDuck service account through the public REST API. Deleting the account permanently deletes the account and all data it owns, so destroy dependent databases and other data first.
 ---
 
 # motherduck_service_account (Resource)
 
-Creates a MotherDuck service account through the public REST API.
+Creates a MotherDuck service account through the public REST API. Deleting the account permanently deletes the account and all data it owns, so destroy dependent databases and other data first.
 
 ## Example Usage
 

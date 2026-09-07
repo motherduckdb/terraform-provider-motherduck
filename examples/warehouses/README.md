@@ -134,7 +134,9 @@ pipeline inputs.
 
 For disposable examples, destroy warehouse roots using their original writer
 tokens first, then destroy bootstrap last using the admin credential.
-Deleting accounts/tokens first can strand databases and prevent cleanup.
+Deleting a service account permanently deletes the account and all data it owns.
+Deleting tokens first can strand databases by removing the credentials needed to
+clean them up. Always destroy warehouse data before bootstrap accounts.
 Do not sweep unrelated databases or shares.
 
 CI validates and plans all roots without credentials and executes the checked-in
