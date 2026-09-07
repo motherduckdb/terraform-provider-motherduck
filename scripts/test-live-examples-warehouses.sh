@@ -39,6 +39,55 @@ bootstrap_dir="${result_dir}/bootstrap"
 mkdir -p "${bootstrap_dir}"
 cp "${ROOT_DIR}/examples/warehouses/bootstrap"/*.tf "${bootstrap_dir}/"
 
+rest_dir="${result_dir}/rest"
+mkdir -p "${rest_dir}"
+for example in service_account access_token duckling_config; do
+  rest_name="tf_audit_rest_${RUN_ID}_${example}"
+  mkdir -p "${rest_dir}/${example}"
+  cp "${ROOT_DIR}/examples/resources/motherduck_${example}/resource.tf" "${rest_dir}/${example}/"
+  sed -i.bak "s/analytics_app/${rest_name}/g" "${rest_dir}/${example}/resource.tf"
+  rm -f "${rest_dir}/${example}/resource.tf.bak"
+  cat >"${rest_dir}/${example}/provider.tf" <<HCL
+terraform {
+  required_providers { motherduck = { source = "motherduckdb/motherduck", version = "= ${PROVIDER_VERSION}" } }
+}
+provider "motherduck" {}
+HCL
+done
+for data_source in user_tokens active_accounts; do
+  mkdir -p "${rest_dir}/${data_source}"
+  cp "${ROOT_DIR}/examples/data-sources/motherduck_${data_source}/data-source.tf" "${rest_dir}/${data_source}/"
+  if [[ "${data_source}" == "user_tokens" ]]; then
+    sed -i.bak "s/analytics_app/tf_audit_rest_${RUN_ID}_service_account/g" "${rest_dir}/${data_source}/data-source.tf"
+    rm -f "${rest_dir}/${data_source}/data-source.tf.bak"
+  fi
+  cat >"${rest_dir}/${data_source}/provider.tf" <<HCL
+terraform {
+  required_providers { motherduck = { source = "motherduckdb/motherduck", version = "= ${PROVIDER_VERSION}" } }
+}
+provider "motherduck" {}
+HCL
+done
+
+blueprint_dir="${result_dir}/blueprints"
+mkdir -p "${blueprint_dir}/writer-bootstrap" "${blueprint_dir}/hypertenancy" "${blueprint_dir}/read-hypertenancy"
+for example in writer-bootstrap hypertenancy read-hypertenancy; do
+  cp "${ROOT_DIR}/examples/blueprints/${example}"/*.tf "${blueprint_dir}/${example}/"
+done
+cat >"${blueprint_dir}/hypertenancy/terraform.tfvars" <<HCL
+database_prefix = "tf_audit_bp_${RUN_ID}"
+reader_prefix   = "tf_audit_reader_${RUN_ID}"
+share_prefix    = "tf_audit_share_${RUN_ID}"
+tenants = { acme = { display_name = "Acme" } }
+HCL
+cat >"${blueprint_dir}/read-hypertenancy/terraform.tfvars" <<HCL
+expected_writer_username = "tf_audit_bp_writer_${RUN_ID}"
+database_prefix = "tf_audit_rh_${RUN_ID}"
+reader_prefix   = "tf_audit_reader_rh_${RUN_ID}"
+share_prefix    = "tf_audit_share_rh_${RUN_ID}"
+tenants = { acme = { display_name = "Acme" } }
+HCL
+
 for environment in dev prod; do
   for layout in simple layered; do
     work_dir="${result_dir}/${layout}-${environment}"
@@ -81,7 +130,7 @@ check_bi_access() {
 
 destroy_status=0
 cleanup() {
-  local environment layout work_dir token
+  local environment layout work_dir token example status
   local child_status=0
   for environment in prod dev; do
     if [[ "${environment}" == "dev" ]]; then token="${dev_writer_token:-}"; else token="${prod_writer_token:-}"; fi
@@ -98,9 +147,34 @@ cleanup() {
   destroy_status="${child_status}"
   if [[ "${destroy_status}" -ne 0 ]]; then
     echo "warehouse cleanup failed; preserving bootstrap state and credentials" >&2
-    return "${destroy_status}"
   fi
-  if [[ -d "${bootstrap_dir}/.terraform" ]]; then
+  for example in service_account access_token duckling_config; do
+    work_dir="${rest_dir}/${example}"
+    if [[ -d "${work_dir}/.terraform" ]]; then
+      TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" destroy -auto-approve -input=false \
+        >"${result_dir}/rest-${example}-destroy.log" 2>&1 || destroy_status=$?
+    fi
+  done
+  if [[ "${destroy_status}" -ne 0 ]]; then
+    echo "REST example cleanup failed; preserving bootstrap state" >&2
+  fi
+  for example in hypertenancy read-hypertenancy; do
+    work_dir="${blueprint_dir}/${example}"
+    if [[ -d "${work_dir}/.terraform" ]]; then
+      MOTHERDUCK_TOKEN="${bp_writer_token:-}" TF_CLI_CONFIG_FILE="${cli_config}" \
+        "${TERRAFORM_BIN}" -chdir="${work_dir}" destroy -auto-approve -input=false \
+        >"${result_dir}/blueprint-${example}-destroy.log" 2>&1 || destroy_status=$?
+    fi
+  done
+  if [[ "${destroy_status}" -ne 0 ]]; then
+    echo "blueprint data cleanup failed; preserving bootstrap state" >&2
+  fi
+  if [[ "${destroy_status}" -eq 0 && -d "${blueprint_dir}/writer-bootstrap/.terraform" ]]; then
+    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${blueprint_dir}/writer-bootstrap" \
+      destroy -auto-approve -input=false -var="writer_username=tf_audit_bp_writer_${RUN_ID}" \
+      >"${result_dir}/blueprint-writer-bootstrap-destroy.log" 2>&1 || destroy_status=$?
+  fi
+  if [[ "${destroy_status}" -eq 0 && -d "${bootstrap_dir}/.terraform" ]]; then
     TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${bootstrap_dir}" \
       destroy -auto-approve -input=false -var="account_prefix=tf_audit_wh_${RUN_ID}" \
       >"${result_dir}/bootstrap-destroy.log" 2>&1 || destroy_status=$?
@@ -126,6 +200,32 @@ prod_writer_token="$(jq -r '.prod_writer' <<<"${tokens_json}")"
 dev_bi_token="$(jq -r '.dev_bi' <<<"${tokens_json}")"
 prod_bi_token="$(jq -r '.prod_bi' <<<"${tokens_json}")"
 printf '%s\n' 'captured bootstrap tokens in process memory only' >"${result_dir}/credential-capture.log"
+
+for example in service_account access_token duckling_config; do
+  work_dir="${rest_dir}/${example}"
+  TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" init -backend=false -input=false >/dev/null
+  TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false >"${result_dir}/rest-${example}-apply.log" 2>&1
+  TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false >"${result_dir}/rest-${example}-plan.log" 2>&1
+done
+for data_source in user_tokens active_accounts; do
+  work_dir="${rest_dir}/${data_source}"
+  TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" init -backend=false -input=false >/dev/null
+  TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -input=false >"${result_dir}/rest-${data_source}-plan.log" 2>&1
+done
+
+TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${blueprint_dir}/writer-bootstrap" init -backend=false -input=false >/dev/null
+TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${blueprint_dir}/writer-bootstrap" apply -auto-approve -input=false \
+  -var="writer_username=tf_audit_bp_writer_${RUN_ID}" >"${result_dir}/blueprint-writer-bootstrap-apply.log" 2>&1
+bp_writer_token="$("${TERRAFORM_BIN}" -chdir="${blueprint_dir}/writer-bootstrap" output -raw writer_token)"
+for example in hypertenancy read-hypertenancy; do
+  TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${blueprint_dir}/${example}" init -backend=false -input=false >/dev/null
+  MOTHERDUCK_TOKEN="${bp_writer_token}" TF_CLI_CONFIG_FILE="${cli_config}" \
+    "${TERRAFORM_BIN}" -chdir="${blueprint_dir}/${example}" apply -auto-approve -input=false \
+    >"${result_dir}/blueprint-${example}-apply.log" 2>&1
+  MOTHERDUCK_TOKEN="${bp_writer_token}" TF_CLI_CONFIG_FILE="${cli_config}" \
+    "${TERRAFORM_BIN}" -chdir="${blueprint_dir}/${example}" plan -detailed-exitcode -input=false \
+    >"${result_dir}/blueprint-${example}-plan.log" 2>&1
+done
 
 for environment in dev prod; do
   if [[ "${environment}" == "dev" ]]; then token="${dev_writer_token}"; else token="${prod_writer_token}"; fi
