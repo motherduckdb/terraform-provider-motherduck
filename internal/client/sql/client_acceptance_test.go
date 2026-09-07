@@ -95,6 +95,10 @@ func TestIntegrationReconnectAfterInitialOperationContextEnds(t *testing.T) {
 		t.Fatal(err)
 	}
 	cancelInitial()
+	initialUser, err := client.ScalarString(context.Background(), "SELECT md_user()")
+	if err != nil {
+		t.Fatalf("initial MotherDuck identity: %v", err)
+	}
 
 	client.db.SetMaxIdleConns(0)
 	client.db.SetMaxIdleConns(1)
@@ -103,6 +107,13 @@ func TestIntegrationReconnectAfterInitialOperationContextEnds(t *testing.T) {
 	defer cancelReconnect()
 	if err := client.Exec(reconnectCtx, "SELECT 1"); err != nil {
 		t.Fatalf("reconnect after initial operation context ended: %v", err)
+	}
+	reconnectUser, err := client.ScalarString(reconnectCtx, "SELECT md_user()")
+	if err != nil {
+		t.Fatalf("reconnect MotherDuck identity: %v", err)
+	}
+	if reconnectUser != initialUser || reconnectUser == "duckdb" {
+		t.Fatalf("reconnect md_user() = %q, want authenticated identity %q", reconnectUser, initialUser)
 	}
 }
 

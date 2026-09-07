@@ -49,6 +49,48 @@ type contextConnector struct {
 	initialize func(context.Context, driver.ExecerContext) error
 }
 
+// oneTimeInitializer bootstraps the shared DuckDB database exactly once. The
+// MotherDuck token setting is database initialization state and cannot be set
+// again on a pooled reconnect after an md: database has been attached. A
+// failed initialization remains retryable with the next connection context.
+type oneTimeInitializer struct {
+	mu          sync.Mutex
+	initialized bool
+	next        int
+	queries     []string
+	token       string
+}
+
+func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContext) error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.initialized {
+		return nil
+	}
+	initCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	for i.next < len(i.queries) {
+		query := i.queries[i.next]
+		tflog.Debug(initCtx, "running MotherDuck SQL boot query", map[string]any{"query": redactToken(query, i.token)})
+		if _, err := execer.ExecContext(initCtx, query, nil); err != nil {
+			// A canceled ATTACH can complete remotely before reporting an
+			// error. Retry the immutable attach statement idempotently so the
+			// next connection does not need to guess whether it attached.
+			if strings.HasPrefix(query, "ATTACH ") && strings.Contains(err.Error(), "Your MotherDuck databases are already attached") {
+				retryQuery := strings.Replace(query, "ATTACH ", "ATTACH IF NOT EXISTS ", 1)
+				if _, retryErr := execer.ExecContext(initCtx, retryQuery, nil); retryErr == nil {
+					i.next++
+					continue
+				}
+			}
+			return fmt.Errorf("running boot query %q: %s", redactToken(query, i.token), redactToken(err.Error(), i.token))
+		}
+		i.next++
+	}
+	i.initialized = true
+	return nil
+}
+
 // Connect supplies each pool connection's current operation context to the
 // MotherDuck boot queries instead of retaining the first operation's context.
 func (c *contextConnector) Connect(ctx context.Context) (driver.Conn, error) {
@@ -100,34 +142,24 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	connector := &contextConnector{Connector: duckdbConnector, initialize: func(ctx context.Context, execer driver.ExecerContext) error {
-		initCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-		defer cancel()
-
-		queries := []string{
-			"INSTALL motherduck",
-			"LOAD motherduck",
-			"SET motherduck_token = " + sqlbuild.StringLiteral(cfg.Token),
-		}
-		if cfg.AttachMode != "" {
-			queries = append(queries, "SET motherduck_attach_mode = "+sqlbuild.StringLiteral(cfg.AttachMode))
-		}
-		if cfg.Database != "" {
-			queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"+cfg.Database))
-		} else {
-			// Initialize the default workspace explicitly. Without this attach,
-			// the first md_user() query can be answered by local DuckDB as
-			// "duckdb" even though the MotherDuck token is configured.
-			queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"))
-		}
-		for _, query := range queries {
-			tflog.Debug(initCtx, "running MotherDuck SQL boot query", map[string]any{"query": redactToken(query, cfg.Token)})
-			if _, err := execer.ExecContext(initCtx, query, nil); err != nil {
-				return fmt.Errorf("running boot query %q: %s", redactToken(query, cfg.Token), redactToken(err.Error(), cfg.Token))
-			}
-		}
-		return nil
-	}}
+	queries := []string{
+		"INSTALL motherduck",
+		"LOAD motherduck",
+		"SET motherduck_token = " + sqlbuild.StringLiteral(cfg.Token),
+	}
+	if cfg.AttachMode != "" {
+		queries = append(queries, "SET motherduck_attach_mode = "+sqlbuild.StringLiteral(cfg.AttachMode))
+	}
+	if cfg.Database != "" {
+		queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"+cfg.Database))
+	} else {
+		// Initialize the default workspace explicitly. Without this attach,
+		// the first md_user() query can be answered by local DuckDB as
+		// "duckdb" even though the MotherDuck token is configured.
+		queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"))
+	}
+	initialize := &oneTimeInitializer{queries: queries, token: cfg.Token}
+	connector := &contextConnector{Connector: duckdbConnector, initialize: initialize.run}
 
 	db := sql.OpenDB(connector)
 	db.SetMaxOpenConns(1)

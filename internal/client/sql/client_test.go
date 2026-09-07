@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -112,6 +113,80 @@ func TestContextConnectorInitializesWithCurrentConnectContext(t *testing.T) {
 	if got, want := fmt.Sprint(seen), "[first second]"; got != want {
 		t.Fatalf("initializer contexts = %s, want %s", got, want)
 	}
+}
+
+func TestOneTimeInitializerRetriesFailureAndSkipsReconnectBootstrap(t *testing.T) {
+	type contextKey struct{}
+	execer := &recordingExecer{attachFailures: 4, attachError: "Your MotherDuck databases are already attached"}
+	queries := []string{"INSTALL motherduck", "ATTACH 'md:'"}
+	initializer := &oneTimeInitializer{queries: queries, token: "test-token"}
+
+	first := context.WithValue(context.Background(), contextKey{}, "first")
+	if err := initializer.run(first, execer); err == nil {
+		t.Fatal("first initialization should fail")
+	}
+	second := context.WithValue(context.Background(), contextKey{}, "second")
+	if err := initializer.run(second, execer); err == nil {
+		t.Fatal("second initialization should still fail")
+	}
+	third := context.WithValue(context.Background(), contextKey{}, "third")
+	if err := initializer.run(third, execer); err != nil {
+		t.Fatal(err)
+	}
+	if err := initializer.run(context.WithValue(context.Background(), contextKey{}, "fourth"), execer); err != nil {
+		t.Fatal(err)
+	}
+	if initializer.next != 2 || !initializer.initialized {
+		t.Fatalf("initializer state = next:%d initialized:%t, want 2,true", initializer.next, initializer.initialized)
+	}
+	if len(execer.queries) != 6 {
+		t.Fatalf("bootstrap query count = %d, want 6 with no fourth-run replay", len(execer.queries))
+	}
+	if got := execer.contexts[len(execer.contexts)-1].Value(contextKey{}); got != "third" {
+		t.Fatalf("retry context = %v, want third", got)
+	}
+}
+
+func TestOneTimeInitializerDoesNotReplaySetupAfterAttachFailure(t *testing.T) {
+	initializer := &oneTimeInitializer{queries: []string{"SETUP", "TOKEN", "ATTACH 'md:'"}, token: "test-token"}
+	execer := &recordingExecer{attachFailures: 2, attachError: "Your MotherDuck databases are already attached"}
+	if err := initializer.run(context.Background(), execer); err == nil {
+		t.Fatal("first attach should fail")
+	}
+	if err := initializer.run(context.Background(), execer); err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(execer.queries); got != "[SETUP TOKEN ATTACH 'md:' ATTACH IF NOT EXISTS 'md:' ATTACH 'md:']" {
+		t.Fatalf("bootstrap queries = %s, want setup/token once and attach twice", got)
+	}
+}
+
+func TestOneTimeInitializerDoesNotMaskInitialAttachError(t *testing.T) {
+	initializer := &oneTimeInitializer{queries: []string{"ATTACH 'md:'"}, token: "test-token"}
+	execer := &recordingExecer{attachFailures: 1, attachError: "authentication failed"}
+	if err := initializer.run(context.Background(), execer); err == nil {
+		t.Fatal("initial attach error should be returned")
+	}
+	if got := fmt.Sprint(execer.queries); got != "[ATTACH 'md:']" {
+		t.Fatalf("bootstrap queries = %s, want no IF NOT EXISTS fallback", got)
+	}
+}
+
+type recordingExecer struct {
+	contexts       []context.Context
+	queries        []string
+	attachFailures int
+	attachError    string
+}
+
+func (r *recordingExecer) ExecContext(ctx context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+	r.contexts = append(r.contexts, ctx)
+	r.queries = append(r.queries, query)
+	if strings.HasPrefix(query, "ATTACH") && r.attachFailures > 0 {
+		r.attachFailures--
+		return nil, errors.New(r.attachError)
+	}
+	return driver.RowsAffected(0), nil
 }
 
 func TestRedactToken(t *testing.T) {
