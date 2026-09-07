@@ -10,7 +10,8 @@ description: |-
 Grants an existing role directly to a principal. `role_name` accepts preset roles
 (`admin`, `builder`, `explorer`) and custom roles. Use `grantee_type = "user"`
 for both people and service accounts, or `grantee_type = "role"` for inheritance.
-The executing SQL token must have permission to assign roles.
+The SQL identity in `MOTHERDUCK_TOKEN` (or provider `token`) must have permission
+to assign roles. Configuring only `admin_token` does not authorize SQL grants.
 
 ## Example Usage
 
@@ -37,6 +38,10 @@ resource "motherduck_role" "analytics_readers" {
   name = "analytics_readers"
 }
 
+resource "motherduck_service_account" "analytics_reader" {
+  username = "svc_analytics_reader"
+}
+
 resource "motherduck_role_grant" "inherit_explorer" {
   role_name    = "explorer"
   grantee_name = motherduck_role.analytics_readers.name
@@ -45,7 +50,7 @@ resource "motherduck_role_grant" "inherit_explorer" {
 
 resource "motherduck_role_grant" "service_account" {
   role_name    = motherduck_role.analytics_readers.name
-  grantee_name = "svc_analytics_reader"
+  grantee_name = motherduck_service_account.analytics_reader.username
   grantee_type = "user"
 }
 ```
