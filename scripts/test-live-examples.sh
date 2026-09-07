@@ -34,7 +34,7 @@ for group in "${groups[@]}"; do
   log_file="${test_dir}/${group}.log"
   echo "Running live example group: ${group}"
   if [[ ! -x "${script}" ]]; then
-    printf '%s\tUNAVAILABLE\t127\t%s\n' "${group}" "${log_file}" >>"${summary_file}"
+    printf '%s\tFAIL\t127\t%s\n' "${group}" "${log_file}" >>"${summary_file}"
     echo "Missing executable live example group: ${script}" >&2
     aggregate_status=1
     continue
