@@ -32,11 +32,18 @@ if [[ -e "${work_dir}" ]]; then
   echo "Refusing to reuse existing test directory: ${work_dir}" >&2
   exit 1
 fi
+umask 077
 mkdir -p "${work_dir}"
 cp "${ROOT_DIR}/examples/resources/motherduck_role/resource.tf" "${work_dir}/role.tf"
 cp "${ROOT_DIR}/examples/resources/motherduck_role_grant/resource.tf" "${work_dir}/role-grant.tf"
+cp "${ROOT_DIR}/examples/data-sources/motherduck_roles/data-source.tf" "${work_dir}/roles.tf"
+cp "${ROOT_DIR}/examples/data-sources/motherduck_role_members/data-source.tf" "${work_dir}/role-members.tf"
+cp "${ROOT_DIR}/examples/data-sources/motherduck_roles_for_role/data-source.tf" "${work_dir}/roles-for-role.tf"
+cp "${ROOT_DIR}/examples/data-sources/motherduck_roles_for_user/data-source.tf" "${work_dir}/roles-for-user.tf"
 perl -0pi -e 's/resource "motherduck_role" "[^"]+" \{\n.*?\n\}\n\n//s' "${work_dir}/role-grant.tf"
 perl -0pi -e "s/svc_analytics_reader/svc_role_example_${suffix}/g; s/analytics_readers/role_example_${suffix}/g; s/analytics_reader/role_example_reader/g" "${work_dir}/role.tf" "${work_dir}/role-grant.tf"
+perl -0pi -e "s/analytics_readers/role_example_${suffix}/g; s/username = \"svc_analytics_reader\"/username = motherduck_service_account.role_example_reader.username/" "${work_dir}/roles.tf" "${work_dir}/role-members.tf" "${work_dir}/roles-for-role.tf" "${work_dir}/roles-for-user.tf"
+perl -0pi -e "s/role_name = \"role_example_${suffix}\"/role_name = motherduck_role.role_example_${suffix}.name/" "${work_dir}/role-members.tf" "${work_dir}/roles-for-role.tf"
 cat > "${work_dir}/main.tf" <<HCL
 terraform {
   required_providers {
@@ -65,22 +72,9 @@ resource "motherduck_role_grant" "existing_to_new" {
   grantee_type = "role"
 }
 
-data "motherduck_roles" "all" {}
-
-data "motherduck_role_members" "target" {
-  role_name = motherduck_role.role_example_${suffix}.name
-}
-
-data "motherduck_roles_for_role" "target" {
-  role_name = motherduck_role.role_example_${suffix}.name
-}
-
-data "motherduck_roles_for_user" "reader" {
-  username = motherduck_service_account.role_example_reader.username
-}
 HCL
-cat "${work_dir}/role.tf" "${work_dir}/role-grant.tf" >> "${work_dir}/main.tf"
-rm "${work_dir}/role.tf" "${work_dir}/role-grant.tf"
+cat "${work_dir}/role.tf" "${work_dir}/role-grant.tf" "${work_dir}/roles.tf" "${work_dir}/role-members.tf" "${work_dir}/roles-for-role.tf" "${work_dir}/roles-for-user.tf" >> "${work_dir}/main.tf"
+rm "${work_dir}/role.tf" "${work_dir}/role-grant.tf" "${work_dir}/roles.tf" "${work_dir}/role-members.tf" "${work_dir}/roles-for-role.tf" "${work_dir}/roles-for-user.tf"
 
 cli_config="${work_dir}/terraformrc"
 write_provider_cli_config "${cli_config}"
@@ -93,7 +87,22 @@ cleanup() {
   fi
   if [[ "${KEEP_LIVE_FIXTURE}" != "1" && "${rc}" -eq 0 ]]; then
     local http_code
-    http_code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${MOTHERDUCK_ADMIN_TOKEN}" "https://api.motherduck.com/v1/users/svc_role_example_${suffix}")" || rc=$?
+    http_code="$(MOTHERDUCK_ADMIN_TOKEN="${MOTHERDUCK_ADMIN_TOKEN}" MOTHERDUCK_API_BASE_URL="${MOTHERDUCK_API_BASE_URL:-https://api.motherduck.com}" ROLE_EXAMPLE_USERNAME="svc_role_example_${suffix}" python3 - <<'PY'
+import os
+import urllib.error
+import urllib.parse
+import urllib.request
+
+base = os.environ["MOTHERDUCK_API_BASE_URL"].rstrip("/")
+url = base + "/v1/users/" + urllib.parse.quote(os.environ["ROLE_EXAMPLE_USERNAME"], safe="")
+request = urllib.request.Request(url, headers={"Authorization": "Bearer " + os.environ["MOTHERDUCK_ADMIN_TOKEN"]})
+try:
+    with urllib.request.urlopen(request, timeout=30) as response:
+        print(response.status)
+except urllib.error.HTTPError as error:
+    print(error.code)
+PY
+)" || rc=$?
     if [[ "${http_code:-}" != "404" ]]; then
       echo "expected role example service account cleanup to return 404, got ${http_code:-unknown}" >&2
       rc=1
@@ -137,8 +146,17 @@ if [[ "${drift_rc}" -ne 2 ]]; then
   exit 1
 fi
 run_tf apply -auto-approve -input=false >/dev/null
+set +e
+run_tf plan -detailed-exitcode -input=false >/dev/null
+repair_rc=$?
+set -e
+if [[ "${repair_rc}" -ne 0 ]]; then
+  echo "expected no-op plan after repairing revoked grant, got ${repair_rc}" >&2
+  exit "${repair_rc}"
+fi
 
 if [[ "${KEEP_LIVE_FIXTURE}" == "1" ]]; then
   trap - EXIT
   echo "Kept live fixture at ${work_dir}"
+  exit 42
 fi
