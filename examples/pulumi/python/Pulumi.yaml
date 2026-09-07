@@ -1,0 +1,10 @@
+name: motherduck-pulumi-example
+description: A minimal Pulumi Python program using the MotherDuck Terraform provider
+runtime:
+  name: python
+packages:
+  motherduck:
+    source: terraform-provider
+    version: 1.4.0
+    parameters:
+      - ./bin/terraform-provider-motherduck
