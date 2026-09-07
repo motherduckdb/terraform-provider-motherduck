@@ -1153,13 +1153,6 @@ func optionalConfigOwnedStringFromLive(current types.String, live stdsql.NullStr
 	return optionalStringFromLive(current, live)
 }
 
-func optionalConfigOwnedLowerStringFromLive(current types.String, live stdsql.NullString) types.String {
-	if current.IsNull() {
-		return types.StringNull()
-	}
-	return lowerNullString(live)
-}
-
 func optionalStringListFromJSON(ctx context.Context, current types.List, raw stdsql.NullString, field string, diags *diag.Diagnostics) types.List {
 	values := []string{}
 	if !decodeNullableJSON(raw, &values, "Unable to parse MotherDuck Flight "+field, diags) {
