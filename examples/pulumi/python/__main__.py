@@ -4,6 +4,7 @@ import pulumi
 import pulumi_motherduck as motherduck
 
 
+config = pulumi.Config()
 provider = motherduck.Provider(
     "motherduck",
     token=pulumi.Output.secret(os.environ["MOTHERDUCK_TOKEN"]),
@@ -11,7 +12,7 @@ provider = motherduck.Provider(
 
 database = motherduck.Database(
     "database",
-    name="pulumi_example",
+    name=config.require("databaseName"),
     snapshot_retention_days=7,
     opts=pulumi.ResourceOptions(provider=provider),
 )

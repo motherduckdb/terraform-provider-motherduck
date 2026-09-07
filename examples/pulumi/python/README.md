@@ -6,6 +6,8 @@ the MotherDuck Terraform provider. It creates one database, schema, and table.
 The recipe was verified with Pulumi `v3.261.0` and the MotherDuck provider
 `v0.1.1` on macOS ARM64. The bridge package is pinned to `v1.4.0` in
 `Pulumi.yaml`, and the Pulumi SDK is pinned to `3.261.0` in `requirements.txt`.
+The sample database name is required configuration so each stack can use a
+unique name.
 
 ## Setup
 
@@ -18,18 +20,28 @@ Download the v0.1.1 artifact for your platform from the
 verify it against the matching `provider_<platform>_<arch>.sha256` file, unzip
 it, and rename the executable to `bin/terraform-provider-motherduck`.
 
-Initialize a local encrypted backend and generate the typed SDK:
+Initialize a local backend and install the pinned bridge and generated SDK:
 
 ```shell
 pulumi login --local
-export PULUMI_CONFIG_PASSPHRASE='use-a-password-manager'
+export PULUMI_CONFIG_PASSPHRASE="$(secret-manager-read pulumi/passphrase)"
 pulumi stack init dev
-pulumi package add terraform-provider ./bin/terraform-provider-motherduck
+pulumi config set databaseName pulumi_example_<unique-suffix>
+pulumi install
 ```
 
-`pulumi package add` generates the local `pulumi_motherduck` SDK. Keep
-`Pulumi.yaml`, `requirements.txt`, and the provider checksum under source
-control; generated SDKs can be regenerated with `pulumi install`.
+`pulumi install` reads the pinned `terraform-provider` package declaration,
+generates the local `pulumi_motherduck` SDK, and creates `.venv` from the
+checked-in runtime options and requirements. Do not run an unversioned
+`pulumi package add` command here because it can select a newer bridge. Keep
+`Pulumi.yaml` and `requirements.txt` under source control. Keep the matching
+release checksum beside the downloaded artifact while verifying it; `.venv`, `sdks`, `bin`, and
+`Pulumi.<stack>.yaml` are local files and are ignored.
+
+`PULUMI_CONFIG_PASSPHRASE` must come from a secret manager or protected CI
+environment. The local backend encrypts stack secrets, but the passphrase and
+the local state directory still need filesystem protection. Replace the
+placeholder `secret-manager-read` command with your secret manager's CLI.
 
 ## Lifecycle
 
@@ -47,8 +59,8 @@ pulumi destroy
 ```
 
 The verified import IDs for this provider follow the Terraform provider's
-existing formats: `pulumi_import_db`, `pulumi_import_db.app`, and
-`pulumi_import_db.app.facts` for a database, schema, and table respectively.
+existing formats: `<database>`, `<database>.<schema>`, and
+`<database>.<schema>.<table>` for a database, schema, and table respectively.
 Use `pulumi import` with those IDs only after confirming the resource is owned
 by this stack, then copy the generated protected resource definitions into the
 program. Remove protection deliberately before destroying imported resources.
