@@ -57,7 +57,8 @@ type oneTimeInitializer struct {
 	mu          sync.Mutex
 	initialized bool
 	next        int
-	steps       []func(context.Context, driver.ExecerContext) error
+	queries     []string
+	token       string
 }
 
 func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContext) error {
@@ -68,9 +69,11 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 	}
 	initCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	for i.next < len(i.steps) {
-		if err := i.steps[i.next](initCtx, execer); err != nil {
-			return err
+	for i.next < len(i.queries) {
+		query := i.queries[i.next]
+		tflog.Debug(initCtx, "running MotherDuck SQL boot query", map[string]any{"query": redactToken(query, i.token)})
+		if _, err := execer.ExecContext(initCtx, query, nil); err != nil {
+			return fmt.Errorf("running boot query %q: %s", redactToken(query, i.token), redactToken(err.Error(), i.token))
 		}
 		i.next++
 	}
@@ -145,23 +148,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		// "duckdb" even though the MotherDuck token is configured.
 		queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"))
 	}
-	steps := make([]func(context.Context, driver.ExecerContext) error, 0, len(queries))
-	for _, query := range queries {
-		query := query
-		attachAttempted := false
-		steps = append(steps, func(ctx context.Context, execer driver.ExecerContext) error {
-			if strings.HasPrefix(query, "ATTACH ") && attachAttempted {
-				query = strings.Replace(query, "ATTACH ", "ATTACH IF NOT EXISTS ", 1)
-			}
-			attachAttempted = true
-			tflog.Debug(ctx, "running MotherDuck SQL boot query", map[string]any{"query": redactToken(query, cfg.Token)})
-			if _, err := execer.ExecContext(ctx, query, nil); err != nil {
-				return fmt.Errorf("running boot query %q: %s", redactToken(query, cfg.Token), redactToken(err.Error(), cfg.Token))
-			}
-			return nil
-		})
-	}
-	initialize := &oneTimeInitializer{steps: steps}
+	initialize := &oneTimeInitializer{queries: queries, token: cfg.Token}
 	connector := &contextConnector{Connector: duckdbConnector, initialize: initialize.run}
 
 	db := sql.OpenDB(connector)

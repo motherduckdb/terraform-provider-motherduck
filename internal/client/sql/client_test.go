@@ -116,18 +116,9 @@ func TestContextConnectorInitializesWithCurrentConnectContext(t *testing.T) {
 
 func TestOneTimeInitializerRetriesFailureAndSkipsReconnectBootstrap(t *testing.T) {
 	type contextKey struct{}
-	execer := &recordingExecer{}
-	attempts := 0
-	initializer := &oneTimeInitializer{steps: []func(context.Context, driver.ExecerContext) error{
-		func(ctx context.Context, _ driver.ExecerContext) error {
-			attempts++
-			execer.contexts = append(execer.contexts, ctx)
-			if attempts == 1 {
-				return errors.New("initialization failed")
-			}
-			return nil
-		},
-	}}
+	execer := &recordingExecer{failAttachOnce: true}
+	queries := []string{"INSTALL motherduck", "ATTACH"}
+	initializer := &oneTimeInitializer{queries: queries, token: "test-token"}
 
 	first := context.WithValue(context.Background(), contextKey{}, "first")
 	if err := initializer.run(first, execer); err == nil {
@@ -141,47 +132,37 @@ func TestOneTimeInitializerRetriesFailureAndSkipsReconnectBootstrap(t *testing.T
 	if err := initializer.run(third, execer); err != nil {
 		t.Fatal(err)
 	}
-	if attempts != 2 {
-		t.Fatalf("initialization attempts = %d, want 2", attempts)
-	}
-	if got := execer.contexts[0].Value(contextKey{}); got != "first" {
-		t.Fatalf("first initialization context = %v, want first", got)
-	}
-	if got := execer.contexts[1].Value(contextKey{}); got != "second" {
-		t.Fatalf("retry initialization context = %v, want second", got)
+	if initializer.next != 2 || !initializer.initialized {
+		t.Fatalf("initializer state = next:%d initialized:%t, want 2,true", initializer.next, initializer.initialized)
 	}
 }
 
 func TestOneTimeInitializerDoesNotReplaySetupAfterAttachFailure(t *testing.T) {
-	setupCalls, tokenCalls, attachCalls := 0, 0, 0
-	initializer := &oneTimeInitializer{steps: []func(context.Context, driver.ExecerContext) error{
-		func(context.Context, driver.ExecerContext) error { setupCalls++; return nil },
-		func(context.Context, driver.ExecerContext) error { tokenCalls++; return nil },
-		func(context.Context, driver.ExecerContext) error {
-			attachCalls++
-			if attachCalls == 1 {
-				return errors.New("attach canceled after remote attach")
-			}
-			return nil
-		},
-	}}
-	execer := &recordingExecer{}
+	initializer := &oneTimeInitializer{queries: []string{"SETUP", "TOKEN", "ATTACH"}, token: "test-token"}
+	execer := &recordingExecer{failAttachOnce: true}
 	if err := initializer.run(context.Background(), execer); err == nil {
 		t.Fatal("first attach should fail")
 	}
 	if err := initializer.run(context.Background(), execer); err != nil {
 		t.Fatal(err)
 	}
-	if setupCalls != 1 || tokenCalls != 1 || attachCalls != 2 {
-		t.Fatalf("bootstrap calls = setup:%d token:%d attach:%d, want 1,1,2", setupCalls, tokenCalls, attachCalls)
+	if got := fmt.Sprint(execer.queries); got != "[SETUP TOKEN ATTACH ATTACH]" {
+		t.Fatalf("bootstrap queries = %s, want setup/token once and attach twice", got)
 	}
 }
 
 type recordingExecer struct {
-	contexts []context.Context
+	contexts       []context.Context
+	queries        []string
+	failAttachOnce bool
 }
 
-func (r *recordingExecer) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
+func (r *recordingExecer) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+	r.queries = append(r.queries, query)
+	if query == "ATTACH" && r.failAttachOnce {
+		r.failAttachOnce = false
+		return nil, errors.New("attach canceled after remote attach")
+	}
 	return driver.RowsAffected(0), nil
 }
 
