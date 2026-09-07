@@ -11,6 +11,8 @@ Manages a MotherDuck database share.
 
 Use this resource when Terraform owns the share name, source database, access mode, visibility, update mode, and optional catalog include patterns. Name, source, access, visibility, and update mode are replacement-only. Include patterns update in place with `ALTER SHARE`.
 
+Access, visibility, and update mode are optional and computed. If omitted, Terraform discovers and records the live MotherDuck values, including server defaults, during refresh and import. Explicit values are enforced and drift on them plans a replacement. Removing an explicit value from configuration adopts the live value and does not reset the share; configure the desired value explicitly when a change is required.
+
 The computed `url` attribute is sensitive. Treat share URLs as access-bearing infrastructure metadata, especially for unrestricted shares. Terraform still stores sensitive values in state, so use an encrypted backend with restricted access and pass share URLs to downstream systems intentionally through sensitive outputs or a secret manager.
 
 ## Example Usage
