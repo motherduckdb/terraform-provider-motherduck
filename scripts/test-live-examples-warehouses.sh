@@ -258,6 +258,24 @@ for example in service_account access_token duckling_config; do
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" init -backend=false -input=false >/dev/null
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false >"${result_dir}/rest-${example}-apply.log" 2>&1
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false >"${result_dir}/rest-${example}-plan.log" 2>&1
+  if [[ "${example}" == "service_account" || "${example}" == "duckling_config" ]]; then
+    state_address="motherduck_${example}.app"
+    import_id="tf_audit_rest_${RUN_ID}_${example}"
+    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" state rm "${state_address}" >/dev/null
+    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" import -input=false "${state_address}" "${import_id}" >"${result_dir}/rest-${example}-import.log" 2>&1
+    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false >"${result_dir}/rest-${example}-import-plan.log" 2>&1
+  fi
+  if [[ "${example}" == "access_token" ]]; then
+    token_id="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" state show motherduck_access_token.app | awk '$1 == "id" { print $3; exit }' | tr -d '"')"
+    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" state rm motherduck_access_token.app >/dev/null
+    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" import -input=false motherduck_access_token.app "tf_audit_rest_${RUN_ID}_access_token/${token_id}" >"${result_dir}/rest-access_token-import.log" 2>&1
+    set +e
+    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false >"${result_dir}/rest-access_token-import-plan.log" 2>&1
+    token_import_plan_status=$?
+    set -e
+    [[ "${token_import_plan_status}" -eq 2 ]] || { echo "expected imported token with configured ttl to require replacement" >&2; return 1; }
+    rg -q 'must be replaced|forces replacement|ttl' "${result_dir}/rest-access_token-import-plan.log"
+  fi
 done
 for data_source in user_tokens active_accounts; do
   work_dir="${rest_dir}/${data_source}"

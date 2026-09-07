@@ -1,0 +1,28 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: ""
+description: |-
+  Creates and revokes a MotherDuck access token for a user or service account.
+---
+
+# {{.Name}} ({{.Type}})
+
+Creates and revokes a MotherDuck access token for a user or service account.
+The token secret is returned only when the token is created and cannot be
+recovered during import or refresh. `ttl` is also not reconstructed from the
+expiration timestamp, so omit it after importing an existing token unless you
+intend to replace that token.
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_access_token/resource.tf"}}
+
+## Import
+
+{{codefile "shell" "examples/resources/motherduck_access_token/import.sh"}}
+
+After import, run `terraform plan` with the token's name and type. Keep `ttl`
+omitted to adopt an existing token without requesting replacement; Terraform
+cannot recover the original lifetime or token secret.
+
+{{ .SchemaMarkdown | trimspace }}
