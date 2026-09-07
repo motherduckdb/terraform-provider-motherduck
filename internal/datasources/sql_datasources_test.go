@@ -126,7 +126,6 @@ func TestRowsSpecsDeclareRequiredFunctions(t *testing.T) {
 		"attached_databases": "md_attached_databases",
 		"buckets_for_secret": "md_list_buckets_for_secret",
 		"files":              "md_list_files",
-		"role_members":       "md_get_role_members",
 		"dives":              "md_list_dives",
 		"dive":               "md_get_dive",
 		"dive_versions":      "md_list_dive_versions",
@@ -248,6 +247,14 @@ func TestRoleRowsSpecsUseShowCommands(t *testing.T) {
 		t.Fatalf("roles build = %q, %v, want SHOW ALL ROLES", query, err)
 	}
 
+	query, err = findSpec(t, "role_members").build(rowsModel{RoleName: types.StringValue("analytics-readers")})
+	if err != nil || query != "SHOW USERS OF ROLE \"analytics-readers\"" {
+		t.Fatalf("role_members build = %q, %v", query, err)
+	}
+	if _, err := findSpec(t, "role_members").build(rowsModel{}); err == nil {
+		t.Fatal("role_members should require role_name")
+	}
+
 	query, err = findSpec(t, "roles_for_user").build(rowsModel{Username: types.StringValue(`weird"user`)})
 	if err != nil || query != `SHOW ROLES TO USER "weird""user"` {
 		t.Fatalf("roles_for_user build = %q, %v", query, err)
@@ -321,6 +328,31 @@ func TestRowsDataSourceQueryRowsAppliesPostProcess(t *testing.T) {
 	}
 	if rowsJSON != `[{"role_name":"alpha"},{"role_name":"zeta"}]` {
 		t.Fatalf("post-processed rows = %s", rowsJSON)
+	}
+}
+
+func TestQueryRoleMembersUsesTopLevelShowCommandsAndNormalizesRows(t *testing.T) {
+	ds := &rowsDataSource{spec: findSpec(t, "role_members")}
+	client := fakeRoleMembersClient{responses: map[string]string{
+		`SHOW USERS OF ROLE "analytics-readers"`: `[{"username":"svc_reader","email":"svc@example.com","is_service_account":true,"granted_at":"2026-09-07T00:00:00Z"}]`,
+		`SHOW ROLES OF ROLE "analytics-readers"`: `[{"role_name":"finance_readers","role_type":"custom","granted_at":"2026-09-07T01:00:00Z"}]`,
+	}}
+	var diags diag.Diagnostics
+	rowsJSON, ok := ds.queryRoleMembers(context.Background(), &client, "analytics-readers", &diags)
+	if !ok || diags.HasError() {
+		t.Fatalf("queryRoleMembers failed: %v", diags)
+	}
+	if want := `[{"email":null,"granted_at":"2026-09-07T01:00:00Z","is_service_account":null,"member_name":"finance_readers","member_type":"role"},{"email":"svc@example.com","granted_at":"2026-09-07T00:00:00Z","is_service_account":true,"member_name":"svc_reader","member_type":"user"}]`; rowsJSON != want {
+		t.Fatalf("normalized rows = %s, want %s", rowsJSON, want)
+	}
+	if len(client.queries) != 2 || client.queries[0] != `SHOW USERS OF ROLE "analytics-readers"` || client.queries[1] != `SHOW ROLES OF ROLE "analytics-readers"` {
+		t.Fatalf("queries = %#v, want both top-level SHOW commands", client.queries)
+	}
+	var errorDiags diag.Diagnostics
+	if _, ok := ds.queryRoleMembers(context.Background(), &fakeRoleMembersClient{responses: map[string]string{
+		`SHOW USERS OF ROLE "analytics-readers"`: `[]`,
+	}}, "analytics-readers", &errorDiags); ok || !errorDiags.HasError() {
+		t.Fatalf("missing role SHOW result should fail: ok=%v diagnostics=%v", ok, errorDiags)
 	}
 }
 
@@ -728,6 +760,20 @@ func (f fakeFunctionClient) Exists(context.Context, string, ...any) (bool, error
 type fakeRowsClient struct {
 	rowsJSON string
 	err      error
+}
+
+type fakeRoleMembersClient struct {
+	responses map[string]string
+	queries   []string
+}
+
+func (f *fakeRoleMembersClient) QueryRowsJSON(_ context.Context, query string, _ ...any) (string, error) {
+	f.queries = append(f.queries, query)
+	rows, ok := f.responses[query]
+	if !ok {
+		return "", errors.New("unexpected role member query")
+	}
+	return rows, nil
 }
 
 func (f fakeRowsClient) QueryRowsJSON(context.Context, string, ...any) (string, error) {
