@@ -106,6 +106,32 @@ func TestIntegrationReconnectAfterInitialOperationContextEnds(t *testing.T) {
 	}
 }
 
+func TestIntegrationCurrentUserUsesMotherDuckSessionOnFirstOperation(t *testing.T) {
+	requireLiveSQL(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	client, err := New(ctx, Config{
+		Token:           os.Getenv("MOTHERDUCK_TOKEN"),
+		CustomUserAgent: "terraform-provider-motherduck-current-user-test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Errorf("closing client: %v", err)
+		}
+	}()
+
+	currentUser, err := client.ScalarString(ctx, "SELECT md_user()")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if currentUser == "" || currentUser == "duckdb" {
+		t.Fatalf("md_user() returned local or empty identity on first operation: %q", currentUser)
+	}
+}
+
 func requireLiveSQL(t *testing.T) {
 	t.Helper()
 	if os.Getenv("MD_TF_ACC") != "1" {
