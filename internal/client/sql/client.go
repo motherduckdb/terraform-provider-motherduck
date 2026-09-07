@@ -151,12 +151,12 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		queries = append(queries, "SET motherduck_attach_mode = "+sqlbuild.StringLiteral(cfg.AttachMode))
 	}
 	if cfg.Database != "" {
-		queries = append(queries, "ATTACH IF NOT EXISTS "+sqlbuild.StringLiteral("md:"+cfg.Database))
+		queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"+cfg.Database))
 	} else {
 		// Initialize the default workspace explicitly. Without this attach,
 		// the first md_user() query can be answered by local DuckDB as
 		// "duckdb" even though the MotherDuck token is configured.
-		queries = append(queries, "ATTACH IF NOT EXISTS "+sqlbuild.StringLiteral("md:"))
+		queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"))
 	}
 	initialize := &oneTimeInitializer{queries: queries, token: cfg.Token}
 	connector := &contextConnector{Connector: duckdbConnector, initialize: initialize.run}
