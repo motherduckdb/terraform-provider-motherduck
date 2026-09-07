@@ -1,14 +1,23 @@
-resource "motherduck_role" "guide_readers" {
-  name = "guide_readers"
+resource "motherduck_database" "analytics" {
+  name = "analytics"
+}
+
+resource "motherduck_table" "invoices" {
+  database = motherduck_database.analytics.name
+  schema   = "main"
+  name     = "invoices"
+  columns = {
+    invoice_id = "INTEGER"
+    amount     = "DOUBLE"
+  }
 }
 
 resource "motherduck_guide" "revenue" {
   topic          = "metrics/revenue"
   title          = "Revenue metrics"
   description    = "Canonical revenue definitions and source tables"
-  access         = "role"
-  role_names     = [motherduck_role.guide_readers.name]
-  change_comment = "initial Terraform import"
+  access         = "user"
+  change_comment = "initial version"
 
   content = <<-MARKDOWN
     # Revenue metrics
@@ -19,9 +28,9 @@ resource "motherduck_guide" "revenue" {
   references = [
     {
       type        = "catalog"
-      url         = "md:analytics"
-      schema      = "main"
-      table       = "invoices"
+      url         = "md:${motherduck_database.analytics.name}"
+      schema      = motherduck_table.invoices.schema
+      table       = motherduck_table.invoices.name
       description = "Authoritative invoice source"
     }
   ]

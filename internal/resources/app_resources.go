@@ -68,6 +68,7 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Dive ID assigned by MotherDuck.",
 			},
 			"title": schema.StringAttribute{
@@ -478,6 +479,7 @@ func (r *flightResource) Schema(ctx context.Context, req resource.SchemaRequest,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Flight ID assigned by MotherDuck.",
 			},
 			"name": schema.StringAttribute{
@@ -737,6 +739,7 @@ func (r *flightRunResource) Schema(ctx context.Context, req resource.SchemaReque
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Stable Terraform ID for this Flight run, derived from the Flight ID and run number.",
 			},
 			"flight_id": schema.StringAttribute{

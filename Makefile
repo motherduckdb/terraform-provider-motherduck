@@ -9,6 +9,7 @@ GOVULNCHECK := $(TOOLS_DIR)/govulncheck
 GOVULNCHECK_VERSION := v1.6.0
 
 .PHONY: build clean-generated clean-tool-cache docs docs-check fmt fmt-check lint pre-push-check release-check release-package-local shellcheck static-check test-cli test-cli-versions test-contract test-examples test-import-validation test-invalid-configuration test-missing-credentials test-repository-hygiene test-scripts test-unit test-integration test-acceptance test-live-required test-live-blueprint-sql-only test-live-blueprint-writer-path test-live-canonical-values test-live-cleanup-audit test-live-complex test-live-database-drop-with-objects test-live-database-drift test-live-database-options test-live-dive test-live-dive-flight-blueprint test-live-ducklake-database test-live-flight test-live-guide test-live-object-storage-listing test-live-preview-function-diagnostics test-live-provider-config test-live-provider-single-attach test-live-quoted-identifiers test-live-quoted-identifiers-import test-live-read-only-sql-catalog test-live-rest-edge test-live-rest-helper test-live-rest-permission-diagnostics test-live-rest-token-matrix test-live-schema-cascade test-live-secret-metadata-drift test-live-secret-raw-sql test-live-share-grant-drift test-live-share-modes test-live-share-option-drift test-live-snapshot-drift test-live-sql-drift test-live-sql-edge test-live-sql-import test-live-sql-stable test-live-table-replace test-live-table-types test-live-table-unmanaged-view test-live-view-drift test-terraform-versions test-terraform-versions-blueprint test-terraform-versions-lifecycle tools tools-ci tools-docs vulncheck workflow-check $(TFPLUGINDOCS) $(ACTIONLINT) $(GOLANGCI_LINT) $(GOVULNCHECK)
+.PHONY: test-live-examples test-live-examples-core test-live-examples-warehouses test-live-examples-apps test-live-examples-roles
 
 tools: tools-docs
 
@@ -110,11 +111,14 @@ test-contract:
 
 test-scripts:
 	for script in scripts/*.sh scripts/lib/*.sh; do bash -n "$$script" || exit; done
+	python3 -c 'import ast, pathlib; [ast.parse(p.read_text(), filename=str(p)) for p in pathlib.Path("scripts").rglob("*.py")]'
 	./scripts/test-download-checksum-unit.sh
 	./scripts/test-version-matrix-unit.sh
 	./scripts/test-terraform-test-unit.sh
 	./scripts/test-live-common-unit.sh
 	./scripts/test-live-rest-helper.sh
+	./scripts/test-live-examples-runner-unit.sh
+	./scripts/test-live-examples-core-unit.sh
 	./scripts/test-live-rest-admin-gates.sh
 	./scripts/test-gates-unit.sh
 
@@ -128,6 +132,21 @@ test-acceptance:
 
 test-live-required:
 	./scripts/test-live-required.sh
+
+test-live-examples:
+	./scripts/test-live-examples.sh
+
+test-live-examples-core:
+	./scripts/test-live-examples-core.sh
+
+test-live-examples-warehouses:
+	./scripts/test-live-examples-warehouses.sh
+
+test-live-examples-apps:
+	./scripts/test-live-examples-apps.sh
+
+test-live-examples-roles:
+	./scripts/test-live-examples-roles.sh
 
 test-live-cleanup-audit:
 	./scripts/audit-live-test-cleanup.sh

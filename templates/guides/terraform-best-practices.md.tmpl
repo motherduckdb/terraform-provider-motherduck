@@ -208,6 +208,9 @@ Blueprint modules intentionally constrain generated names more tightly than raw 
 
 For table columns, DuckDB type aliases are accepted. The provider compares configured and refreshed column types semantically by round-tripping both type strings through DuckDB, so aliases such as `INT` and canonical names such as `INTEGER` do not create replacement plans by themselves. Semantic column changes still replace `motherduck_table`.
 
+The `columns` map does not preserve declaration order. Use explicit column lists
+in `INSERT` statements so values reach the intended columns.
+
 ## Validation Workflow
 
 Use ordinary Terraform validation in root modules and reusable modules:

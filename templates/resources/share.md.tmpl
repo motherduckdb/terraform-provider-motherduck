@@ -2,27 +2,39 @@
 page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
 subcategory: ""
 description: |-
-  Manages a MotherDuck database share.
+  Manages a MotherDuck share and its publication policy.
 ---
 
 # {{.Name}} ({{.Type}})
 
-Manages a MotherDuck database share.
+Manages a MotherDuck share. Use `update_mode = "automatic"` for ongoing data
+publication, or `manual` when the data pipeline should explicitly publish a
+snapshot. Terraform manages the share configuration; a no-op apply does not
+publish newly inserted source data to a manual share.
 
-Use this resource when Terraform owns the share name, source database, access mode, visibility, update mode, and optional catalog include patterns. Name, source, access, visibility, and update mode are replacement-only. Include patterns update in place with `ALTER SHARE`.
+The example uses manual publication. After changing source data, run this as the
+share owner:
 
-Access, visibility, and update mode are optional and computed. If omitted, Terraform discovers and records the live MotherDuck values, including server defaults, during refresh and import. Explicit values are enforced and drift on them plans a replacement. Removing an explicit value from configuration adopts the live value and does not reset the share; configure the desired value explicitly when a change is required.
+```sql
+UPDATE SHARE analytics_share;
+```
 
-The computed `url` attribute is sensitive. Treat share URLs as access-bearing infrastructure metadata, especially for unrestricted shares. Terraform still stores sensitive values in state, so use an encrypted backend with restricted access and pass share URLs to downstream systems intentionally through sensitive outputs or a secret manager.
+Consumers attach using the share's URL. An already connected consumer can run
+`REFRESH DATABASES` to read the published update. Automatic publication also has
+replication delay; see [updating shares](https://motherduck.com/docs/key-tasks/sharing-data/updating-shares/).
+
+Name, source database, access mode, visibility, and update mode are replacement-only. Include patterns update in place with `ALTER SHARE`.
+
+Access, visibility, and update mode are optional and computed. If omitted, Terraform discovers and records live values during refresh and import. Explicit values are enforced; drift on them plans replacement. Removing an explicit value adopts the live value instead of resetting it.
+
+The computed `url` is sensitive. Treat share URLs as access-bearing metadata, especially for unrestricted shares. Terraform still stores sensitive values in state, so use an encrypted backend with restricted access and pass URLs through sensitive outputs or a secret manager.
 
 ## Example Usage
 
 {{tffile "examples/resources/motherduck_share/resource.tf"}}
 
-{{ .SchemaMarkdown | trimspace }}
-
 ## Import
 
-```shell
-terraform import motherduck_share.analytics analytics_share
-```
+{{codefile "shell" "examples/resources/motherduck_share/import.sh"}}
+
+{{ .SchemaMarkdown | trimspace }}

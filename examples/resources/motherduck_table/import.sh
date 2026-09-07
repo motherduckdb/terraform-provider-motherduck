@@ -1,1 +1,1 @@
-terraform import motherduck_table.events 'analytics.app.events'
+terraform import motherduck_table.events 'analytics.mart.events'

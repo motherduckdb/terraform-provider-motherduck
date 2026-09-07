@@ -17,12 +17,15 @@ resource "motherduck_secret" "s3" {
   name = "analytics_s3"
   type = "s3"
 
-  params = {
-    key_id = var.aws_access_key_id
-    secret = var.aws_secret_access_key
-    region = "us-east-1"
-    scope  = "s3://analytics-bucket/"
-  }
+  params = merge(
+    {
+      key_id = var.aws_access_key_id
+      secret = var.aws_secret_access_key
+      region = "us-east-1"
+      scope  = "s3://analytics-bucket/"
+    },
+    var.aws_session_token == null ? {} : { session_token = var.aws_session_token }
+  )
 }
 
 variable "aws_access_key_id" {
@@ -33,6 +36,12 @@ variable "aws_access_key_id" {
 variable "aws_secret_access_key" {
   type      = string
   sensitive = true
+}
+
+variable "aws_session_token" {
+  type      = string
+  sensitive = true
+  default   = null
 }
 ```
 
@@ -63,5 +72,5 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-terraform import motherduck_secret.s3 'storage_credentials'
+terraform import motherduck_secret.s3 'analytics_s3'
 ```

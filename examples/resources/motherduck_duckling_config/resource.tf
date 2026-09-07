@@ -1,5 +1,5 @@
 resource "motherduck_duckling_config" "app" {
-  username = "analytics_app"
+  username = motherduck_service_account.app.username
 
   read_write_instance_size      = "standard"
   read_write_cooldown_seconds   = 600
@@ -8,3 +8,6 @@ resource "motherduck_duckling_config" "app" {
   read_scaling_cooldown_seconds = 600
 }
 
+resource "motherduck_service_account" "app" {
+  username = "analytics_app"
+}

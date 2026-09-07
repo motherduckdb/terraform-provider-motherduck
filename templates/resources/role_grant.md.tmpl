@@ -10,7 +10,8 @@ description: |-
 Grants an existing role directly to a principal. `role_name` accepts preset roles
 (`admin`, `builder`, `explorer`) and custom roles. Use `grantee_type = "user"`
 for both people and service accounts, or `grantee_type = "role"` for inheritance.
-The executing SQL token must have permission to assign roles.
+The SQL identity in `MOTHERDUCK_TOKEN` (or provider `token`) must have permission
+to assign roles. Configuring only `admin_token` does not authorize SQL grants.
 
 ## Example Usage
 

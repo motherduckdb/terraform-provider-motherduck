@@ -71,6 +71,18 @@ provider_installation {
 HCL
 }
 
+isolate_live_test_environment() {
+  # Keep injected service credentials, but never reuse a developer's workspace,
+  # state directory, provider process, or implicit CLI/variable overrides.
+  unset TF_DATA_DIR TF_WORKSPACE TF_REATTACH_PROVIDERS TF_PLUGIN_CACHE_DIR TF_CLI_CONFIG_FILE
+  unset TF_LOG TF_LOG_PATH TF_LOG_PROVIDER TF_LOG_CORE
+  local name
+  for name in ${!TF_CLI_ARGS@} ${!TF_VAR_@}; do
+    unset "${name}"
+  done
+  export TF_IN_AUTOMATION=1 CHECKPOINT_DISABLE=1
+}
+
 isolate_offline_test_environment() {
   # A developer's shell must not inject credentials, CLI flags, variables,
   # another provider process, or a shared state/cache directory into a test.

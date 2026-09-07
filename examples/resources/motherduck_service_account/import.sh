@@ -1,1 +1,1 @@
-terraform import motherduck_service_account.app 'service_account'
+terraform import motherduck_service_account.app 'analytics_app'
