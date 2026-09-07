@@ -28,7 +28,8 @@ preflight_rest_admin
 preflight_exit=$?
 set -e
 if [[ "${preflight_exit}" -eq 42 ]]; then
-  exit 0
+  echo "REST admin smoke requires an organization-admin MOTHERDUCK_ADMIN_TOKEN" >&2
+  exit "${preflight_exit}"
 elif [[ "${preflight_exit}" -ne 0 ]]; then
   exit "${preflight_exit}"
 fi
