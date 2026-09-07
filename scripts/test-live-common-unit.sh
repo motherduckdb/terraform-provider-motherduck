@@ -192,7 +192,7 @@ grep -F 'Live cleanup failed (unname snapshot snapshot in db): stub snapshot upd
 # Exercise the actual writer scenario's cleanup callback without running its
 # credentialed setup. Bootstrap credentials must survive a tenant cleanup error.
 # Variables and stubs below are used by that dynamically loaded callback.
-# shellcheck disable=SC2034,SC2329
+# shellcheck disable=SC2034,SC2317,SC2329
 (
   eval "$(sed -n '/^cleanup() {/,/^}/p' "${ROOT_DIR}/scripts/test-live-blueprint-writer-path.sh")"
   tenant_dir="${test_dir}/tenant"
