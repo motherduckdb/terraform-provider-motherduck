@@ -49,6 +49,29 @@ type contextConnector struct {
 	initialize func(context.Context, driver.ExecerContext) error
 }
 
+// oneTimeInitializer bootstraps the shared DuckDB database exactly once. The
+// MotherDuck token setting is database initialization state and cannot be set
+// again on a pooled reconnect after an md: database has been attached. A
+// failed initialization remains retryable with the next connection context.
+type oneTimeInitializer struct {
+	mu          sync.Mutex
+	initialized bool
+	initialize  func(context.Context, driver.ExecerContext) error
+}
+
+func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContext) error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if i.initialized {
+		return nil
+	}
+	if err := i.initialize(ctx, execer); err != nil {
+		return err
+	}
+	i.initialized = true
+	return nil
+}
+
 // Connect supplies each pool connection's current operation context to the
 // MotherDuck boot queries instead of retaining the first operation's context.
 func (c *contextConnector) Connect(ctx context.Context) (driver.Conn, error) {
@@ -100,7 +123,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	connector := &contextConnector{Connector: duckdbConnector, initialize: func(ctx context.Context, execer driver.ExecerContext) error {
+	initialize := &oneTimeInitializer{initialize: func(ctx context.Context, execer driver.ExecerContext) error {
 		initCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
 
@@ -128,6 +151,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		}
 		return nil
 	}}
+	connector := &contextConnector{Connector: duckdbConnector, initialize: initialize.run}
 
 	db := sql.OpenDB(connector)
 	db.SetMaxOpenConns(1)

@@ -114,6 +114,50 @@ func TestContextConnectorInitializesWithCurrentConnectContext(t *testing.T) {
 	}
 }
 
+func TestOneTimeInitializerRetriesFailureAndSkipsReconnectBootstrap(t *testing.T) {
+	type contextKey struct{}
+	execer := &recordingExecer{}
+	attempts := 0
+	initializer := &oneTimeInitializer{initialize: func(ctx context.Context, _ driver.ExecerContext) error {
+		attempts++
+		execer.contexts = append(execer.contexts, ctx)
+		if attempts == 1 {
+			return errors.New("initialization failed")
+		}
+		return nil
+	}}
+
+	first := context.WithValue(context.Background(), contextKey{}, "first")
+	if err := initializer.run(first, execer); err == nil {
+		t.Fatal("first initialization should fail")
+	}
+	second := context.WithValue(context.Background(), contextKey{}, "second")
+	if err := initializer.run(second, execer); err != nil {
+		t.Fatal(err)
+	}
+	third := context.WithValue(context.Background(), contextKey{}, "third")
+	if err := initializer.run(third, execer); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 2 {
+		t.Fatalf("initialization attempts = %d, want 2", attempts)
+	}
+	if got := execer.contexts[0].Value(contextKey{}); got != "first" {
+		t.Fatalf("first initialization context = %v, want first", got)
+	}
+	if got := execer.contexts[1].Value(contextKey{}); got != "second" {
+		t.Fatalf("retry initialization context = %v, want second", got)
+	}
+}
+
+type recordingExecer struct {
+	contexts []context.Context
+}
+
+func (r *recordingExecer) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
+	return driver.RowsAffected(0), nil
+}
+
 func TestRedactToken(t *testing.T) {
 	tests := map[string]struct {
 		query string
