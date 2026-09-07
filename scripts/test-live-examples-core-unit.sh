@@ -51,3 +51,52 @@ if assert_rows_empty hidden '[{"name":"unexpected"}]' >/dev/null 2>&1; then
   exit 1
 fi
 echo "Core example failure-propagation checks passed"
+
+python3 - "${ROOT_DIR}/scripts/test-live-examples-core.sh" "${work_dir}/resource-function.sh" <<'PY'
+from pathlib import Path
+import sys
+source = Path(sys.argv[1]).read_text()
+body = source.split("run_resource_example() {", 1)[1].split("write_data_assertion() {", 1)[0]
+Path(sys.argv[2]).write_text("run_resource_example() {" + body)
+PY
+# shellcheck disable=SC1091
+source "${work_dir}/resource-function.sh"
+copy_actual_example() {
+  mkdir -p "$2"
+  printf '%s' old_identity >"$2/resource.tf"
+  printf '%s' old_identity >"$2/import.sh"
+}
+substitute_resource_example() { :; }
+run_resource_tf() { :; }
+assert_resource_remote() { :; }
+refresh_and_noop_resource() { :; }
+safe_update_resource() {
+  printf '%s' new_identity >"$2/resource.tf"
+  printf '%s' new_identity >"$2/import.sh"
+  snapshot_current_name=new_identity
+}
+replace_text() {
+  python3 - "$1" "$2" "$3" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+p.write_text(p.read_text().replace(sys.argv[2], sys.argv[3]))
+PY
+}
+import_resource_example() {
+  if [[ "$(cat "$2/import.sh")" != "$(cat "$2/resource.tf")" || "${snapshot_updated_name}" != "$(cat "$2/resource.tf")" ]]; then
+    echo "Snapshot import or catalog expectation disagrees with final cycle configuration" >&2
+    return 1
+  fi
+}
+# Variables are consumed by the sourced resource-cycle function.
+# shellcheck disable=SC2034
+for cycles in 2 3 4 5; do
+  root_test_dir="${work_dir}/snapshot-${cycles}"
+  snapshot_name=old_identity
+  snapshot_updated_name=new_identity
+  snapshot_current_name=old_identity
+  MD_EXAMPLE_UPDATE_CYCLES="${cycles}"
+  run_resource_example snapshot
+done
+echo "Even and odd snapshot-cycle import checks passed"

@@ -166,6 +166,31 @@ They can create compute and execute Flight code. State and logs stay under the
 ignored `test-results/` directory and must not be published. Destroy data and
 application objects before deleting their owning service accounts.
 
+## Repeat lifecycle cycles
+
+Run repeated plan/apply checks and alternating supported updates with:
+
+```bash
+make test-live-cycles
+```
+
+This uses the same disposable examples and credentials as `test-live-examples`.
+By default, every successful resource apply is followed by five plan/apply
+cycles. Managed-resource plans must remain empty, and IDs, creation metadata,
+and Flight run numbers must remain stable. Supported app content, database,
+view, share, snapshot-name, and Duckling configuration changes alternate across
+five update cycles. The warehouse suite deliberately changes a disposable
+token TTL once as a positive control for planned replacement.
+
+Set `MD_CYCLE_REPEATS` and `MD_EXAMPLE_UPDATE_CYCLES` to positive integers to
+change the repetition counts. Set `TF_TEST_PROVIDER_BINARY` to an absolute path
+to a verified released provider binary and `PROVIDER_VERSION` to its version
+when testing an immutable release rather than the current source build.
+
+Private per-apply JSON reports contain resource identities and planned actions,
+not credential values. They are saved under `test-results/lifecycle-cycles-*`.
+Unavailable catalog capabilities still produce a nonzero aggregate result.
+
 ## Terraform Version Matrix
 
 Run the offline matrix without credentials before changing CLI setup or fixtures:

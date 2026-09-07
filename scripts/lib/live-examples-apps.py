@@ -179,16 +179,20 @@ def run_examples(token):
     updated = updated.replace('print("hello")', 'print("hello updated")')
     if updated == text:
         raise RuntimeError("Example content changed; update probes need review")
-    (APP / "main.tf").write_text(config(updated))
-    tf(APP, "apply", "-auto-approve", "-input=false", token=token)
-    after = ids(token)
-    for kind in ("dive", "guide", "flight"):
-        if initial[kind] != after[kind]:
-            raise RuntimeError(f"{kind} content update replaced its identity")
-    if after["guide_version"] <= initial["guide_version"] or after["run_number"] != initial["run_number"]:
-        raise RuntimeError("Expected a new Guide version without executing the Flight again")
-    plan(token)
-    check("content updates preserve identity and do not replay Flight runs")
+    previous_version = initial["guide_version"]
+    for cycle in range(int(os.environ.get("MD_EXAMPLE_UPDATE_CYCLES", "1"))):
+        selected = updated if cycle % 2 == 0 else text
+        (APP / "main.tf").write_text(config(selected))
+        tf(APP, "apply", "-auto-approve", "-input=false", token=token)
+        after = ids(token)
+        for kind in ("dive", "guide", "flight"):
+            if initial[kind] != after[kind]:
+                raise RuntimeError(f"{kind} content update replaced its identity")
+        if after["guide_version"] <= previous_version or after["run_number"] != initial["run_number"]:
+            raise RuntimeError("Expected a new Guide version without executing the Flight again")
+        previous_version = after["guide_version"]
+        plan(token)
+        check(f"content update cycle {cycle + 1}: stable identities and no Flight replay")
 
     for kind in ("guide", "flight", "dive"):
         address = "motherduck_flight.heartbeat" if kind == "flight" else f"motherduck_{kind}.revenue"
