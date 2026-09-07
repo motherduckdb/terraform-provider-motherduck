@@ -263,6 +263,10 @@ func roleNameValidators() []validator.String {
 	return []validator.String{roleNameValidator{}}
 }
 
+func roleGrantRoleNameValidators() []validator.String {
+	return []validator.String{roleGrantRoleNameValidator{}}
+}
+
 func roleGranteeTypeValidators() []validator.String {
 	return []validator.String{stringEnumValidator{
 		name:   "MotherDuck role grantee type",
@@ -541,6 +545,29 @@ func (roleNameValidator) ValidateString(ctx context.Context, req validator.Strin
 }
 
 func validateRoleNameValue(value string) (string, bool) {
+	return validateRoleNameValueWithReserved(value, true)
+}
+
+type roleGrantRoleNameValidator struct{}
+
+func (roleGrantRoleNameValidator) Description(context.Context) string {
+	return "must be 3 to 255 lowercase characters, start with a letter, and contain only letters, digits, hyphens, and underscores"
+}
+
+func (roleGrantRoleNameValidator) MarkdownDescription(context.Context) string {
+	return "must be 3 to 255 lowercase characters, start with a letter, and contain only letters, digits, hyphens, and underscores"
+}
+
+func (roleGrantRoleNameValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if detail, ok := validateRoleNameValueWithReserved(req.ConfigValue.ValueString(), false); !ok {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck role name", detail)
+	}
+}
+
+func validateRoleNameValueWithReserved(value string, rejectReserved bool) (string, bool) {
 	runes := []rune(value)
 	if value != strings.TrimSpace(value) || len(runes) < 3 || len(runes) > 255 {
 		return "Role name must be between 3 and 255 characters with no leading or trailing whitespace.", false
@@ -556,9 +583,11 @@ func validateRoleNameValue(value string) (string, bool) {
 			return "Role name must contain only letters, digits, hyphens, and underscores.", false
 		}
 	}
-	switch value {
-	case "admin", "builder", "explorer":
-		return "Role name must not be one of the reserved MotherDuck role names admin, builder, or explorer.", false
+	if rejectReserved {
+		switch value {
+		case "admin", "builder", "explorer":
+			return "Role name must not be one of the reserved MotherDuck role names admin, builder, or explorer.", false
+		}
 	}
 	return "", true
 }

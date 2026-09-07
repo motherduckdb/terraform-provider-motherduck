@@ -8,7 +8,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
 func TestRoleNameValidator(t *testing.T) {
@@ -53,6 +55,93 @@ func TestRoleGrantSchemaDefaultsToUser(t *testing.T) {
 	granteeType, ok := resp.Schema.Attributes["grantee_type"].(schema.StringAttribute)
 	if !ok || !granteeType.Optional || !granteeType.Computed || granteeType.Default == nil {
 		t.Fatalf("grantee_type schema = %#v", resp.Schema.Attributes["grantee_type"])
+	}
+}
+
+func TestRoleGrantRoleNameValidatorAllowsPresetRoles(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewRoleGrantResource().Schema(t.Context(), resource.SchemaRequest{}, &schemaResp)
+	if schemaResp.Diagnostics.HasError() {
+		t.Fatalf("schema diagnostics: %v", schemaResp.Diagnostics)
+	}
+	roleName, ok := schemaResp.Schema.Attributes["role_name"].(schema.StringAttribute)
+	if !ok || len(roleName.Validators) == 0 {
+		t.Fatalf("role_name schema = %#v, want validators", schemaResp.Schema.Attributes["role_name"])
+	}
+	for _, value := range []string{"admin", "builder", "explorer"} {
+		var resp validator.StringResponse
+		request := validator.StringRequest{
+			Path:        path.Root("role_name"),
+			ConfigValue: types.StringValue(value),
+		}
+		for _, v := range roleName.Validators {
+			v.ValidateString(context.Background(), request, &resp)
+		}
+		if resp.Diagnostics.HasError() {
+			t.Fatalf("preset role %q rejected: %v", value, resp.Diagnostics)
+		}
+	}
+}
+
+func TestRoleSchemaStillRejectsPresetRoles(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewRoleResource().Schema(t.Context(), resource.SchemaRequest{}, &schemaResp)
+	if schemaResp.Diagnostics.HasError() {
+		t.Fatalf("schema diagnostics: %v", schemaResp.Diagnostics)
+	}
+	roleName, ok := schemaResp.Schema.Attributes["name"].(schema.StringAttribute)
+	if !ok || len(roleName.Validators) == 0 {
+		t.Fatalf("name schema = %#v, want validators", schemaResp.Schema.Attributes["name"])
+	}
+	for _, value := range []string{"admin", "builder", "explorer"} {
+		var resp validator.StringResponse
+		request := validator.StringRequest{
+			Path:        path.Root("name"),
+			ConfigValue: types.StringValue(value),
+		}
+		for _, v := range roleName.Validators {
+			v.ValidateString(context.Background(), request, &resp)
+		}
+		if !resp.Diagnostics.HasError() {
+			t.Fatalf("reserved custom role %q accepted", value)
+		}
+	}
+}
+
+func TestRoleGrantImportAllowsPresetRoles(t *testing.T) {
+	var schemaResp resource.SchemaResponse
+	NewRoleGrantResource().Schema(t.Context(), resource.SchemaRequest{}, &schemaResp)
+	if schemaResp.Diagnostics.HasError() {
+		t.Fatalf("schema diagnostics: %v", schemaResp.Diagnostics)
+	}
+	for _, value := range []string{"admin", "builder", "explorer"} {
+		state := tfsdk.State{
+			Schema: schemaResp.Schema,
+			Raw:    tftypes.NewValue(schemaResp.Schema.Type().TerraformType(t.Context()), nil),
+		}
+		resp := resource.ImportStateResponse{State: state}
+		NewRoleGrantResource().(resource.ResourceWithImportState).ImportState(
+			t.Context(),
+			resource.ImportStateRequest{ID: value + "/user/millentic_dev"},
+			&resp,
+		)
+		if resp.Diagnostics.HasError() {
+			t.Fatalf("preset role %q import rejected: %v", value, resp.Diagnostics)
+		}
+	}
+}
+
+func TestRoleGrantRoleNameValidatorStillRejectsInvalidNames(t *testing.T) {
+	v := roleGrantRoleNameValidator{}
+	for _, value := range []string{"ab", "Analytics_Readers", "analytics.readers", "-readers"} {
+		var resp validator.StringResponse
+		v.ValidateString(context.Background(), validator.StringRequest{
+			Path:        path.Root("role_name"),
+			ConfigValue: types.StringValue(value),
+		}, &resp)
+		if !resp.Diagnostics.HasError() {
+			t.Fatalf("invalid role name %q accepted", value)
+		}
 	}
 }
 
