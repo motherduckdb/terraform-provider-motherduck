@@ -12,6 +12,7 @@ for p in (BOOT, APP, FAILED):
     p.mkdir(parents=True, exist_ok=False)
 shutil.copytree(ROOT / 'test-fixtures' / 'live-writer-bootstrap', BOOT, dirs_exist_ok=True)
 (BOOT / 'terraform.tfvars').write_text(f'run_id = "{RUN_ID}"\n')
+(BOOT / 'main.tf').write_text((BOOT / 'main.tf').read_text().replace('= 0.1.0', '= 0.1.1'))
 provider_bin = BASE / 'provider'
 subprocess.run(['go', 'build', '-o', str(provider_bin), './'], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
 mirror = BASE / 'mirror'
@@ -42,73 +43,44 @@ tf(BOOT, 'init', '-backend=false', '-input=false')
 tf(BOOT, 'apply', '-auto-approve', '-input=false')
 username = tf(BOOT, 'output', '-raw', 'writer_username', capture=True).stdout.strip()
 token = tf(BOOT, 'output', '-raw', 'writer_token', capture=True).stdout.strip()
+example_dive = (ROOT / 'examples/resources/motherduck_dive/resource.tf').read_text()
+example_flight_run = (ROOT / 'examples/resources/motherduck_flight_run/resource.tf').read_text()
+example_guide = (ROOT / 'examples/resources/motherduck_guide/resource.tf').read_text()
+example_data_sources = '\n'.join((ROOT / 'examples/data-sources' / name / 'data-source.tf').read_text()
+    .replace('11111111-1111-4111-8111-111111111111',
+             '${motherduck_dive.revenue.id}' if 'dive' in name else ('${motherduck_flight.heartbeat_' + RUN_ID + '.id}' if 'flight' in name else '${motherduck_guide.revenue.id}'))
+    .replace('123e4567-e89b-42d3-a456-426614174000', '${motherduck_guide.revenue.id}')
+    for name in (
+        'motherduck_dive', 'motherduck_dive_versions', 'motherduck_dives',
+        'motherduck_guide', 'motherduck_guide_versions', 'motherduck_guides',
+        'motherduck_flight', 'motherduck_flight_versions', 'motherduck_flight_runs', 'motherduck_flight_logs',
+    ))
+example_data_sources = example_data_sources.replace(
+    'run_number = 1\n}',
+    f'run_number = 1\n  depends_on = [motherduck_flight_run.heartbeat_{RUN_ID}]\n}}',
+)
+example_embed = (ROOT / 'examples/ephemeral-resources/motherduck_dive_embed_session/ephemeral-resource.tf').read_text()
+example_dive = example_dive.replace('wikipedia_pageviews', f'tf_example_db_{RUN_ID}').replace('Revenue', f'Revenue {RUN_ID}')
+example_guide = example_guide[example_guide.index('resource "motherduck_guide"'):]
+example_guide = example_guide.replace('access         = "role"', 'access         = "user"').replace('  role_names     = [motherduck_role.guide_readers.name]\n', '')
+example_guide = example_guide.replace('metrics/revenue', f'metrics/revenue/{RUN_ID}').replace('md:analytics', f'md:tf_example_db_{RUN_ID}')
+example_flight_run = example_flight_run.replace('heartbeat', f'heartbeat_{RUN_ID}')
+example_data_sources = example_data_sources.replace('11111111-1111-4111-8111-111111111111', 'PLACEHOLDER_ID')
+example_embed = example_embed.replace('11111111-1111-4111-8111-111111111111', '${motherduck_dive.revenue.id}').replace('analytics_reader', username)
 hcl = f'''terraform {{
   required_providers {{ motherduck = {{ source = "motherduckdb/motherduck", version = "= 0.1.1" }} }}
 }}
-resource "motherduck_database" "wikipedia" {{ name = "tf_example_db_{RUN_ID}" }}
+{example_dive}
 resource "motherduck_table" "invoices" {{
   database = motherduck_database.wikipedia.name
   schema = "main"
   name = "invoices"
   columns = {{ invoice_id = "INTEGER", amount = "DOUBLE" }}
 }}
-resource "motherduck_share" "wikipedia" {{
-  name = "tf_example_share_{RUN_ID}"
-  source_database = motherduck_database.wikipedia.name
-  access = "unrestricted"
-  visibility = "hidden"
-  update_mode = "automatic"
-}}
-resource "motherduck_dive" "revenue" {{
-  title = "Revenue {RUN_ID}"
-  description = "Revenue overview"
-  api_version = 1
-  status = "ready"
-  required_resources = [{{ alias = "wikipedia_pageviews", url = motherduck_share.wikipedia.url }}]
-  content = "export default function Dive() {{ return <div>Revenue</div>; }}"
-}}
-resource "motherduck_guide" "revenue" {{
-  topic = "metrics/revenue/{RUN_ID}"
-  title = "Revenue metrics"
-  description = "Canonical revenue definitions"
-  content = "# Revenue metrics\\n\\nRevenue is calculated from finalized invoices."
-  references = [{{ type = "catalog", url = "md:tf_example_db_{RUN_ID}", schema = "main", table = "invoices", description = "Authoritative invoice source" }}]
-}}
-resource "motherduck_flight" "heartbeat" {{
-  name = "tf_heartbeat_{RUN_ID}"
-  max_runtime_sec = 900
-  config = {{ mode = "default" }}
-  source_code = "def main():\\n    print(\\\"hello\\\")\\n\\nif __name__ == \\\"__main__\\\":\\n    main()"
-}}
-resource "motherduck_flight_run" "heartbeat" {{
-  flight_id = motherduck_flight.heartbeat.id
-  config = {{ mode = "manual" }}
-  wait_for_status = "succeeded"
-  poll_interval_seconds = 5
-  timeout_seconds = 120
-}}
-data "motherduck_dive" "revenue" {{ dive_id = motherduck_dive.revenue.id }}
-data "motherduck_dive_versions" "revenue" {{ dive_id = motherduck_dive.revenue.id }}
-data "motherduck_dives" "recent" {{ limit = 10 }}
-data "motherduck_guide" "revenue" {{ guide_id = motherduck_guide.revenue.id }}
-data "motherduck_guide_versions" "revenue" {{ guide_id = motherduck_guide.revenue.id }}
-data "motherduck_guides" "recent" {{ limit = 10 }}
-data "motherduck_flight" "heartbeat" {{ flight_id = motherduck_flight.heartbeat.id }}
-data "motherduck_flight_versions" "heartbeat" {{ flight_id = motherduck_flight.heartbeat.id }}
-data "motherduck_flight_runs" "heartbeat" {{ flight_id = motherduck_flight.heartbeat.id }}
-data "motherduck_flight_logs" "heartbeat" {{
-  flight_id = motherduck_flight.heartbeat.id
-  run_number = motherduck_flight_run.heartbeat.run_number
-}}
-data "motherduck_dive_embed_session" "legacy" {{
-  dive_id = motherduck_dive.revenue.id
-  username = "{username}"
-}}
-ephemeral "motherduck_dive_embed_session" "current" {{
-  dive_id = motherduck_dive.revenue.id
-  username = "{username}"
-  session_hint = "deep-example"
-}}
+{example_flight_run}
+{example_guide}
+{example_data_sources}
+{example_embed}
 '''
 (APP / 'main.tf').write_text(hcl)
 (APP / 'terraformrc').write_text(terraformrc)
