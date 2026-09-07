@@ -84,7 +84,7 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"api_version": schema.Int64Attribute{
 				Optional:            true,
-				MarkdownDescription: "Optional Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default.",
+				MarkdownDescription: "Optional Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default. The public MD_GET_DIVE output does not report this value, so import cannot recover it; keep it configured and expect one corrective update after import.",
 			},
 			"required_resources": schema.ListNestedAttribute{
 				Optional:            true,

@@ -179,6 +179,68 @@ func TestDiveRequiredResourcesAreSensitive(t *testing.T) {
 	}
 }
 
+type diveReadbackClient struct{}
+
+func (diveReadbackClient) Available() bool                                      { return true }
+func (diveReadbackClient) AttachDatabase(context.Context, string) error         { return nil }
+func (diveReadbackClient) Close() error                                         { return nil }
+func (diveReadbackClient) Exists(context.Context, string, ...any) (bool, error) { return true, nil }
+func (diveReadbackClient) QueryRowsJSON(context.Context, string, ...any) (string, error) {
+	return "[]", nil
+}
+func (diveReadbackClient) Exec(context.Context, string, ...any) error { return nil }
+func (diveReadbackClient) ScalarString(context.Context, string, ...any) (string, error) {
+	return "", nil
+}
+func (diveReadbackClient) WithDatabaseUse(context.Context, string, func(func(string, ...any) error) error) error {
+	return nil
+}
+func (diveReadbackClient) QueryRow(context.Context, string, ...any) mdsql.RowScanner {
+	return diveReadbackRow{}
+}
+
+type diveReadbackRow struct{}
+
+func (diveReadbackRow) Scan(dest ...any) error {
+	values := []any{"Audit Dive", "", int64(2), "created", "updated", "owner", "content", "ready", "changed", "00000000-0000-4000-8000-000000000000", int64(2)}
+	for i, value := range values {
+		switch target := dest[i].(type) {
+		case *stdsql.NullString:
+			target.Valid = true
+			target.String = value.(string)
+		case *stdsql.NullInt64:
+			target.Valid = true
+			target.Int64 = value.(int64)
+		}
+	}
+	return nil
+}
+
+func TestReadDivePreservesConfiguredAPIVersionWhenPublicReadbackOmitsIt(t *testing.T) {
+	model := diveModel{ID: types.StringValue("123e4567-e89b-42d3-a456-426614174000"), APIVersion: types.Int64Value(1)}
+	resource := &diveResource{baseResource: baseResource{provider: &providerctx.Context{SQL: diveReadbackClient{}}}}
+	var diags diag.Diagnostics
+	if !resource.readDive(context.Background(), &model, &diags) || diags.HasError() {
+		t.Fatalf("readDive diagnostics: %v", diags)
+	}
+	if got := model.APIVersion.ValueInt64(); got != 1 {
+		t.Fatalf("readDive changed configured api_version to %d, want 1", got)
+	}
+}
+
+func TestDiveImportedAPIVersionGetsOneCorrectiveUpdateThenConverges(t *testing.T) {
+	plan := &diveModel{Content: types.StringValue("content"), APIVersion: types.Int64Value(1)}
+	imported := &diveModel{Content: types.StringValue("content"), APIVersion: types.Int64Null()}
+	args, update := diveContentArgs(context.Background(), plan, imported, &diag.Diagnostics{})
+	if !update || args["api_version"] != "1" {
+		t.Fatalf("imported api_version correction = %#v, update=%v; want one update with api_version 1", args, update)
+	}
+	refreshed := &diveModel{Content: types.StringValue("content"), APIVersion: types.Int64Value(1)}
+	if _, update = diveContentArgs(context.Background(), plan, refreshed, &diag.Diagnostics{}); update {
+		t.Fatal("matching api_version after corrective update should converge to no update")
+	}
+}
+
 func TestDiveStatusSchemaValidatesLifecycleValues(t *testing.T) {
 	var schemaResp resource.SchemaResponse
 	NewDiveResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
