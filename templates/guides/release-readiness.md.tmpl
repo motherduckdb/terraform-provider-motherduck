@@ -5,9 +5,9 @@ subcategory: "Contributing"
 
 # Prepare a release
 
-Releases go to GitHub Releases with signed checksums. Users install through the
-[filesystem mirror guide](github-installation.md) until the provider is listed in
-the Terraform Registry.
+Releases go to GitHub Releases with signed checksums and are published through
+the Terraform Registry. Users normally install with `terraform init`. The
+[filesystem mirror guide](github-installation.md) covers direct installation.
 
 ## Validate the candidate
 

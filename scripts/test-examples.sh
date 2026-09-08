@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${ROOT_DIR}/scripts/lib/terraform-test.sh"
 isolate_offline_test_environment
 
-PROVIDER_VERSION="${PROVIDER_VERSION:-0.2.2}"
+PROVIDER_VERSION="${PROVIDER_VERSION:-0.2.3}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d%H%M%S)_$$}"
 TERRAFORM_BIN="${TERRAFORM_BIN:-terraform}"
 
