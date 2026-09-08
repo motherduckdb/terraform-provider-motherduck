@@ -1,0 +1,40 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Application definitions"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+Experimental: manage a Dive's content only when Terraform is its authoritative
+owner. Prefer [Blueprints application deployments](../guides/blueprints-deployment.md)
+for dashboard code, previews, and promotion.
+
+## Usage and lifecycle
+
+The example's unrestricted share is suitable only for data intended to be
+accessible to anyone with its URL. For private or tenant data, design restricted
+sharing and embedding access explicitly.
+
+Import by Dive UUID. The current read API does not expose mounted
+`required_resources` or `api_version`, so Terraform cannot reconstruct those
+fields during import or fully detect external mount changes. Keep the intended
+mount configuration in source control.
+
+Set `description = ""` to clear an existing description. Removing that field is
+not the same operation. Setting `endorsed` status requires the appropriate
+organization-admin permission.
+
+Destroy deletes the Dive. To change deployment tools without deleting it,
+follow [ownership migration](../guides/resource-scope.md).
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_dive/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+{{codefile "shell" "examples/resources/motherduck_dive/import.sh" | trimspace}}

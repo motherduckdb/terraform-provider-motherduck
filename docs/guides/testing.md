@@ -1,6 +1,11 @@
+---
+page_title: "Testing The Provider"
+subcategory: "Contributing"
+---
+
 # Testing The Provider
 
-This guide summarizes the test layers for users and contributors. The full contributor workflow lives in [Contributing](../../CONTRIBUTING.md).
+This guide summarizes the test layers for users and contributors. The full contributor workflow lives in [Contributing](https://github.com/motherduckdb/terraform-provider-motherduck/blob/main/CONTRIBUTING.md).
 
 See the [fixture guide](../../test-fixtures/README.md) for fixture ownership and
 [testing patterns](testing-patterns.md) for independent SQL checks,
@@ -256,6 +261,10 @@ never turns a failed test or failed cleanup into success. An interrupted or fail
 fixture retains state for diagnosis; it is not evidence that cleanup succeeded. Treat live output as account metadata because it can include catalog names, share URLs, tenant names, and snapshot metadata even when Terraform masks sensitive values.
 
 After interrupted live runs, audit common `tf_` leftovers:
+
+Each catalog read uses a fresh connection with a bounded timeout. Reusing one
+connection across all four reads caused repeated CI timeouts. Missing results,
+extra results, and query failures fail the audit and identify the affected check.
 
 ```bash
 MOTHERDUCK_TOKEN=... make test-live-cleanup-audit

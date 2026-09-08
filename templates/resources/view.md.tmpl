@@ -1,0 +1,39 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Data warehouse"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+Manage a SQL view over existing data. Changes to the query update the view in
+place. Moving or renaming it requires replacement.
+
+## Writing the query
+
+Supply the query body, not `CREATE VIEW ... AS`. Semicolons are rejected.
+Use `templatefile` for longer SQL and pass resource names as template inputs.
+When a SQL file refers to a table without referencing its Terraform resource,
+add an explicit `depends_on` so the table exists first.
+
+A view does not materialize results. For a share that must be self-contained,
+consider a physical marts table rather than a view referencing unshared raw data.
+
+## Lifecycle and import
+
+Destroy removes the view, not its source tables. Import uses
+`<database>.<schema>.<view>` and reads the canonical query body. Match the
+imported SELECT body before applying changes.
+
+See [warehouse modeling](../guides/warehouse-examples.md).
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_view/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+{{codefile "shell" "examples/resources/motherduck_view/import.sh" | trimspace}}

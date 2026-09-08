@@ -23,10 +23,10 @@ fi
 
 found=0
 
-# Every mdexec process pays the MotherDuck boot sequence: an extension install,
-# a token round trip and a duckling start. Running the four audit reads as one
-# invocation pays it once instead of four times, which is the difference
-# between a fast audit and one that can exhaust the client boot timeout.
+# Keep each catalog read on its own connection. Reusing one connection across
+# these reads regressed the exact-main audit in CI, while the same reads on
+# separate connections complete successfully. Each invocation retains mdexec's
+# bounded two-minute timeout.
 audit_labels=(databases owned_shares secrets named_snapshots)
 audit_queries=(
   "SELECT coalesce(string_agg(name, ', ' ORDER BY name), '') FROM MD_INFORMATION_SCHEMA.DATABASES WHERE name LIKE 'tf\\_%' ESCAPE '\\'"
@@ -35,38 +35,31 @@ audit_queries=(
   "SELECT coalesce(string_agg(snapshot_name, ', ' ORDER BY snapshot_name), '') FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE snapshot_name LIKE 'tf\\_%' ESCAPE '\\'"
 )
 
-scalar_args=()
-for query in "${audit_queries[@]}"; do
-  scalar_args+=(-scalar "${query}")
-done
-
-# Read through a file rather than a command substitution: a clean account
-# returns four empty values, and $(...) strips the trailing newlines that
-# distinguish four empty results from none at all.
+# A scalar result must contain exactly one line, including when it is empty.
+# Read through a file because command substitution strips trailing newlines.
 audit_output="$(mktemp "${TMPDIR:-/tmp}/mdtf-audit.XXXXXX")"
 trap 'rm -f "${audit_output}"' EXIT
-go run "${ROOT_DIR}/internal/dev/mdexec" "${scalar_args[@]}" > "${audit_output}"
 
-audit_index=0
-while IFS= read -r values; do
-  label="${audit_labels[${audit_index}]:-}"
-  if [[ -z "${label}" ]]; then
-    echo "Live cleanup audit returned more results than queries." >&2
+for audit_index in "${!audit_queries[@]}"; do
+  label="${audit_labels[${audit_index}]}"
+  if ! go run "${ROOT_DIR}/internal/dev/mdexec" -scalar "${audit_queries[${audit_index}]}" > "${audit_output}"; then
+    echo "Live cleanup audit failed while reading ${label}." >&2
     exit 1
   fi
-  audit_index=$((audit_index + 1))
+
+  result_count="$(awk 'END { print NR }' "${audit_output}")"
+  if [[ "${result_count}" -ne 1 ]]; then
+    echo "Live cleanup audit ${label} expected 1 result, got ${result_count}." >&2
+    exit 1
+  fi
+  IFS= read -r values < "${audit_output}"
   if [[ -n "${values}" ]]; then
     found=1
     echo "${label}: ${values}"
   else
     echo "${label}: none"
   fi
-done < "${audit_output}"
-
-if [[ "${audit_index}" -ne "${#audit_labels[@]}" ]]; then
-  echo "Live cleanup audit expected ${#audit_labels[@]} results, got ${audit_index}." >&2
-  exit 1
-fi
+done
 
 sweep_live_test_objects() {
   sweep_databases

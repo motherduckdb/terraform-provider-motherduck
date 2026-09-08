@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="350" viewBox="0 0 1080 350" role="img" aria-labelledby="title desc">
+<title id="title">Deployment</title><desc id="desc">An admin provisions accounts. The writer owns databases, a pipeline writes data, and readers attach restricted shares and query on separate compute.</desc>
+<rect width="1080" height="350" fill="#F8F8F7"/>
+<rect x="32" y="38" width="252" height="72" rx="2" fill="#FAF175" stroke="#383838"/>
+<text x="48" y="70" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Admin setup</text>
+<text x="48" y="92" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">Accounts and compute</text>
+<rect x="414" y="38" width="252" height="72" rx="2" fill="#D0EEE8" stroke="#383838"/>
+<text x="430" y="70" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Writer account</text>
+<text x="430" y="92" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">Terraform</text>
+<rect x="796" y="38" width="252" height="72" rx="2" fill="#CEEBFF" stroke="#383838"/>
+<text x="812" y="70" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Reader account</text>
+<text x="812" y="92" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">BI or application</text>
+<polyline points="284,74 414,74" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="414,74 406,69 406,79" fill="#383838"/>
+<text x="315" y="61" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">token</text>
+<rect x="32" y="238" width="252" height="72" rx="2" fill="#D0EEE8" stroke="#383838"/>
+<text x="48" y="282.0" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Pipeline</text>
+<rect x="414" y="238" width="252" height="72" rx="2" fill="#FFFFFF" stroke="#383838"/>
+<text x="430" y="282.0" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Databases</text>
+<rect x="796" y="238" width="252" height="72" rx="2" fill="#CEEBFF" stroke="#383838"/>
+<text x="812" y="282.0" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Restricted shares</text>
+<polyline points="540,110 540,238" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="540,238 535,230 545,230" fill="#383838"/>
+<text x="554" y="177" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">owns</text>
+<polyline points="284,274 414,274" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="414,274 406,269 406,279" fill="#383838"/>
+<text x="311" y="261" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">writes</text>
+<polyline points="666,274 796,274" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="796,274 788,269 788,279" fill="#383838"/>
+<text x="696" y="261" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">publishes</text>
+<polyline points="922,238 922,110" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="922,110 917,118 927,118" fill="#383838"/>
+<text x="936" y="169" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">attach</text>
+<text x="936" y="190" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">then read</text>
+</svg>

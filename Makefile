@@ -58,6 +58,8 @@ clean-tool-cache:
 
 docs: tools-docs
 	TF_PLUGIN_TIMEOUT=120s $(TFPLUGINDOCS) generate --provider-name=motherduck
+	mkdir -p docs/assets
+	cp templates/assets/*.png templates/assets/*.svg docs/assets/
 
 docs-check:
 	set -eu; tmp_dir=$$(mktemp -d); \
@@ -65,6 +67,7 @@ docs-check:
 	cp -R docs "$$tmp_dir/docs"; \
 	$(MAKE) docs; \
 	diff -ru "$$tmp_dir/docs" docs
+	$(TFPLUGINDOCS) validate --provider-name motherduck
 
 fmt:
 	gofmt -w .
@@ -105,6 +108,11 @@ release-sign-check:
 STATIC_CHECKS := fmt-check lint workflow-check shellcheck test-scripts docs-check test-cli test-repository-hygiene build
 
 static-check: $(STATIC_CHECKS) vulncheck
+
+# CI's required CLI matrix already runs test-cli on every supported version.
+# The local pre-push gate retains it through static-check.
+.PHONY: ci-static-check
+ci-static-check: $(filter-out test-cli,$(STATIC_CHECKS)) vulncheck
 
 pre-push-check: static-check test-unit test-contract
 

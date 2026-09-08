@@ -1,3 +1,8 @@
+---
+page_title: "Prepare a release"
+subcategory: "Contributing"
+---
+
 # Prepare a release
 
 Releases go to GitHub Releases with signed checksums. Users install through the

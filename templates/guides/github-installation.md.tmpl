@@ -1,3 +1,8 @@
+---
+page_title: "Install from GitHub Releases"
+subcategory: "Operations"
+---
+
 # Install from GitHub Releases
 
 Most users do not need this guide. The provider is published as

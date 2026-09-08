@@ -77,10 +77,10 @@ func main() {
 
 	// One line per query, in flag order, so callers can pair results with the
 	// queries they asked for. An empty result still prints its line.
-	for _, query := range scalarQueryList {
+	for index, query := range scalarQueryList {
 		value, err := client.ScalarString(ctx, query)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintf(os.Stderr, "scalar query %d/%d failed: %v\n", index+1, len(scalarQueryList), err)
 			os.Exit(1)
 		}
 		fmt.Println(value)

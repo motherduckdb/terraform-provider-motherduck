@@ -1,6 +1,6 @@
 ---
 page_title: "motherduck_dive_embed_session Data Source - motherduck"
-subcategory: ""
+subcategory: "Application definitions"
 description: |-
   Creates a short-lived Dive embed session for a service account.
 ---

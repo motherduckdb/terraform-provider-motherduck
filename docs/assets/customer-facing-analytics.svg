@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="382" viewBox="0 0 1120 382" role="img" aria-labelledby="title desc">
+<title id="title">Customer isolation</title><desc id="desc">A central writer owns Acme and Globex databases. Each restricted share is granted to its own reader account. The backend authenticates and routes each tenant.</desc>
+<rect width="1120" height="382" fill="#F8F8F7"/>
+<rect x="242" y="24" width="650" height="144" rx="2" fill="#F4EFEA" stroke="#C5BBB1"/>
+<text x="260" y="52" fill="#383838" font-family="Arial, sans-serif" font-size="16" font-weight="700">Acme</text>
+<rect x="242" y="214" width="650" height="144" rx="2" fill="#F4EFEA" stroke="#C5BBB1"/>
+<text x="260" y="242" fill="#383838" font-family="Arial, sans-serif" font-size="16" font-weight="700">Globex</text>
+<rect x="32" y="155" width="160" height="72" rx="2" fill="#D0EEE8" stroke="#383838"/>
+<text x="48" y="199.0" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Writer</text>
+<rect x="260" y="80" width="162" height="64" rx="2" fill="#FFFFFF" stroke="#383838"/>
+<text x="276" y="120.0" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Database</text>
+<rect x="461" y="80" width="186" height="64" rx="2" fill="#FFFFFF" stroke="#383838"/>
+<text x="477" y="112" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Share</text>
+<text x="477" y="134" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">Restricted</text>
+<rect x="686" y="80" width="186" height="64" rx="2" fill="#CEEBFF" stroke="#383838"/>
+<text x="702" y="112" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Reader account</text>
+<text x="702" y="134" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">Read pool</text>
+<polyline points="422,112 461,112" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="461,112 453,107 453,117" fill="#383838"/>
+<polyline points="647,112 686,112" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="686,112 678,107 678,117" fill="#383838"/>
+<rect x="260" y="270" width="162" height="64" rx="2" fill="#FFFFFF" stroke="#383838"/>
+<text x="276" y="310.0" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Database</text>
+<rect x="461" y="270" width="186" height="64" rx="2" fill="#FFFFFF" stroke="#383838"/>
+<text x="477" y="302" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Share</text>
+<text x="477" y="324" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">Restricted</text>
+<rect x="686" y="270" width="186" height="64" rx="2" fill="#CEEBFF" stroke="#383838"/>
+<text x="702" y="302" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Reader account</text>
+<text x="702" y="324" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">Read pool</text>
+<polyline points="422,302 461,302" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="461,302 453,297 453,307" fill="#383838"/>
+<polyline points="647,302 686,302" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="686,302 678,297 678,307" fill="#383838"/>
+<rect x="948" y="155" width="140" height="72" rx="2" fill="#FAF175" stroke="#383838"/>
+<text x="964" y="187" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Backend</text>
+<text x="964" y="209" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">Auth + routing</text>
+<polyline points="192,178 215,178 215,112 260,112" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="260,112 252,107 252,117" fill="#383838"/>
+<polyline points="192,204 215,204 215,302 260,302" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="260,302 252,297 252,307" fill="#383838"/>
+<polyline points="872,112 919,112 919,178 948,178" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="948,178 940,173 940,183" fill="#383838"/>
+<polyline points="872,302 919,302 919,204 948,204" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="948,204 940,199 940,209" fill="#383838"/>
+</svg>

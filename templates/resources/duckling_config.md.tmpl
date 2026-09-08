@@ -1,0 +1,44 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Identity and compute"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+Configure read-write and read-scaling compute for an existing user or service
+account. This resource uses the organization admin credential.
+
+## Sizing the workload
+
+The settings apply to the named account. To scale a separate BI reader,
+configure that reader's username, not the writer's. A read-scaling pool limit is
+not a preallocated count of continuously running replicas.
+
+Instance-size and pool changes update the configuration in place. The username
+is replacement-only. Pulse does not accept cooldown settings, so omit the
+corresponding cooldown when selecting Pulse.
+
+Measure representative queries and concurrency before choosing production
+sizes. The provider validates accepted values, while the service enforces
+availability and account-specific limits.
+
+## Destroy and import
+
+Destroy removes this resource from Terraform state **without resetting the live
+compute settings**, because the API has no reset/delete operation for them.
+The provider emits a warning. Change the configuration explicitly when you want
+to resize compute before giving up management.
+
+Import by username. See [read scaling](../guides/sharing-and-read-scaling.md).
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_duckling_config/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+{{codefile "shell" "examples/resources/motherduck_duckling_config/import.sh" | trimspace}}

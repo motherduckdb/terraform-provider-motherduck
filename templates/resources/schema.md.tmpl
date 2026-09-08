@@ -1,0 +1,36 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Data warehouse"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+Create a namespace inside a database owned by the connected SQL account. Use
+schemas to organize raw and analytical relations. A schema is not a separate
+account or compute boundary.
+
+## Usage and lifecycle
+
+Reference the database resource's `.name` so Terraform orders creation and
+destruction. The database and schema name are replacement-only.
+
+Destroy is restrictive by default: unmanaged objects prevent removal. Set
+`cascade_on_delete = true` only when removing every contained object is intended.
+The setting can change without replacing the schema.
+
+Import uses `<database>.<schema>`. The built-in `main` schema already exists in
+a database. Reference it by name when appropriate rather than creating it again.
+
+See [your first warehouse](../guides/getting-started.md).
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_schema/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+{{codefile "shell" "examples/resources/motherduck_schema/import.sh" | trimspace}}

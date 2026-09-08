@@ -1,0 +1,38 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Storage and recovery"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+Create a named snapshot of an existing database. A named snapshot is a recovery
+point, not a recurring backup schedule.
+
+## Usage and lifecycle
+
+Terraform creates the snapshot when it creates the resource. A no-change apply
+does not refresh it to newer data. If the snapshot must follow a load, finish
+and verify that load before creating the snapshot.
+
+Changing the name renames the snapshot. Changing its database requires
+replacement. Destroy removes the managed name rather than promising immediate
+physical deletion of retained history.
+
+Import uses `<database>.<snapshot-name>`. The computed `id` is the service
+snapshot ID. Plan retention and recovery around the account's supported snapshot
+features, and test restoration separately.
+
+See [state and lifecycle](../guides/state-and-lifecycle.md) and
+[MotherDuck snapshots](https://motherduck.com/docs/concepts/snapshots/).
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_snapshot/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+{{codefile "shell" "examples/resources/motherduck_snapshot/import.sh" | trimspace}}

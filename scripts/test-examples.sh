@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${ROOT_DIR}/scripts/lib/terraform-test.sh"
 isolate_offline_test_environment
 
-PROVIDER_VERSION="${PROVIDER_VERSION:-0.1.0}"
+PROVIDER_VERSION="${PROVIDER_VERSION:-0.2.2}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d%H%M%S)_$$}"
 TERRAFORM_BIN="${TERRAFORM_BIN:-terraform}"
 
@@ -96,12 +96,6 @@ tenants = {
     snapshot_retention_days = 14
   }
 }
-HCL
-      ;;
-    examples/provider)
-      cat > "${work_dir}/terraform.tfvars" <<'HCL'
-motherduck_token       = "dummy-sql-token"
-motherduck_admin_token = "dummy-admin-token"
 HCL
       ;;
     examples/resources/motherduck_secret)
@@ -238,14 +232,28 @@ HCL
   fi
 
   planned_count=$((planned_count + 1))
-  # The provider-only example intentionally has no resources. Every managed
-  # example must actually propose a create, not merely produce an empty plan.
-  if [[ "${relative_dir}" != examples/provider ]]; then
-    TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan" |
-      jq -e '[.resource_changes[]? | select(.mode == "managed" and .change.actions == ["create"])] | length > 0' >/dev/null
-  fi
+  # Every managed example must propose a create, not merely produce an empty plan.
+  TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan" |
+    jq -e '[.resource_changes[]? | select(.mode == "managed" and .change.actions == ["create"])] | length > 0' >/dev/null
 
   case "${relative_dir}" in
+    examples/customer-facing-analytics)
+      TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan" > "${work_dir}/tenant-plan.json"
+      jq -e '
+        ([.resource_changes[] | select(.mode == "managed" and .change.actions == ["create"])] | length == 18) and
+        ([.resource_changes[] | select(.type == "motherduck_share") | .change.after | {access,visibility,update_mode}] == [
+          {access:"restricted",visibility:"hidden",update_mode:"automatic"},
+          {access:"restricted",visibility:"hidden",update_mode:"automatic"}
+        ]) and
+        ([.resource_changes[] | select(.type == "motherduck_access_token") | .change.after | {token_type,ttl}] | sort_by(.token_type) == [
+          {token_type:"read_scaling",ttl:2592000}, {token_type:"read_scaling",ttl:2592000},
+          {token_type:"read_write",ttl:3600}, {token_type:"read_write",ttl:3600}
+        ]) and
+        (.planned_values.outputs.reader_tokens.sensitive == true) and
+        (.planned_values.outputs.reader_setup_tokens.sensitive == true) and
+        (.planned_values.outputs.share_urls.sensitive == true)
+      ' "${work_dir}/tenant-plan.json" >/dev/null
+      ;;
     examples/blueprints/hypertenancy|examples/blueprints/read-hypertenancy)
       plan_json="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan")"
       for expected in \

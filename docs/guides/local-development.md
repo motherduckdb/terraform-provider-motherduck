@@ -1,3 +1,8 @@
+---
+page_title: "Run a local provider build"
+subcategory: "Contributing"
+---
+
 # Run a local provider build
 
 Install Go using the toolchain in `go.mod`, a native C/C++ compiler for CGO,

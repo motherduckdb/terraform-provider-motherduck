@@ -1,6 +1,6 @@
 ---
 page_title: "motherduck_role_grant Resource - motherduck"
-subcategory: ""
+subcategory: "Access control"
 description: |-
   Grants a preset or custom MotherDuck role directly to a user, service account, or custom role.
 ---

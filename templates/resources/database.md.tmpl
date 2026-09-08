@@ -1,0 +1,43 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Data warehouse"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+Create a database as the SQL identity in `MOTHERDUCK_TOKEN`. Its owner is the
+account that can write its data. Use a separate account when ownership or writer
+compute must be isolated.
+
+## Usage and lifecycle
+
+- Native storage is the default. Select `database_type = "ducklake"` only for a
+  deliberate DuckLake deployment. `data_path` and `encrypted` are DuckLake-only.
+- Use `transient = true` for a transient database, not a database type named
+  `transient`.
+- Snapshot retention updates in place. Name and create-only storage options
+  require replacement.
+- Destroy drops the database and its contents, including data loaded outside
+  Terraform. Add `lifecycle { prevent_destroy = true }` for an important
+  database while its resource block remains managed.
+- Do not put a database created here in the provider's `database` setting.
+  Reference its name from downstream resources instead.
+
+Import uses the database name. Public catalogs do not reconstruct DuckLake
+`data_path` or `encrypted`. Omit those create-only fields after import unless
+replacement is intentional.
+
+See [warehouse deployment](../guides/warehouse-examples.md) and
+[state and imports](../guides/state-and-lifecycle.md).
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_database/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+{{codefile "shell" "examples/resources/motherduck_database/import.sh" | trimspace}}

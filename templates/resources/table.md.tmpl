@@ -1,0 +1,39 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Data warehouse"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+Manage a table's column definitions while a pipeline manages its rows. Use this
+for stable landing or serving tables whose schema belongs in Terraform.
+
+## Usage and lifecycle
+
+**A column change replaces the table and its data.** Use a reviewed data
+migration for important tables, or transfer schema ownership to your modeling
+tool. Do not let Terraform and dbt manage the same table definition.
+
+`columns` is a map from column name to DuckDB type. It does not define primary
+keys or `NOT NULL` constraints, and it does not preserve declaration order.
+Use explicit column lists in inserts. Equivalent type aliases, such as `INT`
+and `INTEGER`, are compared semantically.
+
+The database, schema, and name also require replacement when changed. Destroy
+drops the table. Import uses `<database>.<schema>.<table>` and reads its existing
+column definitions.
+
+See [the layered warehouse](../guides/warehouse-examples.md) for a table whose
+rows are refreshed without recreating its definition.
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_table/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+{{codefile "shell" "examples/resources/motherduck_table/import.sh" | trimspace}}
