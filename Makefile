@@ -126,6 +126,7 @@ test-scripts:
 	./scripts/test-live-rest-admin-gates.sh
 	./scripts/test-gates-unit.sh
 	./scripts/test-release-signing-unit.sh
+	./scripts/test-live-cleanup-audit-unit.sh
 
 test-integration:
 	@if [ -z "$${MOTHERDUCK_TOKEN:-}" ]; then echo "MOTHERDUCK_TOKEN is required for SQL integration tests" >&2; exit 1; fi
