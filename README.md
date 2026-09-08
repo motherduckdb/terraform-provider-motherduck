@@ -4,11 +4,13 @@ Manage MotherDuck infrastructure with Terraform: SQL-backed databases, schemas,
 tables, views, shares, roles, secrets, and snapshots,
 plus REST-backed service accounts, access tokens, and Duckling configuration.
 
-Source address: `registry.terraform.io/motherduckdb/motherduck`. Releases are
-published to [GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases)
-with checksums signed by the publisher key. Install through a
-[filesystem mirror](docs/guides/github-installation.md) until the provider is
-listed in the Terraform Registry.
+Available on the Terraform Registry:
+[motherduckdb/motherduck](https://registry.terraform.io/providers/motherduckdb/motherduck/latest).
+`terraform init` installs it and verifies the publisher signature, with no extra
+configuration. Releases are also published to
+[GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases)
+with signed checksums for
+[direct installation](docs/guides/github-installation.md).
 Built with Terraform Plugin Framework, protocol 6, and embedded DuckDB.
 
 ## Recommended ownership
@@ -27,7 +29,7 @@ see [resource scope and migration](docs/guides/resource-scope.md).
 
 | Task | Read |
 | --- | --- |
-| Install a GitHub release | [GitHub installation](docs/guides/github-installation.md) |
+| Install the provider | [Registry](https://registry.terraform.io/providers/motherduckdb/motherduck/latest), or [direct from a release](docs/guides/github-installation.md) |
 | Create your first database | [Walkthrough](docs/guides/getting-started.md) |
 | Build a warehouse with service-account environments | [Warehouse examples](examples/warehouses/README.md) |
 | Run this source from a local build | [Local development](docs/guides/local-development.md) |
@@ -40,12 +42,11 @@ see [resource scope and migration](docs/guides/resource-scope.md).
 
 ## Using the provider
 
-Download a version from [GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases)
-and follow the [filesystem mirror installation guide](docs/guides/github-installation.md)
-before running `terraform init`. Terraform does not automatically download this
-provider from GitHub based on its source address.
+Declare the provider and run `terraform init`. Terraform resolves it from the
+Terraform Registry and verifies the publisher signature. To install without
+Registry access, see the [direct installation guide](docs/guides/github-installation.md).
 
-After installing the package in your mirror, use this root-module configuration:
+Use this root-module configuration:
 
 ```hcl
 terraform {
@@ -54,7 +55,7 @@ terraform {
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = "~> 0.1.0"
+      version = "~> 0.2.2"
     }
   }
 }
