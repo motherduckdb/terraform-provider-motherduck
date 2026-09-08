@@ -4,6 +4,7 @@ import (
 	"context"
 	stdsql "database/sql"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,7 +18,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
 type deadlineFlightClient struct {
@@ -536,5 +539,71 @@ func TestOptionalConfigOwnedStringFromLiveKeepsNullWhenUnconfigured(t *testing.T
 	})
 	if got.ValueString() != "custom-token" {
 		t.Fatalf("optionalConfigOwnedStringFromLive() = %q, want custom-token", got.ValueString())
+	}
+}
+
+// diveCreateOrphanClient answers MD_CREATE_DIVE with an ID and then reports
+// that MD_GET_DIVE returned no row, simulating an eventually consistent read.
+type diveCreateOrphanClient struct{ diveReadbackClient }
+
+func (diveCreateOrphanClient) QueryRow(_ context.Context, query string, _ ...any) mdsql.RowScanner {
+	if strings.Contains(query, "MD_CREATE_DIVE") {
+		return diveCreatedRow{}
+	}
+	return diveMissingRow{}
+}
+
+type diveCreatedRow struct{}
+
+func (diveCreatedRow) Scan(dest ...any) error {
+	*(dest[0].(*string)) = "123e4567-e89b-42d3-a456-426614174000"
+	return nil
+}
+
+type diveMissingRow struct{}
+
+func (diveMissingRow) Scan(...any) error { return stdsql.ErrNoRows }
+
+func TestDiveCreatePersistsIDWhenReadbackFails(t *testing.T) {
+	ctx := context.Background()
+	res := &diveResource{baseResource: baseResource{provider: &providerctx.Context{SQL: diveCreateOrphanClient{}}}}
+	var schemaResp resource.SchemaResponse
+	res.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+	if schemaResp.Diagnostics.HasError() {
+		t.Fatalf("schema diagnostics: %v", schemaResp.Diagnostics)
+	}
+	s := schemaResp.Schema
+
+	planModel := diveModel{
+		ID:                types.StringUnknown(),
+		Title:             types.StringValue("Audit Dive"),
+		Content:           types.StringValue("content"),
+		RequiredResources: types.ListNull(types.ObjectType{AttrTypes: map[string]attr.Type{"alias": types.StringType, "url": types.StringType}}),
+		Status:            types.StringUnknown(),
+		StatusChangedAt:   types.StringUnknown(),
+		StatusSetBy:       types.StringUnknown(),
+		StatusVersion:     types.Int64Unknown(),
+		CurrentVersion:    types.Int64Unknown(),
+		CreatedAt:         types.StringUnknown(),
+		UpdatedAt:         types.StringUnknown(),
+		OwnerName:         types.StringUnknown(),
+	}
+	plan := tfsdk.Plan{Schema: s}
+	if diags := plan.Set(ctx, &planModel); diags.HasError() {
+		t.Fatalf("plan set: %v", diags)
+	}
+	resp := resource.CreateResponse{State: tfsdk.State{Schema: s}}
+	resp.State.Raw = tftypes.NewValue(s.Type().TerraformType(ctx), nil)
+	res.Create(ctx, resource.CreateRequest{Plan: plan}, &resp)
+
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("create should fail when the Dive cannot be read back")
+	}
+	var id types.String
+	if diags := resp.State.GetAttribute(ctx, path.Root("id"), &id); diags.HasError() {
+		t.Fatalf("state id: %v", diags)
+	}
+	if id.ValueString() != "123e4567-e89b-42d3-a456-426614174000" {
+		t.Fatalf("state id = %q, want the created Dive ID so the resource is tainted rather than orphaned", id.ValueString())
 	}
 }
