@@ -431,7 +431,7 @@ func (r *schemaResource) Read(ctx context.Context, req resource.ReadRequest, res
 		exists, existsErr = client.Exists(ctx, `SELECT count(*) FROM information_schema.schemata WHERE catalog_name = ? AND schema_name = ?`, state.Database.ValueString(), state.Name.ValueString())
 		return existsErr
 	})
-	if err != nil && isNotFound(err) {
+	if err != nil && isNotFoundFor(err, state.Database.ValueString(), state.Name.ValueString()) {
 		resp.State.RemoveResource(ctx)
 		return
 	}
@@ -696,8 +696,18 @@ func (r *viewResource) ValidateConfig(ctx context.Context, req resource.Validate
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !config.Query.IsNull() && !config.Query.IsUnknown() && strings.Contains(config.Query.ValueString(), ";") {
-		resp.Diagnostics.AddAttributeError(path.Root("query"), "Invalid MotherDuck view query", "View queries must be a single SELECT body and must not contain semicolons.")
+	if !config.Query.IsNull() && !config.Query.IsUnknown() {
+		validateViewQuery(config.Query.ValueString(), &resp.Diagnostics)
+	}
+}
+
+// validateViewQuery rejects a raw view body that could carry a second
+// statement. It runs at plan time on known values and again at apply time on
+// the resolved plan, because duckdb-go executes multi-statement strings and a
+// value unknown at plan time would otherwise bypass the plan-time check.
+func validateViewQuery(query string, diags *diag.Diagnostics) {
+	if strings.Contains(query, ";") {
+		diags.AddAttributeError(path.Root("query"), "Invalid MotherDuck view query", "View queries must be a single SELECT body and must not contain semicolons.")
 	}
 }
 
@@ -765,6 +775,10 @@ func (r *viewResource) createOrReplaceView(ctx context.Context, getter interface
 	}
 	var plan viewModel
 	diags.Append(getter.Get(ctx, &plan)...)
+	if diags.HasError() {
+		return
+	}
+	validateViewQuery(plan.Query.ValueString(), diags)
 	if diags.HasError() {
 		return
 	}
@@ -948,6 +962,25 @@ func (r *secretResource) createSecret(ctx context.Context, getter interface {
 	if !plan.Params.IsNull() {
 		diags.Append(plan.Params.ElementsAs(ctx, &params, false)...)
 	}
+	if diags.HasError() {
+		return
+	}
+	// Re-validate on the resolved plan: values unknown at plan time skipped the
+	// plan-time checks, and everything below is spliced into raw SQL.
+	secretType := plan.Type.ValueString()
+	values := secretValidationValues{Type: &secretType, ParamKeys: make([]string, 0, len(params))}
+	if !plan.SecretProvider.IsNull() {
+		provider := plan.SecretProvider.ValueString()
+		values.SecretProvider = &provider
+	}
+	for key := range params {
+		values.ParamKeys = append(values.ParamKeys, key)
+	}
+	if !plan.SecretSQL.IsNull() {
+		secretSQL := plan.SecretSQL.ValueString()
+		values.SecretSQL = &secretSQL
+	}
+	validateSecretValues(values, diags)
 	if diags.HasError() {
 		return
 	}
@@ -1369,7 +1402,7 @@ func (r *shareGrantResource) Read(ctx context.Context, req resource.ReadRequest,
 		exists, existsErr = client.Exists(ctx, `SELECT count(*) FROM MD_LIST_SHARE_GRANTEES(?) WHERE lower(grantee_name) = lower(?) AND lower(grantee_type) = lower(?) AND lower(privilege) = 'read'`, state.Share.ValueString(), state.Username.ValueString(), state.GranteeType.ValueString())
 		return existsErr
 	})
-	remove, err := shareGrantReadDecision(exists, err)
+	remove, err := shareGrantReadDecision(state.Share.ValueString(), exists, err)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read MotherDuck share grant", err.Error())
 		return
@@ -1438,9 +1471,9 @@ func (r *shareGrantResource) ImportState(ctx context.Context, req resource.Impor
 // not-found error means the share itself was dropped out of band, so the
 // grant no longer exists and must be removed from state instead of failing
 // every subsequent refresh and destroy.
-func shareGrantReadDecision(exists bool, err error) (remove bool, readErr error) {
+func shareGrantReadDecision(share string, exists bool, err error) (remove bool, readErr error) {
 	if err != nil {
-		if isNotFound(err) {
+		if isNotFoundFor(err, share) {
 			return true, nil
 		}
 		return false, err
@@ -1664,7 +1697,7 @@ func (r *snapshotResource) readSnapshot(ctx context.Context, model *snapshotMode
 		}
 		return client.QueryRow(ctx, `SELECT snapshot_id::VARCHAR, created_ts::VARCHAR, count(*) OVER () FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE database_name = ? AND snapshot_name = ?`, model.Database.ValueString(), model.Name.ValueString()).Scan(&id, &created, &matches)
 	})
-	if err != nil && isNotFound(err) {
+	if err != nil && isNotFoundFor(err, model.Database.ValueString(), model.Name.ValueString()) {
 		return false
 	}
 	if err == stdsql.ErrNoRows {
@@ -1707,7 +1740,7 @@ func relationExists(ctx context.Context, r interface {
 		exists, existsErr = client.Exists(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_catalog = ? AND table_schema = ? AND table_name = ? AND table_type = ?`, database, schemaName, name, tableType)
 		return existsErr
 	})
-	if err != nil && isNotFound(err) {
+	if err != nil && isNotFoundFor(err, database, schemaName, name) {
 		return false
 	}
 	if err != nil {
@@ -1806,7 +1839,7 @@ func readViewServerDefinition(ctx context.Context, client providerctx.SQLClient,
 		}
 		return client.QueryRow(ctx, `SELECT view_definition FROM information_schema.views WHERE table_catalog = ? AND table_schema = ? AND table_name = ?`, database, schemaName, name).Scan(&definition)
 	})
-	if err != nil && isNotFound(err) {
+	if err != nil && isNotFoundFor(err, database, schemaName, name) {
 		return "", false
 	}
 	if err == stdsql.ErrNoRows {
@@ -2078,15 +2111,55 @@ func canonicalTableColumns(ctx context.Context, client scalarStringer, columns m
 	return canonical
 }
 
+// validateSecretConfig runs the shared secret checks on the values known at
+// plan time. `type` and `secret_provider` are covered by their attribute
+// validators at plan time, so only params and secret_sql are checked here.
 func validateSecretConfig(config secretModel, diags *diag.Diagnostics) {
+	values := secretValidationValues{}
 	if !config.Params.IsNull() && !config.Params.IsUnknown() {
 		for key := range config.Params.Elements() {
-			if !isBareSQLWord(key) {
-				diags.AddAttributeError(path.Root("params").AtMapKey(key), "Invalid MotherDuck secret parameter", "Secret parameter keys must be single bare SQL option words containing only letters, numbers, and underscores, starting with a letter or underscore.")
-			}
+			values.ParamKeys = append(values.ParamKeys, key)
 		}
 	}
-	if !config.SecretSQL.IsNull() && !config.SecretSQL.IsUnknown() && strings.Contains(config.SecretSQL.ValueString(), ";") {
+	if !config.SecretSQL.IsNull() && !config.SecretSQL.IsUnknown() {
+		secretSQL := config.SecretSQL.ValueString()
+		values.SecretSQL = &secretSQL
+	}
+	validateSecretValues(values, diags)
+}
+
+// secretValidationValues carries the secret fields that are spliced into the
+// CREATE SECRET statement as raw SQL. Nil pointers mean "not provided or not
+// yet known", so the field is skipped.
+type secretValidationValues struct {
+	Type           *string
+	SecretProvider *string
+	ParamKeys      []string
+	SecretSQL      *string
+}
+
+// validateSecretValues is the single source of truth for what may be spliced
+// into CREATE SECRET. Plan-time validation and apply-time re-validation both
+// call it, so a value unknown at plan time cannot bypass the checks.
+func validateSecretValues(values secretValidationValues, diags *diag.Diagnostics) {
+	if values.Type != nil {
+		if detail := sqlBareOptionWordError(*values.Type); detail != "" {
+			diags.AddAttributeError(path.Root("type"), "Invalid MotherDuck SQL option", detail)
+		}
+	}
+	if values.SecretProvider != nil && *values.SecretProvider != "" {
+		if detail := sqlBareOptionWordError(*values.SecretProvider); detail != "" {
+			diags.AddAttributeError(path.Root("secret_provider"), "Invalid MotherDuck SQL option", detail)
+		}
+	}
+	keys := append([]string(nil), values.ParamKeys...)
+	sort.Strings(keys)
+	for _, key := range keys {
+		if !isBareSQLWord(key) {
+			diags.AddAttributeError(path.Root("params").AtMapKey(key), "Invalid MotherDuck secret parameter", "Secret parameter keys must be single bare SQL option words containing only letters, numbers, and underscores, starting with a letter or underscore.")
+		}
+	}
+	if values.SecretSQL != nil && strings.Contains(*values.SecretSQL, ";") {
 		diags.AddAttributeError(path.Root("secret_sql"), "Invalid MotherDuck secret SQL", "Raw secret SQL clauses must not contain semicolons.")
 	}
 }
