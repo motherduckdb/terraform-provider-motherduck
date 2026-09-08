@@ -5,6 +5,13 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # The embedded DuckDB version must be one MotherDuck already accepts.
+      # Newer duckdb-go / duckdb-go-bindings releases can ship before the
+      # service supports that DuckDB client, and offline CI cannot detect it.
+      # Bump these by hand and run a live SQL smoke first; see CONTRIBUTING.md.
+      - dependency-name: "github.com/duckdb/duckdb-go/*"
+      - dependency-name: "github.com/duckdb/duckdb-go-bindings*"
 
   - package-ecosystem: github-actions
     directory: /

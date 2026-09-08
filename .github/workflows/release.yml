@@ -49,7 +49,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y shellcheck
 
       - name: Run release preflight checks
-        run: make pre-push-check release-check release-sign-check
+        run: make release-preflight-check release-check
+
+      # Advisory only for releases: a newly published advisory in an indirect
+      # dependency must not block shipping an unrelated fix. Pull-request CI
+      # keeps vulncheck blocking through `make static-check`.
+      - name: Run vulnerability check (advisory)
+        continue-on-error: true
+        run: make vulncheck
 
   live-contracts:
     name: Live release contracts
@@ -204,6 +211,11 @@ jobs:
             exit 1
           fi
           sha256sum -c "${digest_files[@]}"
+          # Per-build digests exist only to detect corruption between the build
+          # jobs and this one. They are not release assets: the Registry
+          # validates every attached file and rejects names that are not
+          # provider packages, checksums, signature, or manifest.
+          rm -f "${digest_files[@]}"
           packages=(terraform-provider-motherduck_"${version}"_*.zip)
           if [[ "${#packages[@]}" -ne 4 ]]; then
             echo "Expected exactly four provider packages for version ${version}." >&2

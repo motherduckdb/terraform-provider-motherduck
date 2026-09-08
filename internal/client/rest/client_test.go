@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestCreateToken(t *testing.T) {
@@ -332,5 +333,81 @@ func mustNoErr(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNewTrimsTokenWhitespace(t *testing.T) {
+	var gotAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"accounts":[]}`))
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL, "  admin-token\n")
+	mustNoErr(t, err)
+	if !client.Available() {
+		t.Fatal("trimmed token should be available")
+	}
+	if _, err := client.ActiveAccounts(context.Background()); err != nil {
+		t.Fatalf("request with newline-suffixed token failed: %v", err)
+	}
+	if gotAuth != "Bearer admin-token" {
+		t.Fatalf("Authorization = %q, want trimmed bearer token", gotAuth)
+	}
+
+	blank, err := New(server.URL, " \n\t")
+	mustNoErr(t, err)
+	if blank.Available() {
+		t.Fatal("whitespace-only token should not be available")
+	}
+}
+
+func TestAPIErrorCapsEchoedBody(t *testing.T) {
+	page := "<html>\n<body>\n" + strings.Repeat("blocked by gateway ", 500) + "\n</body>\n</html>"
+	if len(page) <= maxEchoedBodyBytes {
+		t.Fatalf("test body must exceed cap, got %d bytes", len(page))
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(page))
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL, "admin-token")
+	mustNoErr(t, err)
+	_, err = client.ActiveAccounts(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("error type = %T, want APIError", err)
+	}
+	if apiErr.Body != page {
+		t.Fatal("raw Body should keep the full response for callers that need it")
+	}
+	msg := apiErr.Error()
+	if len(msg) > maxEchoedBodyBytes+128 {
+		t.Fatalf("error string too long: %d bytes", len(msg))
+	}
+	if !strings.HasSuffix(msg, "... (truncated)") {
+		t.Fatalf("error string missing truncation marker: %q", msg[len(msg)-40:])
+	}
+	if strings.ContainsAny(msg, "\n\r") {
+		t.Fatal("error string should be a single line")
+	}
+	if !strings.HasPrefix(msg, "MotherDuck API error 403: <html> <body> blocked by gateway") {
+		t.Fatalf("unexpected prefix: %q", msg[:80])
+	}
+
+	short := APIError{StatusCode: 502, Body: "  upstream\n\tunavailable  "}
+	if got, want := short.Error(), "MotherDuck API error 502: upstream unavailable"; got != want {
+		t.Fatalf("short body = %q, want %q", got, want)
+	}
+	multibyte := APIError{StatusCode: 502, Body: strings.Repeat("é", maxEchoedBodyBytes)}
+	if got := multibyte.Error(); !utf8.ValidString(got) {
+		t.Fatal("truncation split a multi-byte rune")
 	}
 }

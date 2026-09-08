@@ -51,13 +51,18 @@ live_cleanup_on_exit() {
   exit "${cleanup_status}"
 }
 
+# Every live fixture names its durable objects with a "tf" prefix ("tf_run_...",
+# or quoted "tf provider ..."). Cleanup mutations pass this prefix to mdexec so
+# a bad RUN_ID interpolation cannot drop an unrelated object.
+LIVE_CLEANUP_ALLOW_PREFIX="${LIVE_CLEANUP_ALLOW_PREFIX:-tf}"
+
 live_cleanup_mdexec() {
   local operation="$1"
   shift
 
   local diagnostic
   local status
-  if diagnostic="$(go run "${ROOT_DIR}/internal/dev/mdexec" "$@" 2>&1 >/dev/null)"; then
+  if diagnostic="$(go run "${ROOT_DIR}/internal/dev/mdexec" -allow-prefix "${LIVE_CLEANUP_ALLOW_PREFIX}" "$@" 2>&1 >/dev/null)"; then
     return 0
   else
     status=$?
@@ -112,8 +117,11 @@ live_unname_snapshot() {
     return "${status}"
   fi
   if [[ -n "${snapshot_id}" ]]; then
+    # ALTER SNAPSHOT addresses the snapshot by id, so the guard checks the
+    # containing test database name instead.
     live_cleanup_mdexec "unname snapshot ${snapshot_name} in ${database_name}" \
       -database "${database_name}" \
+      -allow-target "${database_name}" \
       -pre "USE $(sql_identifier "${database_name}")" \
       -sql "ALTER SNAPSHOT $(sql_literal "${snapshot_id}") SET snapshot_name = ''"
   fi

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -165,6 +166,67 @@ func isNotFound(err error) bool {
 			strings.Contains(msg, "no database/share named")
 	}
 	return false
+}
+
+// isNotFoundFor reports whether err is a not-found error about one of the
+// named objects. Read paths use it instead of isNotFound so that a catalog
+// error about an unrelated object (a missing information_schema view, a
+// failed USE, an unavailable system catalog) is surfaced as an error rather
+// than misread as "the managed object was deleted", which would drop the
+// resource from state and make the next apply fail with "already exists".
+// REST not-found errors are already entity-scoped and pass through unchanged.
+// With no non-empty names it falls back to isNotFound.
+func isNotFoundFor(err error, names ...string) bool {
+	if !isNotFound(err) {
+		return false
+	}
+	var apiErr *mdrest.APIError
+	if errors.As(err, &apiErr) {
+		return true
+	}
+	names = slices.DeleteFunc(slices.Clone(names), func(n string) bool { return strings.TrimSpace(n) == "" })
+	if len(names) == 0 {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return slices.ContainsFunc(names, func(n string) bool {
+		return containsIdentifierWord(msg, strings.ToLower(strings.TrimSpace(n)))
+	})
+}
+
+// containsIdentifierWord reports whether name appears in msg as a whole
+// identifier token, so a short object name such as "a" does not match the
+// letters inside "catalog". Both inputs must already be lower-cased.
+func containsIdentifierWord(msg, name string) bool {
+	isIdent := func(r byte) bool {
+		return r == '_' || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+	}
+	for start := 0; ; {
+		idx := strings.Index(msg[start:], name)
+		if idx < 0 {
+			return false
+		}
+		idx += start
+		end := idx + len(name)
+		beforeOK := idx == 0 || !isIdent(msg[idx-1])
+		afterOK := end == len(msg) || !isIdent(msg[end])
+		if beforeOK && afterOK {
+			return true
+		}
+		start = idx + 1
+	}
+}
+
+// sqlBareOptionWordError returns a non-empty detail when value cannot be
+// spliced into a SQL statement as a bare option word. It is shared by the
+// plan-time attribute validator and the apply-time re-validation so an
+// unknown-at-plan value cannot bypass the check.
+func sqlBareOptionWordError(value string) string {
+	canonical := strings.ToLower(strings.TrimSpace(value))
+	if !isBareSQLWord(value) || value != canonical {
+		return "Value must be a lowercase bare SQL option word containing only letters, numbers, and underscores, starting with a letter or underscore."
+	}
+	return ""
 }
 
 func knownInt64(value types.Int64) bool {
@@ -447,10 +509,8 @@ func (sqlBareWordValidator) ValidateString(ctx context.Context, req validator.St
 	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
-	value := req.ConfigValue.ValueString()
-	canonical := strings.ToLower(strings.TrimSpace(value))
-	if !isBareSQLWord(value) || value != canonical {
-		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck SQL option", "Value must be a lowercase bare SQL option word containing only letters, numbers, and underscores, starting with a letter or underscore.")
+	if detail := sqlBareOptionWordError(req.ConfigValue.ValueString()); detail != "" {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck SQL option", detail)
 	}
 }
 

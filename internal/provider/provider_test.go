@@ -282,3 +282,43 @@ func providerTestConfig(t *testing.T, values map[string]tftypes.Value) tfsdk.Con
 		Schema: schemaResp.Schema,
 	}
 }
+
+func TestUserAgentAppendsCustomSuffix(t *testing.T) {
+	tests := map[string]struct {
+		custom string
+		want   string
+	}{
+		"default":           {custom: "", want: "terraform-provider-motherduck/1.2.3"},
+		"whitespace only":   {custom: "   ", want: "terraform-provider-motherduck/1.2.3"},
+		"suffix appended":   {custom: "acme-platform/4.5", want: "terraform-provider-motherduck/1.2.3 acme-platform/4.5"},
+		"suffix is trimmed": {custom: "  acme  ", want: "terraform-provider-motherduck/1.2.3 acme"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := userAgent("1.2.3", tc.custom); got != tc.want {
+				t.Fatalf("userAgent() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestConfigureCustomUserAgentIsSuffix(t *testing.T) {
+	t.Setenv("MOTHERDUCK_TOKEN", "md_test_token")
+	t.Setenv("MOTHERDUCK_ADMIN_TOKEN", "")
+
+	p := New("9.9.9")()
+	var resp provider.ConfigureResponse
+	p.Configure(context.Background(), provider.ConfigureRequest{Config: providerTestConfig(t, map[string]tftypes.Value{
+		"custom_user_agent": tftypes.NewValue(tftypes.String, "acme/1.0"),
+	})}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %v", resp.Diagnostics)
+	}
+	data, ok := resp.ResourceData.(*providerctx.Context)
+	if !ok {
+		t.Fatalf("ResourceData = %T, want *providerctx.Context", resp.ResourceData)
+	}
+	if got, want := data.SQLConfig.CustomUserAgent, "terraform-provider-motherduck/9.9.9 acme/1.0"; got != want {
+		t.Fatalf("SQLConfig.CustomUserAgent = %q, want %q", got, want)
+	}
+}
