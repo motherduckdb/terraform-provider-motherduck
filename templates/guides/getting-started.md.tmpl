@@ -9,8 +9,10 @@ Use Terraform 1.5 or later, a MotherDuck account with permission to create
 databases, and a SQL token supplied as `MOTHERDUCK_TOKEN`. An organization admin
 token is not needed for this walkthrough.
 
-Install a [GitHub release through a filesystem mirror](github-installation.md) first.
-For source builds, use [local development](local-development.md).
+`terraform init` installs the provider from the Terraform Registry, so no setup
+is needed first. To install without Registry access, see
+[direct installation](github-installation.md). For source builds, use
+[local development](local-development.md).
 
 ## Create a working directory
 
@@ -22,7 +24,7 @@ terraform {
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = "~> 0.1.0"
+      version = "~> 0.2.2"
     }
   }
 }
@@ -44,9 +46,9 @@ the database being created; provider initialization happens before creation.
 
 ## Plan and apply
 
-For a GitHub release installed through a filesystem mirror, run `terraform init` first and commit
-`.terraform.lock.hcl`. Development overrides use the separate setup in the
-local development guide.
+Run `terraform init` first and commit `.terraform.lock.hcl`, which records the
+provider version and its verified digests. Development overrides use the
+separate setup in the local development guide.
 
 ```shell
 terraform fmt

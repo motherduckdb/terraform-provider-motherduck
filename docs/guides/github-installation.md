@@ -1,11 +1,16 @@
 # Install from GitHub Releases
 
-The provider is distributed through
-[GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
-Use this guide to install a release directly, whether because the version you
-want is not listed in the Terraform Registry, you are in an air-gapped
-environment, or you want to pin a locally verified artifact. The source address
-identifies the provider; a filesystem mirror tells Terraform where to obtain it.
+Most users do not need this guide. The provider is published as
+[motherduckdb/motherduck](https://registry.terraform.io/providers/motherduckdb/motherduck/latest),
+so `terraform init` installs it and verifies the publisher signature with no
+extra configuration.
+
+Use this guide to install a release directly from
+[GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases)
+instead: in an air-gapped environment, to pin a locally verified artifact, or
+for a version predating Registry publication (v0.2.1 and earlier are not on the
+Registry). The source address identifies the provider; a filesystem mirror tells
+Terraform where to obtain it.
 
 ## Download and verify
 
