@@ -49,7 +49,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y shellcheck
 
       - name: Run release preflight checks
-        run: make pre-push-check release-check
+        run: make release-preflight-check release-check
+
+      # Advisory only for releases: a newly published advisory in an indirect
+      # dependency must not block shipping an unrelated fix. Pull-request CI
+      # keeps vulncheck blocking through `make static-check`.
+      - name: Run vulnerability check (advisory)
+        continue-on-error: true
+        run: make vulncheck
 
   live-contracts:
     name: Live release contracts

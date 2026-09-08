@@ -115,6 +115,15 @@ run_cli_smoke() {
 
   if [[ "${TF_VERSION_SQL_LIFECYCLE}" == "1" ]]; then
     TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-database-drop-with-objects.sh"
+    # Preview-surface lifecycles. Each script skips with exit 0 when the
+    # account does not expose the required MD_* functions (or, for share
+    # grants, when neither an admin token nor MD_TF_ACC_SHARE_GRANTEE_USERNAME
+    # is present); set MD_TF_ACC_REQUIRE_* to turn a skip into a failure.
+    TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-guide.sh"
+    TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-dive.sh"
+    TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-flight.sh"
+    TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-dive-flight-blueprint.sh"
+    TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-share-grant-drift.sh"
   fi
 
   if [[ "${TF_VERSION_BLUEPRINT_LIFECYCLE}" == "1" ]]; then

@@ -46,7 +46,7 @@ Run release packaging checks after changing release scripts or workflows:
 make release-check
 ```
 
-When updating Go modules, test the DuckDB/MotherDuck path before keeping a `duckdb-go` or `duckdb-go-bindings` bump. Newer embedded DuckDB builds can be published before MotherDuck supports that DuckDB version, so a clean `go test` is not enough; run at least `MOTHERDUCK_TOKEN=... make test-terraform-versions` or a focused live SQL smoke.
+When updating Go modules, test the DuckDB/MotherDuck path before keeping a `duckdb-go` or `duckdb-go-bindings` bump. Newer embedded DuckDB builds can be published before MotherDuck supports that DuckDB version, so a clean `go test` is not enough; run at least `MOTHERDUCK_TOKEN=... make test-terraform-versions` or a focused live SQL smoke. For that reason Dependabot is configured in `.github/dependabot.yml` to ignore `github.com/duckdb/duckdb-go/*` and `github.com/duckdb/duckdb-go-bindings*`; bump those modules manually in a dedicated PR and record the live smoke you ran in the PR description.
 
 ShellCheck is a required local dependency, matching CI. Install it with
 `brew install shellcheck` on macOS or your system package manager. The CLI gate
