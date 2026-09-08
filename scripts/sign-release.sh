@@ -10,7 +10,9 @@ set -euo pipefail
 # Environment:
 #   GPG_PRIVATE_KEY  Required. ASCII-armored private key for the publisher.
 #   GPG_PASSPHRASE   Optional. Passphrase for that key, empty when unprotected.
-#   GPG_FINGERPRINT  Optional. Expected primary-key fingerprint, asserted when set.
+#   GPG_FINGERPRINT  Optional. Expected key, asserted when set. Accepts the full
+#                    40-character fingerprint or a long key ID (the last 16 or
+#                    more hex characters of it), case and spacing insensitive.
 
 checksum_file="${1:-}"
 if [[ -z "${checksum_file}" ]]; then
@@ -76,9 +78,17 @@ fi
 fingerprint="${fingerprints}"
 
 if [[ -n "${GPG_FINGERPRINT:-}" ]]; then
+  # The Registry displays a long key ID rather than a full fingerprint, so
+  # accept either. A long key ID is the trailing 16 hex characters of the
+  # fingerprint. Shorter values are refused because short key IDs collide.
   expected="$(printf '%s' "${GPG_FINGERPRINT}" | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')"
-  if [[ "${expected}" != "${fingerprint}" ]]; then
-    echo "Signing key fingerprint ${fingerprint} does not match GPG_FINGERPRINT." >&2
+  expected="${expected#0X}"
+  if [[ ! "${expected}" =~ ^[0-9A-F]{16,40}$ ]]; then
+    echo "GPG_FINGERPRINT must be 16 to 40 hex characters, a long key ID or a full fingerprint." >&2
+    exit 1
+  fi
+  if [[ "${fingerprint}" != *"${expected}" ]]; then
+    echo "Signing key ${fingerprint} does not match GPG_FINGERPRINT ${expected}." >&2
     exit 1
   fi
 fi
