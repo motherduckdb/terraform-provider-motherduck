@@ -204,6 +204,11 @@ jobs:
             exit 1
           fi
           sha256sum -c "${digest_files[@]}"
+          # Per-build digests exist only to detect corruption between the build
+          # jobs and this one. They are not release assets: the Registry
+          # validates every attached file and rejects names that are not
+          # provider packages, checksums, signature, or manifest.
+          rm -f "${digest_files[@]}"
           packages=(terraform-provider-motherduck_"${version}"_*.zip)
           if [[ "${#packages[@]}" -ne 4 ]]; then
             echo "Expected exactly four provider packages for version ${version}." >&2
