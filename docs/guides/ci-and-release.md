@@ -51,8 +51,9 @@ The weekly matrix runs read-only checks on every supported Terraform version and
 
 ## Releases
 
-Releases are published to GitHub only. Follow the [release checklist](release-readiness.md)
-and [installation guide](github-installation.md). The provider is not in the Terraform Registry.
+Releases are published to GitHub Releases with signed checksums. Follow the
+[release checklist](release-readiness.md) and the
+[installation guide](github-installation.md).
 
 `.github/workflows/release.yml` runs when a semantic version tag is pushed:
 
@@ -70,13 +71,17 @@ The release workflow:
 5. Downloads all platform packages and per-build digests into one release job.
 6. Verifies the per-build digests.
 7. Creates registry SHA256 checksums.
-8. Includes checksums without a GPG signature for GitHub-only distribution.
-9. Adds the Terraform Registry manifest.
+8. Adds the Terraform Registry manifest.
+9. Signs the checksum file with the publisher GPG key from the protected
+   `motherduck-release` environment, producing the detached binary
+   `SHA256SUMS.sig` the Registry requires.
 10. Publishes GitHub build-provenance attestations for package and release artifacts.
-11. Creates the GitHub release for the tag.
+11. Verifies the checksum, signature, and manifest are present, then creates the
+    GitHub release for the tag.
 
-Future Terraform Registry publication requires its own registration and GPG signing setup.
-These are not prerequisites for the current GitHub-only releases.
+Signing is the only release step that needs credentials beyond the live test
+token. The publisher key and its passphrase are held as secrets on the protected
+`motherduck-release` environment; `GPG_FINGERPRINT` pins the expected key.
 
 Initial release targets:
 
@@ -91,11 +96,15 @@ Add a target only after proving its native runner can build `scripts/package-rel
 
 ## Local Release Checks
 
-Run the release package check before pushing release workflow changes:
+Run the release package and signing checks before pushing release workflow changes:
 
 ```bash
 make release-check
+make release-sign-check
 ```
+
+`make release-sign-check` needs `gpg` and uses a throwaway key, so it never
+touches the publisher key. It also runs inside `make static-check`.
 
 Create a local package under `dist/`:
 

@@ -137,10 +137,15 @@ git push origin v0.1.0
 ```
 
 The release workflow runs the preflight and live gates, builds and installs native
-packages, verifies checksums, attaches a protocol manifest and GitHub provenance,
-and creates a GitHub release. GitHub-only distribution does not require GPG.
-Users install packages through a [filesystem mirror](docs/guides/github-installation.md).
-Registry publication is a separate future step with additional signing requirements.
+packages, verifies checksums, signs the checksum file with the publisher GPG key,
+attaches a protocol manifest and GitHub provenance, and creates a GitHub release.
+The signature is the detached binary `SHA256SUMS.sig` the Terraform Registry
+requires. Users can also install packages through a
+[filesystem mirror](docs/guides/github-installation.md).
+
+Run `make release-sign-check` after touching `scripts/sign-release.sh` or the
+release workflow. It signs with a throwaway key and needs `gpg`
+(`brew install gnupg`), never the publisher key.
 
 The provider embeds DuckDB through CGO, so release targets are built on native operating system runners. Add a platform only after proving that runner can build the package and Terraform can initialize the produced provider binary.
 

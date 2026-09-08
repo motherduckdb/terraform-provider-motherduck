@@ -4,10 +4,11 @@ Manage MotherDuck infrastructure with Terraform: SQL-backed databases, schemas,
 tables, views, shares, roles, secrets, and snapshots,
 plus REST-backed service accounts, access tokens, and Duckling configuration.
 
-Distribution: [GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
-**This provider is not published in the Terraform Registry.**
-Its Terraform source address remains `registry.terraform.io/motherduckdb/motherduck`
-for identity and future compatibility; install it through a filesystem mirror.
+Source address: `registry.terraform.io/motherduckdb/motherduck`. Releases are
+published to [GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases)
+with checksums signed by the publisher key. Install through a
+[filesystem mirror](docs/guides/github-installation.md) until the provider is
+listed in the Terraform Registry.
 Built with Terraform Plugin Framework, protocol 6, and embedded DuckDB.
 
 ## Recommended ownership
@@ -29,7 +30,7 @@ see [resource scope and migration](docs/guides/resource-scope.md).
 | Install a GitHub release | [GitHub installation](docs/guides/github-installation.md) |
 | Create your first database | [Walkthrough](docs/guides/getting-started.md) |
 | Build a warehouse with service-account environments | [Warehouse examples](examples/warehouses/README.md) |
-| Run this source before Registry publication | [Local development](docs/guides/local-development.md) |
+| Run this source from a local build | [Local development](docs/guides/local-development.md) |
 | Write production Terraform configuration | [Terraform best practices](docs/guides/terraform-best-practices.md) |
 | Import objects, handle drift, or protect state | [State and lifecycle](docs/guides/state-and-lifecycle.md) |
 | Find attributes, defaults, and examples | [Provider reference](docs/index.md), [resources](docs/resources), [data sources](docs/data-sources) |

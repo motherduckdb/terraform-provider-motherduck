@@ -1,9 +1,11 @@
 # Install from GitHub Releases
 
 The provider is distributed through
-[GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases),
-not the Terraform Registry. Its source address identifies the provider; a
-filesystem mirror tells Terraform where to obtain it.
+[GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
+Use this guide to install a release directly, whether because the version you
+want is not listed in the Terraform Registry, you are in an air-gapped
+environment, or you want to pin a locally verified artifact. The source address
+identifies the provider; a filesystem mirror tells Terraform where to obtain it.
 
 ## Download and verify
 
@@ -26,10 +28,21 @@ actual="$(shasum -a 256 "${download_dir}/${archive}" | awk '{print $1}')"
 test -n "${expected}" && test "${actual}" = "${expected}"
 ```
 
-Continue only if the verification command succeeds. Checksums detect file
-corruption; they are not a GPG publisher signature. Releases also carry GitHub
-build-provenance attestations, verifiable with
+Continue only if the verification command succeeds. Checksums alone detect file
+corruption, not substitution. Releases also carry a detached publisher GPG
+signature over the checksum file, plus GitHub build-provenance attestations,
+verifiable with
 `gh attestation verify PATH_TO_ZIP --repo motherduckdb/terraform-provider-motherduck`.
+
+To check the publisher signature, import the public key registered on the
+Terraform Registry, then verify the detached signature over the checksum file:
+
+```shell
+gh release download "v${version}" \
+  --repo motherduckdb/terraform-provider-motherduck \
+  --pattern "${sums}.sig" --dir "${download_dir}"
+gpg --verify "${download_dir}/${sums}.sig" "${download_dir}/${sums}"
+```
 
 ## Configure a mirror
 
