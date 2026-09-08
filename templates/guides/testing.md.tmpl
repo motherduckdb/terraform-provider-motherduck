@@ -262,6 +262,10 @@ fixture retains state for diagnosis; it is not evidence that cleanup succeeded. 
 
 After interrupted live runs, audit common `tf_` leftovers:
 
+Each catalog read uses a fresh connection with a bounded timeout. Reusing one
+connection across all four reads caused repeated CI timeouts. Missing results,
+extra results, and query failures fail the audit and identify the affected check.
+
 ```bash
 MOTHERDUCK_TOKEN=... make test-live-cleanup-audit
 ```

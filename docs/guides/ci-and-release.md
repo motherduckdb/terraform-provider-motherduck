@@ -14,12 +14,25 @@ This repository uses separate workflows for pull-request checks, live MotherDuck
 The required offline jobs run independently:
 
 ```bash
-make static-check
+make ci-static-check
 make release-check
 make test-unit test-contract
 ```
 
-`Static checks` owns formatting, linting, vulnerability, workflow, shell, docs, examples, repository hygiene, and provider builds. Native package jobs own packaging and installation checks without repeating them in the static job. `Behavior contracts` owns race-enabled unit tests and Terraform protocol lifecycles against hermetic SQL and REST clients. A global coverage percentage is not required; each contract must assert externally visible state and exact backend side effects.
+`Static checks` owns formatting, linting, vulnerability, workflow, shell, docs,
+repository hygiene, and provider builds. The CLI matrix owns example validation
+and diagnostic checks, so the static job does not run that suite a second time.
+Native package jobs own packaging and installation checks. `Behavior contracts`
+owns race-enabled unit tests and Terraform protocol lifecycles against hermetic
+SQL and REST clients. A global coverage percentage is not required. Each contract
+must assert externally visible state and exact backend side effects.
+
+Go's module and build caches are managed by `setup-go`. Static and release
+preflight jobs additionally cache lint and documentation tools by operating
+system, architecture, Go version, Makefile, and dependency lockfile. Tools are
+still checked against their pinned versions. Provider binaries, Terraform state,
+and test results are not reused from this tool cache. The local
+`make pre-push-check` continues to run the full static and CLI suites.
 
 The Terraform compatibility job repeats the offline Terraform checks against supported Terraform versions:
 

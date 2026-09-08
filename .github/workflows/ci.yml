@@ -26,9 +26,16 @@ jobs:
           persist-credentials: false
 
       - name: Setup Go
+        id: go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+
+      - name: Cache lint and documentation tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tools/bin
+          key: ci-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('Makefile', 'go.sum') }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
@@ -37,10 +44,13 @@ jobs:
           terraform_wrapper: false
 
       - name: Install shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y shellcheck
+          fi
 
       - name: Run static gate
-        run: make static-check
+        run: make ci-static-check
 
   behavior-contracts:
     name: Behavior contracts

@@ -109,6 +109,11 @@ STATIC_CHECKS := fmt-check lint workflow-check shellcheck test-scripts docs-chec
 
 static-check: $(STATIC_CHECKS) vulncheck
 
+# CI's required CLI matrix already runs test-cli on every supported version.
+# The local pre-push gate retains it through static-check.
+.PHONY: ci-static-check
+ci-static-check: $(filter-out test-cli,$(STATIC_CHECKS)) vulncheck
+
 pre-push-check: static-check test-unit test-contract
 
 # The pull-request gate without the live vulnerability feed. The tag-driven
