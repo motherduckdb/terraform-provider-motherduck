@@ -11,15 +11,30 @@ import (
 	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
 )
 
+// scalarQueries collects repeated -scalar flags. Reusing one connection for
+// several reads avoids paying the MotherDuck boot sequence, an extension
+// install and a duckling start, once per query.
+type scalarQueries []string
+
+func (q *scalarQueries) String() string {
+	return strings.Join(*q, "; ")
+}
+
+func (q *scalarQueries) Set(value string) error {
+	*q = append(*q, value)
+	return nil
+}
+
 func main() {
 	execQuery := flag.String("sql", "", "SQL statement to execute")
-	scalarQuery := flag.String("scalar", "", "SQL scalar query to print")
+	var scalarQueryList scalarQueries
+	flag.Var(&scalarQueryList, "scalar", "SQL scalar query to print; repeat to run several on one connection")
 	database := flag.String("database", "", "MotherDuck database to attach before running SQL")
 	preQuery := flag.String("pre", "", "Optional SQL statement to execute before the main statement")
 	allowPrefix := flag.String("allow-prefix", "", "When set, mutating SQL must include this object-name prefix")
 	flag.Parse()
 
-	if (*execQuery == "" && *scalarQuery == "") || (*execQuery != "" && *scalarQuery != "") {
+	if (*execQuery == "" && len(scalarQueryList) == 0) || (*execQuery != "" && len(scalarQueryList) > 0) {
 		fmt.Fprintln(os.Stderr, "exactly one of -sql or -scalar is required")
 		os.Exit(2)
 	}
@@ -68,12 +83,16 @@ func main() {
 		return
 	}
 
-	value, err := client.ScalarString(ctx, *scalarQuery)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	// One line per query, in flag order, so callers can pair results with the
+	// queries they asked for. An empty result still prints its line.
+	for _, query := range scalarQueryList {
+		value, err := client.ScalarString(ctx, query)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println(value)
 	}
-	fmt.Println(value)
 }
 
 func validateAllowedPrefix(queries ...string) error {
