@@ -1,9 +1,14 @@
+---
+page_title: "Resource scope and migration"
+subcategory: "Operations"
+---
+
 # Resource scope and migration
 
 The recommended default is Terraform for infrastructure and access controls,
 with application deployment tooling for code and content.
 
-| Surface | First-release posture |
+| Surface | Deployment posture |
 | --- | --- |
 | Databases, schemas, tables/views, shares, roles/grants, secrets, service accounts, tokens, Duckling configuration, snapshots | Core infrastructure; consult each resource's lifecycle constraints |
 | Flight definitions and schedules | Optional Terraform ownership; use only when Terraform is the authoritative deployment owner |

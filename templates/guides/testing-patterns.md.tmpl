@@ -1,3 +1,8 @@
+---
+page_title: "Write useful provider tests"
+subcategory: "Contributing"
+---
+
 # Write useful provider tests
 
 For a SQL-backed resource, successful Terraform state does not prove that the

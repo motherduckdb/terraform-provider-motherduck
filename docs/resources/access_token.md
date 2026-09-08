@@ -1,6 +1,6 @@
 ---
 page_title: "motherduck_access_token Resource - motherduck"
-subcategory: ""
+subcategory: "Identity and compute"
 description: |-
   Creates and revokes a MotherDuck access token for a user or service account.
 ---
@@ -27,6 +27,25 @@ resource "motherduck_access_token" "app" {
   ttl        = 2592000
 }
 ```
+
+## Rotation and state
+
+Use `read_write` for provisioning and ingestion, and `read_scaling` for supported
+read-only serving connections. Two tokens for one account do not create separate
+data ownership. Read-scaling readers need account initialization and any share
+attachment through a read-write connection first.
+
+Token name, username, type, and TTL changes require replacement. Destroy revokes
+the token. TTL is not a rotation schedule. To avoid interrupting consumers,
+create a second token, update and verify consumers, then retire the old one.
+
+The generated secret is stored in Terraform state. A sensitive output masks
+normal CLI display but does not encrypt state. If a token disappears from the
+API listing, refresh removes its state so the next apply can create a new one.
+The provider warns when it cannot explain the absence by the recorded expiry.
+
+See [authentication and rotation](../guides/authentication.md) and
+[reader setup](../guides/sharing-and-read-scaling.md).
 
 ## Import
 

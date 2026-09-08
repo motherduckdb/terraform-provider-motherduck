@@ -151,4 +151,21 @@ The provider embeds DuckDB through CGO, so release targets are built on native o
 
 ## Documentation Style
 
+Keep the provider introduction in `templates/index.md.tmpl` and guides in
+`templates/guides/`. Registry guides need a `page_title` in YAML frontmatter.
+Use subcategories to separate deployment architectures, operations, reusable
+blueprints, and contributor guides. Resource templates add usage and lifecycle
+notes while retaining the generated schema and checked-in example snippets.
+
+Architecture diagrams have PNG and SVG outputs under `templates/assets/`.
+Edit `scripts/render-docs-diagrams.py` and run it with Python and Pillow to
+regenerate them, then run `make docs`. PNG embeds use absolute raw GitHub URLs
+so they work in Registry Markdown without Mermaid support. They become available
+when the assets reach `main`. Check the rendered pages and diagrams before
+publishing. Registry documentation updates require a new provider release.
+
+Run `tools/bin/tfplugindocs validate --provider-name motherduck` after generation
+to check Registry structure and metadata, in addition to `make docs-check` and
+the example CLI checks.
+
 Customer-facing docs should describe stable public behavior, not private implementation notes. Public docs can mention preview feature gates, account/plan prerequisites, and Terraform state implications. Keep private readiness findings out of the public tree.

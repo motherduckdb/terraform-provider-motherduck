@@ -1,6 +1,6 @@
 ---
 page_title: "motherduck_share Resource - motherduck"
-subcategory: ""
+subcategory: "Access control"
 description: |-
   Manages a MotherDuck share and its publication policy.
 ---

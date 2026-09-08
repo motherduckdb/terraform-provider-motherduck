@@ -1,3 +1,8 @@
+---
+page_title: "CI and Release"
+subcategory: "Contributing"
+---
+
 # CI and Release
 
 This repository uses separate workflows for pull-request checks, live MotherDuck smoke tests, and tag-driven releases.

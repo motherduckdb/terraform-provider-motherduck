@@ -1,0 +1,25 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "{{if eq .Name "motherduck_active_accounts" "motherduck_user_tokens" "motherduck_current_user" "motherduck_live_duckling_size"}}Identity and compute{{else if eq .Name "motherduck_roles" "motherduck_role_members" "motherduck_roles_for_role" "motherduck_roles_for_user" "motherduck_owned_share" "motherduck_owned_shares" "motherduck_shared_with_me"}}Access control{{else if eq .Name "motherduck_flight" "motherduck_flights" "motherduck_flight_runs" "motherduck_flight_logs" "motherduck_flight_versions" "motherduck_dive" "motherduck_dives" "motherduck_dive_versions" "motherduck_guide" "motherduck_guides" "motherduck_guide_versions"}}Application definitions{{else}}Catalog and storage{{end}}"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+This data source inspects existing objects without taking lifecycle ownership.
+Use it after the referenced objects exist and with credentials that can read
+them. See [authentication](../guides/authentication.md).
+
+{{ if .HasExamples -}}
+## Example Usage
+
+{{- range .ExampleFiles }}
+
+{{ tffile . }}
+{{- end }}
+{{- end }}
+
+{{ .SchemaMarkdown | trimspace }}

@@ -1,6 +1,11 @@
+---
+page_title: "Testing The Provider"
+subcategory: "Contributing"
+---
+
 # Testing The Provider
 
-This guide summarizes the test layers for users and contributors. The full contributor workflow lives in [Contributing](../../CONTRIBUTING.md).
+This guide summarizes the test layers for users and contributors. The full contributor workflow lives in [Contributing](https://github.com/motherduckdb/terraform-provider-motherduck/blob/main/CONTRIBUTING.md).
 
 See the [fixture guide](../../test-fixtures/README.md) for fixture ownership and
 [testing patterns](testing-patterns.md) for independent SQL checks,

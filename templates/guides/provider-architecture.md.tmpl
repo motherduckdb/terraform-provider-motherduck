@@ -1,3 +1,8 @@
+---
+page_title: "Provider architecture"
+subcategory: "Contributing"
+---
+
 # Provider architecture
 
 The provider uses Terraform Plugin Framework and protocol 6. The public source

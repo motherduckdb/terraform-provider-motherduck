@@ -1,23 +1,17 @@
 terraform {
+  required_version = ">= 1.5.0"
+
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = ">= 0.1.0"
+      version = "~> 0.2.2"
     }
   }
 }
 
-provider "motherduck" {
-  token       = var.motherduck_token
-  admin_token = var.motherduck_admin_token
-}
+provider "motherduck" {}
 
-variable "motherduck_token" {
-  type      = string
-  sensitive = true
-}
-
-variable "motherduck_admin_token" {
-  type      = string
-  sensitive = true
+resource "motherduck_database" "analytics" {
+  name                    = "analytics"
+  snapshot_retention_days = 7
 }

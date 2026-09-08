@@ -58,6 +58,8 @@ clean-tool-cache:
 
 docs: tools-docs
 	TF_PLUGIN_TIMEOUT=120s $(TFPLUGINDOCS) generate --provider-name=motherduck
+	mkdir -p docs/assets
+	cp templates/assets/*.png templates/assets/*.svg docs/assets/
 
 docs-check:
 	set -eu; tmp_dir=$$(mktemp -d); \
@@ -65,6 +67,7 @@ docs-check:
 	cp -R docs "$$tmp_dir/docs"; \
 	$(MAKE) docs; \
 	diff -ru "$$tmp_dir/docs" docs
+	$(TFPLUGINDOCS) validate --provider-name motherduck
 
 fmt:
 	gofmt -w .

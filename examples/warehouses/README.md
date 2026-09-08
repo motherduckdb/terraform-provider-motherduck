@@ -10,7 +10,7 @@ Three independent Terraform roots demonstrate environment ownership and two ware
 
 These follow MotherDuck's [resource-management](https://motherduck.com/docs/concepts/resource-management)
 and [environment-management](https://motherduck.com/docs/key-tasks/data-warehousing/environment-management)
-guidance, retrieved through Context7. Layout follows
+guidance. Layout follows
 [Terraform's standard structure](https://developer.hashicorp.com/terraform/language/modules/develop/structure).
 Like the [Databricks examples repository](https://github.com/databricks/terraform-databricks-examples),
 each directory explains its prerequisites, deployment, and cleanup.
@@ -37,7 +37,7 @@ organizations or protection against privileged administrators.
 
 ## Deployment order
 
-1. Install the [GitHub release through a filesystem mirror](../../docs/guides/github-installation.md).
+1. Run `terraform init` to install the provider from the [Terraform Registry](https://registry.terraform.io/providers/motherduckdb/motherduck/latest). For an offline mirror, see [direct installation](../../docs/guides/github-installation.md).
 2. Pick a unique account/database prefix. Apply bootstrap with admin credentials.
 3. Transfer generated writer and BI tokens from the protected bootstrap state
    into separate secret-manager entries through approved secret automation.

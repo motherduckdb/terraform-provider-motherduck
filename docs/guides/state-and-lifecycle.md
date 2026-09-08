@@ -1,3 +1,8 @@
+---
+page_title: "State, imports, and lifecycle"
+subcategory: "Operations"
+---
+
 # State, imports, and lifecycle
 
 See [resource scope](resource-scope.md) for the recommended infrastructure-first

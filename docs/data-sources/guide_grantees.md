@@ -1,6 +1,6 @@
 ---
 page_title: "motherduck_guide_grantees Data Source - motherduck"
-subcategory: ""
+subcategory: "Application definitions"
 description: |-
   Reads Guide grantees when the connected MotherDuck SQL session supports that catalog.
 ---

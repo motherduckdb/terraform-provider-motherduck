@@ -1,6 +1,6 @@
 ---
 page_title: "motherduck_flight_run Resource - motherduck"
-subcategory: ""
+subcategory: "Application definitions"
 description: |-
   Runs a MotherDuck Flight and optionally waits for completion.
 ---

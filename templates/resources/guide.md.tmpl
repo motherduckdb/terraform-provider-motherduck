@@ -1,0 +1,36 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Application definitions"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+Experimental: manage versioned Guide content and its audience as one unit.
+Prefer [Blueprints](../guides/blueprints-deployment.md) when Markdown and related
+application assets are deployed together.
+
+## Usage and lifecycle
+
+Keep Guide content in version control and choose one deployment owner for
+content, references, and audience. Referenced share URLs are sensitive and can
+appear in Terraform state even when normal output is masked.
+
+Import by Guide UUID. User/private and organization audiences are the documented
+public access modes. Role audiences depend on the Guide grantee functions being
+available in the account and are retained as compatibility fields.
+
+Destroy deletes the Guide. To retain the remote object while moving to
+Blueprints, remove Terraform ownership without destruction and keep its UUID.
+See [resource scope and migration](../guides/resource-scope.md).
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_guide/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+{{codefile "shell" "examples/resources/motherduck_guide/import.sh" | trimspace}}

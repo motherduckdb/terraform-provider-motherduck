@@ -1,6 +1,6 @@
 ---
 page_title: "motherduck_database_snapshots Data Source - motherduck"
-subcategory: ""
+subcategory: "Storage and recovery"
 description: |-
   Reads MotherDuck database snapshot metadata from public SQL catalog tables.
 ---

@@ -1,3 +1,8 @@
+---
+page_title: "Terraform Best Practices"
+subcategory: "Operations"
+---
+
 # Terraform Best Practices
 
 This guide describes how to use the MotherDuck provider in production Terraform code. It focuses on module shape, state safety, credential handling, and predictable lifecycle management.
@@ -58,9 +63,12 @@ Access token resources expose the newly created token once. Treat the resulting 
 
 Keep durable desired state in Terraform and keep operational actions out unless their state behavior is explicit.
 
+See [resource scope](resource-scope.md) for experimental application resources and
+the recommended Blueprints ownership boundary.
+
 Good Terraform fits:
 
-- databases, schemas, tables, views, shares, share grants, secrets, snapshots, Dives, service accounts, access tokens, and Duckling configuration;
+- databases, schemas, tables, views, shares, share grants, secrets, snapshots, service accounts, access tokens, and Duckling configuration;
 - read-only inspection with data sources;
 - Flight definitions that should be managed as durable desired state.
 
@@ -83,9 +91,9 @@ Avoid modules that create both platform-level service accounts and all tenant da
 
 For common multi-tenant starting points, see the included blueprint modules:
 
-- [Writer bootstrap](../blueprints/writer-bootstrap.md): the dedicated writer service account and read-write token that own tenant data infrastructure.
-- [Hypertenancy](../blueprints/hypertenancy.md): one isolated database, schema, restricted share, reader service account, and reader token per tenant.
-- [Read hypertenancy](../blueprints/read-hypertenancy.md): centralized writes through one writer identity with per-tenant reader databases and shares.
+- [Writer bootstrap](blueprint-writer-bootstrap.md): the dedicated writer service account and read-write token that own tenant data infrastructure.
+- [Hypertenancy](blueprint-hypertenancy.md): one isolated database, schema, restricted share, reader service account, and reader token per tenant.
+- [Read hypertenancy](blueprint-read-hypertenancy.md): centralized writes through one writer identity with per-tenant reader databases and shares.
 
 MotherDuck databases are writable only by the identity that owns them, and `GRANT READ ON SHARE` can be run only by the share owner. Apply tenant data-plane modules with the writer service account's token so the writer owns the databases it must write and the shares it must grant.
 
@@ -225,7 +233,7 @@ terraform apply tfplan
 
 For reusable modules, also validate a small fixture that exercises default inputs and at least one realistic tenant or database configuration. Keep module outputs narrow and mark generated tokens, share URLs, and row-style catalog JSON outputs as sensitive.
 
-Provider contributors should use the repository targets described in [Contributing](../../CONTRIBUTING.md) instead of copying provider-development commands into customer modules.
+Provider contributors should use the repository targets described in [Contributing](https://github.com/motherduckdb/terraform-provider-motherduck/blob/main/CONTRIBUTING.md) instead of copying provider-development commands into customer modules.
 
 ```bash
 make pre-push-check

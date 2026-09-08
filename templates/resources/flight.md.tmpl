@@ -1,0 +1,45 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Application definitions"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+Manage a Flight's Python definition and optional schedule when Terraform is its
+sole deployment owner. For application packages with previews and promotion,
+use [Blueprints](../guides/blueprints-deployment.md).
+
+## Definition and execution
+
+`source_code` and `requirements_txt` can read version-controlled files with
+`file(...)`. `config` supplies string runtime configuration. Keep credentials
+out of those values and use the supported Flight secret mechanisms.
+
+Creating or updating the definition does not mean that a data load has run or
+succeeded. Configure `schedule_cron` for recurring execution, or trigger a run
+through the application deployment workflow. The Flight-run Terraform resource
+is deprecated.
+
+## Lifecycle and import
+
+Import by Flight UUID to preserve identity. Terraform reads the current
+definition and then reconciles configured code and settings. Do not edit the
+same Flight through both Terraform and another deployment system.
+
+Destroy deletes the Flight definition. Verify its schedules, dependencies, and
+data-retention requirements before removing it. Function availability depends
+on the MotherDuck account and client.
+
+See [resource scope](../guides/resource-scope.md).
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_flight/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+{{codefile "shell" "examples/resources/motherduck_flight/import.sh" | trimspace}}

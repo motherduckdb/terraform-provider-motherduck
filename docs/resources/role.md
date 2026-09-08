@@ -1,6 +1,6 @@
 ---
 page_title: "motherduck_role Resource - motherduck"
-subcategory: ""
+subcategory: "Access control"
 description: |-
   Manages a custom MotherDuck role.
 ---
