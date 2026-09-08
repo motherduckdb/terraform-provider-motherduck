@@ -98,6 +98,40 @@ if GPG_PRIVATE_KEY="${private_key}" GPG_PASSPHRASE="${passphrase}" \
   exit 1
 fi
 
+# The Registry shows a long key ID, not a full fingerprint, so both forms must
+# be accepted, and so must lowercase and spaced input.
+long_key_id="${fingerprint: -16}"
+GPG_PRIVATE_KEY="${private_key}" GPG_PASSPHRASE="${passphrase}" \
+  GPG_FINGERPRINT="${long_key_id}" \
+  "${ROOT_DIR}/scripts/sign-release.sh" "${checksum_file}" >/dev/null
+GNUPGHOME="${verify_home}" gpg --batch --verify "${signature_file}" "${checksum_file}" >/dev/null 2>&1
+
+GPG_PRIVATE_KEY="${private_key}" GPG_PASSPHRASE="${passphrase}" \
+  GPG_FINGERPRINT="$(printf '%s' "${long_key_id}" | tr '[:upper:]' '[:lower:]')" \
+  "${ROOT_DIR}/scripts/sign-release.sh" "${checksum_file}" >/dev/null
+
+GPG_PRIVATE_KEY="${private_key}" GPG_PASSPHRASE="${passphrase}" \
+  GPG_FINGERPRINT="0x${long_key_id}" \
+  "${ROOT_DIR}/scripts/sign-release.sh" "${checksum_file}" >/dev/null
+
+# A wrong long key ID of the right shape must still fail.
+if GPG_PRIVATE_KEY="${private_key}" GPG_PASSPHRASE="${passphrase}" \
+  GPG_FINGERPRINT="0000000000000000" \
+  "${ROOT_DIR}/scripts/sign-release.sh" "${checksum_file}" >/dev/null 2>&1; then
+  echo "Expected a wrong long key ID to fail signing" >&2
+  exit 1
+fi
+
+# Too short to be collision resistant, and not hex at all, must both be refused.
+for bad in "2CBF0A1C" "not-a-fingerprint"; do
+  if GPG_PRIVATE_KEY="${private_key}" GPG_PASSPHRASE="${passphrase}" \
+    GPG_FINGERPRINT="${bad}" \
+    "${ROOT_DIR}/scripts/sign-release.sh" "${checksum_file}" >/dev/null 2>&1; then
+    echo "Expected GPG_FINGERPRINT '${bad}' to be refused" >&2
+    exit 1
+  fi
+done
+
 if GPG_PRIVATE_KEY="${private_key}" GPG_PASSPHRASE="${passphrase}" \
   "${ROOT_DIR}/scripts/sign-release.sh" "${test_dir}/missing_SHA256SUMS" >/dev/null 2>&1; then
   echo "Expected a missing checksum file to fail signing" >&2
