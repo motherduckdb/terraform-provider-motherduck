@@ -296,12 +296,10 @@ func accessTokenExpired(expireAt types.String, now time.Time) bool {
 	if raw == "" {
 		return false
 	}
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02T15:04:05.999999999", "2006-01-02 15:04:05.999999999-07:00", "2006-01-02 15:04:05.999999999"} {
-		if when, err := time.Parse(layout, raw); err == nil {
-			return when.Before(now)
-		}
-	}
-	return false
+	// The REST API returns expire_at as RFC 3339; RFC3339Nano also accepts
+	// values without fractional seconds.
+	when, err := time.Parse(time.RFC3339Nano, raw)
+	return err == nil && when.Before(now)
 }
 
 func (r *accessTokenResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {

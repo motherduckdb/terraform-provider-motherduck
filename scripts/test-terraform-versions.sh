@@ -119,11 +119,9 @@ run_cli_smoke() {
     # account does not expose the required MD_* functions (or, for share
     # grants, when neither an admin token nor MD_TF_ACC_SHARE_GRANTEE_USERNAME
     # is present); set MD_TF_ACC_REQUIRE_* to turn a skip into a failure.
-    TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-guide.sh"
-    TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-dive.sh"
-    TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-flight.sh"
-    TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-dive-flight-blueprint.sh"
-    TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-share-grant-drift.sh"
+    for fixture in guide dive flight dive-flight-blueprint share-grant-drift; do
+      TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-${fixture}.sh"
+    done
   fi
 
   if [[ "${TF_VERSION_BLUEPRINT_LIFECYCLE}" == "1" ]]; then

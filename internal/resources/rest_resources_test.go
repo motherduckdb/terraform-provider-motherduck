@@ -448,15 +448,14 @@ func TestAccessTokenExpired(t *testing.T) {
 		value types.String
 		want  bool
 	}{
-		"null":                {types.StringNull(), false},
-		"unknown":             {types.StringUnknown(), false},
-		"empty":               {types.StringValue(""), false},
-		"garbage":             {types.StringValue("soon"), false},
-		"rfc3339 past":        {types.StringValue("2026-09-01T00:00:00Z"), true},
-		"rfc3339 future":      {types.StringValue("2026-12-01T00:00:00Z"), false},
-		"fractional past":     {types.StringValue("2026-09-01T00:00:00.123456Z"), true},
-		"space separated":     {types.StringValue("2026-09-01 00:00:00.123456+00:00"), true},
-		"no zone in the past": {types.StringValue("2026-09-01T00:00:00"), true},
+		"null":                    {types.StringNull(), false},
+		"unknown":                 {types.StringUnknown(), false},
+		"empty":                   {types.StringValue(""), false},
+		"garbage":                 {types.StringValue("soon"), false},
+		"rfc3339 past":            {types.StringValue("2026-09-01T00:00:00Z"), true},
+		"rfc3339 future":          {types.StringValue("2026-12-01T00:00:00Z"), false},
+		"fractional past":         {types.StringValue("2026-09-01T00:00:00.123456Z"), true},
+		"non rfc3339 is cautious": {types.StringValue("2026-09-01 00:00:00"), false},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {

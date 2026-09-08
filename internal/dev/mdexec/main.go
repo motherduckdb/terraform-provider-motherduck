@@ -11,24 +11,15 @@ import (
 	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
 )
 
-// scalarQueries collects repeated -scalar flags. Reusing one connection for
-// several reads avoids paying the MotherDuck boot sequence, an extension
-// install and a duckling start, once per query.
-type scalarQueries []string
-
-func (q *scalarQueries) String() string {
-	return strings.Join(*q, "; ")
-}
-
-func (q *scalarQueries) Set(value string) error {
-	*q = append(*q, value)
-	return nil
-}
-
 func main() {
 	execQuery := flag.String("sql", "", "SQL statement to execute")
-	var scalarQueryList scalarQueries
-	flag.Var(&scalarQueryList, "scalar", "SQL scalar query to print; repeat to run several on one connection")
+	// Repeated -scalar flags share one connection, so several reads pay the
+	// MotherDuck boot sequence (extension install, duckling start) once.
+	var scalarQueryList []string
+	flag.Func("scalar", "SQL scalar query to print; repeat to run several on one connection", func(value string) error {
+		scalarQueryList = append(scalarQueryList, value)
+		return nil
+	})
 	database := flag.String("database", "", "MotherDuck database to attach before running SQL")
 	preQuery := flag.String("pre", "", "Optional SQL statement to execute before the main statement")
 	allowPrefix := flag.String("allow-prefix", "", "When set, every mutating SQL statement must target an object whose name starts with this prefix")
@@ -204,15 +195,13 @@ func embeddedMutation(tokens []token) string {
 	return ""
 }
 
+var (
+	mutationVerbs = map[string]bool{"CREATE": true, "DROP": true, "ALTER": true, "INSERT": true, "UPDATE": true, "DELETE": true, "GRANT": true, "REVOKE": true, "TRUNCATE": true}
+	objectKinds   = map[string]bool{"DATABASE": true, "SHARE": true, "SECRET": true, "SCHEMA": true, "TABLE": true, "VIEW": true, "ROLE": true}
+)
+
 func isMutation(first token) bool {
-	if first.quoted || first.literal {
-		return false
-	}
-	switch strings.ToUpper(first.text) {
-	case "CREATE", "DROP", "ALTER", "INSERT", "UPDATE", "DELETE", "GRANT", "REVOKE", "TRUNCATE":
-		return true
-	}
-	return false
+	return !first.quoted && !first.literal && mutationVerbs[strings.ToUpper(first.text)]
 }
 
 // mutationTarget returns the name of the object a DDL statement targets. For
@@ -240,7 +229,6 @@ func mutationTarget(tokens []token) (name string, needsTarget bool, err error) {
 		// DuckDB folds unquoted identifiers to lower case.
 		return strings.ToLower(tok.text), nil
 	}
-	objectKinds := map[string]bool{"DATABASE": true, "SHARE": true, "SECRET": true, "SCHEMA": true, "TABLE": true, "VIEW": true, "ROLE": true}
 
 	verb := strings.ToUpper(tokens[0].text)
 	i := 1

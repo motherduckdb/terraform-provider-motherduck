@@ -5,6 +5,8 @@ import (
 	stdsql "database/sql"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -967,20 +969,12 @@ func (r *secretResource) createSecret(ctx context.Context, getter interface {
 	}
 	// Re-validate on the resolved plan: values unknown at plan time skipped the
 	// plan-time checks, and everything below is spliced into raw SQL.
-	secretType := plan.Type.ValueString()
-	values := secretValidationValues{Type: &secretType, ParamKeys: make([]string, 0, len(params))}
-	if !plan.SecretProvider.IsNull() {
-		provider := plan.SecretProvider.ValueString()
-		values.SecretProvider = &provider
-	}
-	for key := range params {
-		values.ParamKeys = append(values.ParamKeys, key)
-	}
-	if !plan.SecretSQL.IsNull() {
-		secretSQL := plan.SecretSQL.ValueString()
-		values.SecretSQL = &secretSQL
-	}
-	validateSecretValues(values, diags)
+	validateSecretValues(secretValidationValues{
+		Type:      plan.Type.ValueString(),
+		Provider:  plan.SecretProvider.ValueString(),
+		ParamKeys: slices.Sorted(maps.Keys(params)),
+		RawSQL:    plan.SecretSQL.ValueString(),
+	}, diags)
 	if diags.HasError() {
 		return
 	}
@@ -2117,13 +2111,10 @@ func canonicalTableColumns(ctx context.Context, client scalarStringer, columns m
 func validateSecretConfig(config secretModel, diags *diag.Diagnostics) {
 	values := secretValidationValues{}
 	if !config.Params.IsNull() && !config.Params.IsUnknown() {
-		for key := range config.Params.Elements() {
-			values.ParamKeys = append(values.ParamKeys, key)
-		}
+		values.ParamKeys = slices.Sorted(maps.Keys(config.Params.Elements()))
 	}
 	if !config.SecretSQL.IsNull() && !config.SecretSQL.IsUnknown() {
-		secretSQL := config.SecretSQL.ValueString()
-		values.SecretSQL = &secretSQL
+		values.RawSQL = config.SecretSQL.ValueString()
 	}
 	validateSecretValues(values, diags)
 }
@@ -2132,34 +2123,32 @@ func validateSecretConfig(config secretModel, diags *diag.Diagnostics) {
 // CREATE SECRET statement as raw SQL. Nil pointers mean "not provided or not
 // yet known", so the field is skipped.
 type secretValidationValues struct {
-	Type           *string
-	SecretProvider *string
-	ParamKeys      []string
-	SecretSQL      *string
+	Type      string
+	Provider  string
+	ParamKeys []string // sorted, so diagnostics are deterministic
+	RawSQL    string
 }
 
 // validateSecretValues is the single source of truth for what may be spliced
 // into CREATE SECRET. Plan-time validation and apply-time re-validation both
 // call it, so a value unknown at plan time cannot bypass the checks.
 func validateSecretValues(values secretValidationValues, diags *diag.Diagnostics) {
-	if values.Type != nil {
-		if detail := sqlBareOptionWordError(*values.Type); detail != "" {
+	if values.Type != "" {
+		if detail := sqlBareOptionWordError(values.Type); detail != "" {
 			diags.AddAttributeError(path.Root("type"), "Invalid MotherDuck SQL option", detail)
 		}
 	}
-	if values.SecretProvider != nil && *values.SecretProvider != "" {
-		if detail := sqlBareOptionWordError(*values.SecretProvider); detail != "" {
+	if values.Provider != "" {
+		if detail := sqlBareOptionWordError(values.Provider); detail != "" {
 			diags.AddAttributeError(path.Root("secret_provider"), "Invalid MotherDuck SQL option", detail)
 		}
 	}
-	keys := append([]string(nil), values.ParamKeys...)
-	sort.Strings(keys)
-	for _, key := range keys {
+	for _, key := range values.ParamKeys {
 		if !isBareSQLWord(key) {
 			diags.AddAttributeError(path.Root("params").AtMapKey(key), "Invalid MotherDuck secret parameter", "Secret parameter keys must be single bare SQL option words containing only letters, numbers, and underscores, starting with a letter or underscore.")
 		}
 	}
-	if values.SecretSQL != nil && strings.Contains(*values.SecretSQL, ";") {
+	if strings.Contains(values.RawSQL, ";") {
 		diags.AddAttributeError(path.Root("secret_sql"), "Invalid MotherDuck secret SQL", "Raw secret SQL clauses must not contain semicolons.")
 	}
 }

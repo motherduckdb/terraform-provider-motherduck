@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -183,19 +184,14 @@ func isNotFoundFor(err error, names ...string) bool {
 	if errors.As(err, &apiErr) {
 		return true
 	}
-	msg := strings.ToLower(err.Error())
-	matched := false
-	for _, name := range names {
-		name = strings.ToLower(strings.TrimSpace(name))
-		if name == "" {
-			continue
-		}
-		matched = true
-		if containsIdentifierWord(msg, name) {
-			return true
-		}
+	names = slices.DeleteFunc(slices.Clone(names), func(n string) bool { return strings.TrimSpace(n) == "" })
+	if len(names) == 0 {
+		return true
 	}
-	return !matched
+	msg := strings.ToLower(err.Error())
+	return slices.ContainsFunc(names, func(n string) bool {
+		return containsIdentifierWord(msg, strings.ToLower(strings.TrimSpace(n)))
+	})
 }
 
 // containsIdentifierWord reports whether name appears in msg as a whole
@@ -218,9 +214,6 @@ func containsIdentifierWord(msg, name string) bool {
 			return true
 		}
 		start = idx + 1
-		if start >= len(msg) {
-			return false
-		}
 	}
 }
 

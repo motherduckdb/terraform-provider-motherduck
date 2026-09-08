@@ -550,7 +550,7 @@ func (diveCreateOrphanClient) QueryRow(_ context.Context, query string, _ ...any
 	if strings.Contains(query, "MD_CREATE_DIVE") {
 		return diveCreatedRow{}
 	}
-	return diveMissingRow{}
+	return errRowScanner{err: stdsql.ErrNoRows}
 }
 
 type diveCreatedRow struct{}
@@ -559,10 +559,6 @@ func (diveCreatedRow) Scan(dest ...any) error {
 	*(dest[0].(*string)) = "123e4567-e89b-42d3-a456-426614174000"
 	return nil
 }
-
-type diveMissingRow struct{}
-
-func (diveMissingRow) Scan(...any) error { return stdsql.ErrNoRows }
 
 func TestDiveCreatePersistsIDWhenReadbackFails(t *testing.T) {
 	ctx := context.Background()

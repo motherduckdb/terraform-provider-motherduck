@@ -3,7 +3,7 @@ package resources
 import (
 	"context"
 	"errors"
-	"sort"
+	"slices"
 	"strings"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
@@ -52,17 +52,9 @@ func redactSensitiveValues(message string, sensitive []string) string {
 	// Redact longer values first so a value that is a prefix of another does
 	// not split the longer one and leave its tail (for example a query string
 	// carrying a token) in the message.
-	ordered := make([]string, 0, len(sensitive))
-	for _, value := range sensitive {
-		if strings.TrimSpace(value) != "" {
-			ordered = append(ordered, value)
-		}
-	}
-	sort.SliceStable(ordered, func(i, j int) bool { return len(ordered[i]) > len(ordered[j]) })
+	ordered := slices.DeleteFunc(slices.Clone(sensitive), func(v string) bool { return strings.TrimSpace(v) == "" })
+	slices.SortStableFunc(ordered, func(a, b string) int { return len(b) - len(a) })
 	for _, value := range ordered {
-		if strings.TrimSpace(value) == "" {
-			continue
-		}
 		message = strings.ReplaceAll(message, sqlbuild.StringLiteral(value), "'[redacted]'")
 		if escaped := strings.ReplaceAll(value, "'", "''"); escaped != value {
 			message = strings.ReplaceAll(message, escaped, "[redacted]")

@@ -796,31 +796,30 @@ func TestValidateViewQueryRejectsSemicolons(t *testing.T) {
 }
 
 func TestValidateSecretValuesSharedRules(t *testing.T) {
-	str := func(v string) *string { return &v }
 	tests := map[string]struct {
 		values    secretValidationValues
 		wantPaths []string
 	}{
-		"valid": {values: secretValidationValues{Type: str("s3"), SecretProvider: str("config"), ParamKeys: []string{"key_id", "secret"}, SecretSQL: str("REGION 'us-east-1'")}},
+		"valid": {values: secretValidationValues{Type: "s3", Provider: "config", ParamKeys: []string{"key_id", "secret"}, RawSQL: "REGION 'us-east-1'"}},
 		"type with injection": {
-			values:    secretValidationValues{Type: str("s3); DROP DATABASE prod; --")},
+			values:    secretValidationValues{Type: "s3); DROP DATABASE prod; --"},
 			wantPaths: []string{"type"},
 		},
 		"uppercase type": {
-			values:    secretValidationValues{Type: str("S3")},
+			values:    secretValidationValues{Type: "S3"},
 			wantPaths: []string{"type"},
 		},
 		"provider with space": {
-			values:    secretValidationValues{SecretProvider: str("config extra")},
+			values:    secretValidationValues{Provider: "config extra"},
 			wantPaths: []string{"secret_provider"},
 		},
-		"empty provider skipped": {values: secretValidationValues{SecretProvider: str("")}},
+		"empty provider skipped": {values: secretValidationValues{Provider: ""}},
 		"param key injection": {
 			values:    secretValidationValues{ParamKeys: []string{"key_id", "x) ; DROP"}},
 			wantPaths: []string{`params["x) ; DROP"]`},
 		},
 		"secret_sql semicolon": {
-			values:    secretValidationValues{SecretSQL: str("REGION 'a'; DROP DATABASE prod")},
+			values:    secretValidationValues{RawSQL: "REGION 'a'; DROP DATABASE prod"},
 			wantPaths: []string{"secret_sql"},
 		},
 	}
