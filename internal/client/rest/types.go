@@ -4,9 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 var ErrMissingAdminToken = errors.New("MotherDuck REST operations require admin_token or MOTHERDUCK_ADMIN_TOKEN")
+
+// maxEchoedBodyBytes caps how much of a non-JSON error body is copied into an
+// error string. Proxies and WAFs answer with whole HTML pages; echoing those
+// verbatim floods Terraform diagnostics and CI logs without adding signal.
+const maxEchoedBodyBytes = 2048
 
 type APIError struct {
 	StatusCode int    `json:"-"`
@@ -22,7 +28,7 @@ type APIError struct {
 func (e APIError) Error() string {
 	message := e.Message
 	if message == "" {
-		message = e.Body
+		message = echoBody(e.Body)
 	}
 	issueMessages := make([]string, 0, len(e.Issues))
 	for _, issue := range e.Issues {
@@ -48,6 +54,20 @@ func (e APIError) Error() string {
 		message += " (response body truncated)"
 	}
 	return fmt.Sprintf("MotherDuck API error %d: %s", e.StatusCode, message)
+}
+
+// echoBody flattens a raw response body onto one line and truncates it so an
+// error string stays readable in Terraform output.
+func echoBody(body string) string {
+	body = strings.Join(strings.Fields(body), " ")
+	if len(body) <= maxEchoedBodyBytes {
+		return body
+	}
+	cut := maxEchoedBodyBytes
+	for cut > 0 && !utf8.RuneStart(body[cut]) {
+		cut--
+	}
+	return body[:cut] + "... (truncated)"
 }
 
 // IsEntityNotFound reports whether the error is a routed 404 for an entity that

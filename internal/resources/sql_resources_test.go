@@ -11,6 +11,8 @@ import (
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
+	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlcatalog"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -593,6 +595,7 @@ func TestShareGrantErrorDetail(t *testing.T) {
 
 func TestShareGrantReadDecision(t *testing.T) {
 	shareDropped := &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: "Catalog Error: Database share example_share not found"}
+	otherMissing := &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: "Catalog Error: Table Function with name md_list_share_grantees does not exist!"}
 	other := errors.New("network unreachable")
 	tests := map[string]struct {
 		exists     bool
@@ -603,12 +606,13 @@ func TestShareGrantReadDecision(t *testing.T) {
 		"grant exists":                {exists: true, wantRemove: false},
 		"grant revoked out of band":   {exists: false, wantRemove: true},
 		"share dropped out of band":   {exists: false, err: shareDropped, wantRemove: true},
+		"other object missing":        {exists: false, err: otherMissing, wantRemove: false, wantErr: otherMissing},
 		"other errors surface as-is":  {exists: false, err: other, wantRemove: false, wantErr: other},
 		"error wins over stale exist": {exists: true, err: other, wantRemove: false, wantErr: other},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			remove, err := shareGrantReadDecision(tc.exists, tc.err)
+			remove, err := shareGrantReadDecision("example_share", tc.exists, tc.err)
 			if remove != tc.wantRemove {
 				t.Fatalf("remove = %t, want %t", remove, tc.wantRemove)
 			}
@@ -745,6 +749,95 @@ func TestIsNotFoundUsesTypedErrors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if got := isNotFound(tc.err); got != tc.want {
 				t.Fatalf("isNotFound() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsNotFoundForRequiresNamedObject(t *testing.T) {
+	dbMissing := &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: `Catalog Error: Database with name "analytics" does not exist!`}
+	tableMissing := &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: "Catalog Error: Table with name facts does not exist!"}
+	unrelated := &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: "Catalog Error: Table with name information_schema.views does not exist!"}
+	rest := &mdrest.APIError{StatusCode: 404, Code: "NOT_FOUND", Message: "entity not found"}
+	tests := map[string]struct {
+		err   error
+		names []string
+		want  bool
+	}{
+		"names the database":              {err: dbMissing, names: []string{"analytics", "main", "facts"}, want: true},
+		"names the object":                {err: tableMissing, names: []string{"analytics", "main", "facts"}, want: true},
+		"case insensitive":                {err: tableMissing, names: []string{"FACTS"}, want: true},
+		"unrelated catalog object":        {err: unrelated, names: []string{"analytics", "main", "facts"}, want: false},
+		"non catalog error":               {err: errors.New("facts not found"), names: []string{"facts"}, want: false},
+		"nil error":                       {err: nil, names: []string{"facts"}, want: false},
+		"no names falls back to broad":    {err: unrelated, names: nil, want: true},
+		"empty names fall back to broad":  {err: unrelated, names: []string{"", " "}, want: true},
+		"rest entity not found unchanged": {err: rest, names: []string{"anything"}, want: true},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := isNotFoundFor(tc.err, tc.names...); got != tc.want {
+				t.Fatalf("isNotFoundFor() = %t, want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateViewQueryRejectsSemicolons(t *testing.T) {
+	var diags diag.Diagnostics
+	validateViewQuery("SELECT 1", &diags)
+	if diags.HasError() {
+		t.Fatalf("unexpected diagnostics for single statement: %v", diags)
+	}
+	validateViewQuery("SELECT 1; DROP DATABASE prod", &diags)
+	if !diags.HasError() {
+		t.Fatal("expected semicolon to be rejected")
+	}
+}
+
+func TestValidateSecretValuesSharedRules(t *testing.T) {
+	str := func(v string) *string { return &v }
+	tests := map[string]struct {
+		values    secretValidationValues
+		wantPaths []string
+	}{
+		"valid": {values: secretValidationValues{Type: str("s3"), SecretProvider: str("config"), ParamKeys: []string{"key_id", "secret"}, SecretSQL: str("REGION 'us-east-1'")}},
+		"type with injection": {
+			values:    secretValidationValues{Type: str("s3); DROP DATABASE prod; --")},
+			wantPaths: []string{"type"},
+		},
+		"uppercase type": {
+			values:    secretValidationValues{Type: str("S3")},
+			wantPaths: []string{"type"},
+		},
+		"provider with space": {
+			values:    secretValidationValues{SecretProvider: str("config extra")},
+			wantPaths: []string{"secret_provider"},
+		},
+		"empty provider skipped": {values: secretValidationValues{SecretProvider: str("")}},
+		"param key injection": {
+			values:    secretValidationValues{ParamKeys: []string{"key_id", "x) ; DROP"}},
+			wantPaths: []string{`params["x) ; DROP"]`},
+		},
+		"secret_sql semicolon": {
+			values:    secretValidationValues{SecretSQL: str("REGION 'a'; DROP DATABASE prod")},
+			wantPaths: []string{"secret_sql"},
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			var diags diag.Diagnostics
+			validateSecretValues(tc.values, &diags)
+			var gotPaths []string
+			for _, d := range diags.Errors() {
+				withPath, ok := d.(diag.DiagnosticWithPath)
+				if !ok {
+					t.Fatalf("diagnostic without path: %v", d)
+				}
+				gotPaths = append(gotPaths, withPath.Path().String())
+			}
+			if !reflect.DeepEqual(gotPaths, tc.wantPaths) {
+				t.Fatalf("diagnostic paths = %#v, want %#v", gotPaths, tc.wantPaths)
 			}
 		})
 	}
@@ -1334,4 +1427,115 @@ type fakeSQLFunctionClient struct {
 
 func (f fakeSQLFunctionClient) Exists(context.Context, string, ...any) (bool, error) {
 	return f.available, f.err
+}
+
+// recordingSQLClient is an always-available SQL client that records executed
+// statements so apply-path tests can prove that nothing reached the server.
+type recordingSQLClient struct {
+	execs []string
+}
+
+func (c *recordingSQLClient) Available() bool                              { return true }
+func (c *recordingSQLClient) AttachDatabase(context.Context, string) error { return nil }
+func (c *recordingSQLClient) Close() error                                 { return nil }
+func (c *recordingSQLClient) Exec(_ context.Context, query string, _ ...any) error {
+	c.execs = append(c.execs, query)
+	return nil
+}
+func (c *recordingSQLClient) Exists(context.Context, string, ...any) (bool, error) {
+	return false, nil
+}
+func (c *recordingSQLClient) QueryRow(context.Context, string, ...any) mdsql.RowScanner {
+	return errRowScanner{err: sql.ErrNoRows}
+}
+func (c *recordingSQLClient) QueryRowsJSON(context.Context, string, ...any) (string, error) {
+	return "[]", nil
+}
+func (c *recordingSQLClient) ScalarString(context.Context, string, ...any) (string, error) {
+	return "", nil
+}
+func (c *recordingSQLClient) WithDatabaseUse(ctx context.Context, _ string, fn func(func(string, ...any) error) error) error {
+	return fn(func(query string, args ...any) error { return c.Exec(ctx, query, args...) })
+}
+
+type errRowScanner struct{ err error }
+
+func (r errRowScanner) Scan(...any) error { return r.err }
+
+// modelGetter satisfies the plan/state getter interface used by the shared
+// create helpers, returning a fixed model.
+type modelGetter struct{ model any }
+
+func (g modelGetter) Get(_ context.Context, target any) diag.Diagnostics {
+	reflect.ValueOf(target).Elem().Set(reflect.ValueOf(g.model))
+	return nil
+}
+
+type discardSetter struct{}
+
+func (discardSetter) Set(context.Context, any) diag.Diagnostics { return nil }
+
+func TestViewApplyRejectsMultiStatementQuery(t *testing.T) {
+	client := &recordingSQLClient{}
+	r := &viewResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	plan := viewModel{
+		Database: types.StringValue("analytics"),
+		Schema:   types.StringValue("main"),
+		Name:     types.StringValue("v"),
+		// Unknown at plan time, resolved at apply time to a second statement.
+		Query: types.StringValue("SELECT 1; DROP DATABASE prod"),
+	}
+	var diags diag.Diagnostics
+	r.createOrReplaceView(context.Background(), modelGetter{model: plan}, discardSetter{}, &fakePrivateState{}, &diags)
+	if !diags.HasError() {
+		t.Fatal("expected apply-time validation error")
+	}
+	if len(client.execs) != 0 {
+		t.Fatalf("expected no SQL to run, got %q", client.execs)
+	}
+}
+
+func TestSecretApplyRejectsUnsafeValues(t *testing.T) {
+	ctx := context.Background()
+	params, valueDiags := types.MapValueFrom(ctx, types.StringType, map[string]string{"key_id": "abc"})
+	if valueDiags.HasError() {
+		t.Fatalf("building params map: %v", valueDiags)
+	}
+	tests := map[string]secretModel{
+		"type injection":       {Name: types.StringValue("s"), Type: types.StringValue("s3); DROP DATABASE prod; --"), Params: params},
+		"provider injection":   {Name: types.StringValue("s"), Type: types.StringValue("s3"), SecretProvider: types.StringValue("config) --"), Params: params},
+		"secret_sql semicolon": {Name: types.StringValue("s"), Type: types.StringValue("s3"), Params: params, SecretSQL: types.StringValue("REGION 'a'; DROP DATABASE prod")},
+	}
+	for name, plan := range tests {
+		t.Run(name, func(t *testing.T) {
+			client := &recordingSQLClient{}
+			r := &secretResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+			var diags diag.Diagnostics
+			r.createSecret(ctx, modelGetter{model: plan}, discardSetter{}, false, &diags)
+			if !diags.HasError() {
+				t.Fatal("expected apply-time validation error")
+			}
+			if len(client.execs) != 0 {
+				t.Fatalf("expected no SQL to run, got %q", client.execs)
+			}
+		})
+	}
+}
+
+func TestContainsIdentifierWord(t *testing.T) {
+	cases := map[string]struct {
+		msg, name string
+		want      bool
+	}{
+		"short name inside another word": {"catalog error: table with name b does not exist", "a", false},
+		"short name as whole token":      {"catalog error: table with name a does not exist", "a", true},
+		"quoted name":                    {`catalog error: table "tf_x" does not exist`, "tf_x", true},
+		"name is prefix of another":      {"table tf_x_backup does not exist", "tf_x", false},
+		"name at end":                    {"does not exist: tf_x", "tf_x", true},
+	}
+	for label, tc := range cases {
+		if got := containsIdentifierWord(tc.msg, tc.name); got != tc.want {
+			t.Fatalf("%s: containsIdentifierWord(%q, %q) = %v, want %v", label, tc.msg, tc.name, got, tc.want)
+		}
+	}
 }

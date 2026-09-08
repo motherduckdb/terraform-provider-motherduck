@@ -186,11 +186,20 @@ func (r *diveResource) Create(ctx context.Context, req resource.CreateRequest, r
 	query := "SELECT id::VARCHAR FROM MD_CREATE_DIVE" + sqlbuild.NamedArgs(args)
 	var id string
 	if err := client.QueryRow(ctx, query).Scan(&id); err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck Dive", err.Error())
+		resp.Diagnostics.AddError("Unable to create MotherDuck Dive", sensitiveWriteDiagnostic("Dive", err, diveSensitiveValues(ctx, plan.RequiredResources)))
 		return
 	}
 	plan.ID = types.StringValue(id)
+	// Persist the ID before the read-back so a failed or empty MD_GET_DIVE
+	// leaves a tainted resource in state instead of an orphaned remote Dive.
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), id)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	if !r.readDive(ctx, &plan, &resp.Diagnostics) {
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Unable to read MotherDuck Dive", "Dive was created but could not be read through MD_GET_DIVE.")
+		}
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -260,7 +269,7 @@ func (r *diveResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	if updateContent {
 		contentArgs["id"] = sqlbuild.StringLiteral(state.ID.ValueString()) + "::UUID"
 		if _, err := client.QueryRowsJSON(ctx, "SELECT * FROM MD_UPDATE_DIVE_CONTENT"+sqlbuild.NamedArgs(contentArgs)); err != nil {
-			resp.Diagnostics.AddError("Unable to update MotherDuck Dive content", err.Error())
+			resp.Diagnostics.AddError("Unable to update MotherDuck Dive content", sensitiveWriteDiagnostic("Dive", err, diveSensitiveValues(ctx, plan.RequiredResources)))
 			return
 		}
 	}

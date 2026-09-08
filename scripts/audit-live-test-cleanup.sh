@@ -109,14 +109,17 @@ sweep_secrets() {
 
 sweep_named_snapshots() {
   local rows
-  rows="$(list_lines "SELECT coalesce(string_agg(database_name || '\t' || snapshot_id::VARCHAR, '\n' ORDER BY database_name, snapshot_name), '') FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE snapshot_name LIKE 'tf\\_%' ESCAPE '\\'")"
-  while IFS=$'\t' read -r database_name snapshot_id; do
-    [[ -z "${database_name}" || -z "${snapshot_id}" ]] && continue
+  rows="$(list_lines "SELECT coalesce(string_agg(database_name || '\t' || snapshot_id::VARCHAR || '\t' || snapshot_name, '\n' ORDER BY database_name, snapshot_name), '') FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE snapshot_name LIKE 'tf\\_%' ESCAPE '\\'")"
+  while IFS=$'\t' read -r database_name snapshot_id snapshot_name; do
+    [[ -z "${database_name}" || -z "${snapshot_id}" || -z "${snapshot_name}" ]] && continue
+    # ALTER SNAPSHOT addresses the snapshot by id, so pass the prefixed
+    # snapshot name as the guard's target instead of a comment.
     go run "${ROOT_DIR}/internal/dev/mdexec" \
       -database "${database_name}" \
       -pre "USE $(sql_identifier "${database_name}")" \
       -allow-prefix "tf_" \
-      -sql "ALTER SNAPSHOT $(sql_literal "${snapshot_id}") SET snapshot_name = '' /* tf_ */"
+      -allow-target "${snapshot_name}" \
+      -sql "ALTER SNAPSHOT $(sql_literal "${snapshot_id}") SET snapshot_name = ''"
   done <<<"${rows}"
 }
 

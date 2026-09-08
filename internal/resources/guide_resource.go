@@ -265,7 +265,7 @@ func (r *guideResource) Create(ctx context.Context, req resource.CreateRequest, 
 	query := "SELECT id::VARCHAR FROM MD_CREATE_GUIDE" + sqlbuild.NamedArgs(args)
 	var id string
 	if err := retry.SQL(ctx, func() error { return client.QueryRow(ctx, query).Scan(&id) }); err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck Guide", err.Error())
+		resp.Diagnostics.AddError("Unable to create MotherDuck Guide", sensitiveWriteDiagnostic("Guide", err, guideSensitiveValues(ctx, plan.References)))
 		return
 	}
 	plan.ID = types.StringValue(id)
@@ -354,7 +354,7 @@ func (r *guideResource) Update(ctx context.Context, req resource.UpdateRequest, 
 			versionArgs[`"references"`] = emptyGuideReferencesSQL()
 		}
 		if _, err := client.QueryRowsJSON(ctx, "SELECT * FROM MD_UPDATE_GUIDE"+sqlbuild.NamedArgs(versionArgs)); err != nil {
-			resp.Diagnostics.AddError("Unable to append MotherDuck Guide version", err.Error())
+			resp.Diagnostics.AddError("Unable to append MotherDuck Guide version", sensitiveWriteDiagnostic("Guide", err, guideSensitiveValues(ctx, plan.References)))
 			return
 		}
 	}

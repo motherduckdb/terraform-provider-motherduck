@@ -109,7 +109,7 @@ func (p *motherduckProvider) Configure(ctx context.Context, req provider.Configu
 	}
 	database := stringValue(cfg.Database, "")
 	attachMode := stringValue(cfg.AttachMode, "")
-	customUserAgent := stringValue(cfg.CustomUserAgent, "terraform-provider-motherduck/"+p.version)
+	customUserAgent := userAgent(p.version, stringValue(cfg.CustomUserAgent, ""))
 	requestTimeout := int64Value(cfg.RequestTimeout, 30)
 
 	if cfg.Token.IsUnknown() {
@@ -159,6 +159,18 @@ func (p *motherduckProvider) DataSources(ctx context.Context) []func() datasourc
 
 func (p *motherduckProvider) EphemeralResources(ctx context.Context) []func() ephemeral.EphemeralResource {
 	return ephemeralresources.All()
+}
+
+// userAgent builds the provider identifier sent on SQL and REST traffic. The
+// configured custom_user_agent is a suffix appended after the provider
+// name/version so MotherDuck can always attribute requests to the provider.
+func userAgent(version, custom string) string {
+	base := "terraform-provider-motherduck/" + version
+	custom = strings.TrimSpace(custom)
+	if custom == "" {
+		return base
+	}
+	return base + " " + custom
 }
 
 func stringValue(value types.String, fallback string) string {

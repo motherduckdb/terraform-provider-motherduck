@@ -237,6 +237,8 @@ Use the blueprint matrix when architecture modules should be proven across Terra
 MOTHERDUCK_TOKEN=... make test-terraform-versions-blueprint
 ```
 
+The SQL lifecycle matrix runs the database drop-with-objects smoke and the Guide, Dive, Flight, Dive-and-Flight blueprint, and share-grant drift smokes. Preview-surface smokes skip with a successful exit when the account lacks the required `MD_*` functions; set `MD_TF_ACC_REQUIRE_GUIDES`, `MD_TF_ACC_REQUIRE_DIVES`, `MD_TF_ACC_REQUIRE_FLIGHTS`, or `MD_TF_ACC_REQUIRE_DIVE_FLIGHT_BLUEPRINT` to fail instead of skipping.
+
 Both lifecycle matrices create durable MotherDuck objects while they run and clean them up on exit.
 
 ## Output And Cleanup
