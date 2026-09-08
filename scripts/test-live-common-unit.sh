@@ -77,6 +77,13 @@ assert_log_contains 'DROP DATABASE IF EXISTS "db""quoted" CASCADE'
 assert_log_contains 'DROP SHARE IF EXISTS "share""quoted"'
 assert_log_contains 'DROP SECRET IF EXISTS "secret""quoted" FROM motherduck'
 
+# Every cleanup mutation carries the mdexec allow-prefix guard.
+if [[ "$(grep -c -- '-allow-prefix tf ' "${LIVE_COMMON_TEST_LOG}")" -ne 3 ]]; then
+  echo "Expected every cleanup mutation to pass -allow-prefix tf" >&2
+  cat "${LIVE_COMMON_TEST_LOG}" >&2
+  exit 1
+fi
+
 # Each direct cleanup operation returns the mdexec failure and emits a short diagnostic.
 export LIVE_COMMON_TEST_FAILURE=database
 database_status=0
@@ -134,6 +141,8 @@ fi
 export LIVE_COMMON_TEST_SCALAR_OUTPUT="snapshot-id"
 live_unname_snapshot "db" "snapshot"
 assert_log_contains "ALTER SNAPSHOT 'snapshot-id' SET snapshot_name = ''"
+# The snapshot statement names no object, so the guard target is the database.
+assert_log_contains "-allow-prefix tf -database db -allow-target db "
 
 export LIVE_COMMON_TEST_FAILURE=scalar
 lookup_status=0
