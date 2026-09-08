@@ -44,7 +44,7 @@ Outputs:
 
 ```hcl
 module "writer_bootstrap" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.2.2"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.2.3"
 
   writer_username = "svc_writer_prod"
 }

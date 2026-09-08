@@ -82,7 +82,7 @@ Key each tenant by a stable internal tenant id, not by an email or company name.
 
 ```hcl
 module "hypertenancy" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/hypertenancy?ref=v0.2.2"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/hypertenancy?ref=v0.2.3"
 
   tenants = {
     acme = {

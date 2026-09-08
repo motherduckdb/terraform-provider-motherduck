@@ -86,7 +86,7 @@ Stage one creates the writer (see the writer-bootstrap blueprint), and its token
 
 ```hcl
 module "writer_bootstrap" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.2.2"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.2.3"
 
   writer_username = "svc_writer_prod"
 }
@@ -96,7 +96,7 @@ Stage two, in a separate root module and state. Key each tenant by a stable inte
 
 ```hcl
 module "read_hypertenancy" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.2.2"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.2.3"
 
   expected_writer_username = "svc_writer_prod"
 
