@@ -32,6 +32,15 @@ case "$*" in
   *MD_INFORMATION_SCHEMA.DATABASES*) label=databases; row=1 ;;
   *) echo "Unknown audit query" >&2; exit 1 ;;
 esac
+if [[ "${label}" == "named_snapshots" ]]; then
+  if [[ "$*" != *" -timeout 5m "* ]]; then
+    echo "Snapshot audit must have a bounded five-minute budget." >&2
+    exit 1
+  fi
+elif [[ "$*" != *" -timeout 2m "* ]]; then
+  echo "Other audit reads must retain the two-minute timeout." >&2
+  exit 1
+fi
 printf '%s\n' "${label}" >> "${AUDIT_CALLS}"
 if [[ "${AUDIT_STUB_FAIL_LABEL:-}" == "${label}" ]]; then
   echo "stub query failure" >&2

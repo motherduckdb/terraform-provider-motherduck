@@ -24,8 +24,13 @@ func main() {
 	preQuery := flag.String("pre", "", "Optional SQL statement to execute before the main statement")
 	allowPrefix := flag.String("allow-prefix", "", "When set, every mutating SQL statement must target an object whose name starts with this prefix")
 	allowTarget := flag.String("allow-target", "", "Name of the object a mutation targets when the statement itself does not name it (for example ALTER SNAPSHOT by id); checked against -allow-prefix")
+	timeout := flag.Duration("timeout", 2*time.Minute, "Total timeout for connection setup and statements")
 	flag.Parse()
 
+	if *timeout <= 0 {
+		fmt.Fprintln(os.Stderr, "timeout must be greater than zero")
+		os.Exit(2)
+	}
 	if (*execQuery == "" && len(scalarQueryList) == 0) || (*execQuery != "" && len(scalarQueryList) > 0) {
 		fmt.Fprintln(os.Stderr, "exactly one of -sql or -scalar is required")
 		os.Exit(2)
@@ -35,7 +40,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
 	client, err := mdsql.New(ctx, mdsql.Config{

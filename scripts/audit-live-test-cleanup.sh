@@ -25,8 +25,8 @@ found=0
 
 # Keep each catalog read on its own connection. Reusing one connection across
 # these reads regressed the exact-main audit in CI, while the same reads on
-# separate connections complete successfully. Each invocation retains mdexec's
-# bounded two-minute timeout.
+# separate connections complete successfully. Snapshot metadata can approach
+# the ordinary two-minute limit, so only that read gets a five-minute budget.
 audit_labels=(databases owned_shares secrets named_snapshots)
 audit_queries=(
   "SELECT coalesce(string_agg(name, ', ' ORDER BY name), '') FROM MD_INFORMATION_SCHEMA.DATABASES WHERE name LIKE 'tf\\_%' ESCAPE '\\'"
@@ -42,7 +42,11 @@ trap 'rm -f "${audit_output}"' EXIT
 
 for audit_index in "${!audit_queries[@]}"; do
   label="${audit_labels[${audit_index}]}"
-  if ! go run "${ROOT_DIR}/internal/dev/mdexec" -scalar "${audit_queries[${audit_index}]}" > "${audit_output}"; then
+  query_timeout="2m"
+  if [[ "${label}" == "named_snapshots" ]]; then
+    query_timeout="5m"
+  fi
+  if ! go run "${ROOT_DIR}/internal/dev/mdexec" -timeout "${query_timeout}" -scalar "${audit_queries[${audit_index}]}" > "${audit_output}"; then
     echo "Live cleanup audit failed while reading ${label}." >&2
     exit 1
   fi
