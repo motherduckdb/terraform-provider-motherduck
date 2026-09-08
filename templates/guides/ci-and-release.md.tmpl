@@ -49,6 +49,8 @@ Missing `MOTHERDUCK_TOKEN` fails the job instead of producing a successful skip.
 
 The weekly matrix runs read-only checks on every supported Terraform version and OpenTofu `1.12.6`. SQL lifecycle checks run on Terraform `1.5.7`, Terraform `1.16.1`, and OpenTofu `1.12.6`; the blueprint lifecycle runs on Terraform `1.16.1`. Manual inputs can request lifecycle coverage for every selected version.
 
+The SQL lifecycle matrix runs the database drop-with-objects smoke plus the Guide, Dive, Flight, Dive-and-Flight blueprint, and share-grant drift smokes. Each preview-surface smoke exits successfully with a skip when the account does not expose the required `MD_*` functions, so a green matrix is not proof of coverage; set the matching `MD_TF_ACC_REQUIRE_*` variable to turn a skip into a failure.
+
 ## Releases
 
 Releases are published to GitHub only. Follow the [release checklist](release-readiness.md)
@@ -63,7 +65,7 @@ git push origin v0.1.0
 
 The release workflow:
 
-1. Runs the full preflight gate and release packaging check.
+1. Runs the release preflight gate (`make release-preflight-check`) and release packaging check. The preflight is the pull-request gate without `vulncheck`; vulnerability scanning still runs in the release job as an advisory step so a new advisory in an indirect dependency cannot block an unrelated release. Pull-request CI keeps `vulncheck` blocking.
 2. Runs the required SQL lifecycle on the exact tagged commit using the protected live environment.
 3. Builds native provider packages.
 4. Creates a SHA256 digest in each platform build job.
