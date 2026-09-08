@@ -191,11 +191,37 @@ func isNotFoundFor(err error, names ...string) bool {
 			continue
 		}
 		matched = true
-		if strings.Contains(msg, name) {
+		if containsIdentifierWord(msg, name) {
 			return true
 		}
 	}
 	return !matched
+}
+
+// containsIdentifierWord reports whether name appears in msg as a whole
+// identifier token, so a short object name such as "a" does not match the
+// letters inside "catalog". Both inputs must already be lower-cased.
+func containsIdentifierWord(msg, name string) bool {
+	isIdent := func(r byte) bool {
+		return r == '_' || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+	}
+	for start := 0; ; {
+		idx := strings.Index(msg[start:], name)
+		if idx < 0 {
+			return false
+		}
+		idx += start
+		end := idx + len(name)
+		beforeOK := idx == 0 || !isIdent(msg[idx-1])
+		afterOK := end == len(msg) || !isIdent(msg[end])
+		if beforeOK && afterOK {
+			return true
+		}
+		start = idx + 1
+		if start >= len(msg) {
+			return false
+		}
+	}
 }
 
 // sqlBareOptionWordError returns a non-empty detail when value cannot be

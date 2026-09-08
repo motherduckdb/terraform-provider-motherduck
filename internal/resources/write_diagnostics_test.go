@@ -124,3 +124,14 @@ func TestGuideSensitiveValuesCollectsURLs(t *testing.T) {
 		t.Fatal("null list should yield no values")
 	}
 }
+
+func TestRedactSensitiveValuesOverlappingPrefixes(t *testing.T) {
+	short := "https://host/resource"
+	long := short + "?token=secret"
+	for name, order := range map[string][]string{"short first": {short, long}, "long first": {long, short}} {
+		got := redactSensitiveValues("failed: "+long+" and "+short, order)
+		if strings.Contains(got, "secret") || strings.Contains(got, "host/resource") {
+			t.Fatalf("%s: sensitive text survived redaction: %q", name, got)
+		}
+	}
+}

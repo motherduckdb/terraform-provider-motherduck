@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
@@ -48,7 +49,17 @@ func sensitiveWriteDiagnostic(subject string, err error, sensitive []string) str
 // redactSensitiveValues replaces every sensitive value in message, including
 // its SQL string-literal form, with a placeholder.
 func redactSensitiveValues(message string, sensitive []string) string {
+	// Redact longer values first so a value that is a prefix of another does
+	// not split the longer one and leave its tail (for example a query string
+	// carrying a token) in the message.
+	ordered := make([]string, 0, len(sensitive))
 	for _, value := range sensitive {
+		if strings.TrimSpace(value) != "" {
+			ordered = append(ordered, value)
+		}
+	}
+	sort.SliceStable(ordered, func(i, j int) bool { return len(ordered[i]) > len(ordered[j]) })
+	for _, value := range ordered {
 		if strings.TrimSpace(value) == "" {
 			continue
 		}

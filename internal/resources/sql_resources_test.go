@@ -1521,3 +1521,21 @@ func TestSecretApplyRejectsUnsafeValues(t *testing.T) {
 		})
 	}
 }
+
+func TestContainsIdentifierWord(t *testing.T) {
+	cases := map[string]struct {
+		msg, name string
+		want      bool
+	}{
+		"short name inside another word": {"catalog error: table with name b does not exist", "a", false},
+		"short name as whole token":      {"catalog error: table with name a does not exist", "a", true},
+		"quoted name":                    {`catalog error: table "tf_x" does not exist`, "tf_x", true},
+		"name is prefix of another":      {"table tf_x_backup does not exist", "tf_x", false},
+		"name at end":                    {"does not exist: tf_x", "tf_x", true},
+	}
+	for label, tc := range cases {
+		if got := containsIdentifierWord(tc.msg, tc.name); got != tc.want {
+			t.Fatalf("%s: containsIdentifierWord(%q, %q) = %v, want %v", label, tc.msg, tc.name, got, tc.want)
+		}
+	}
+}

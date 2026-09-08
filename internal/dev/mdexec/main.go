@@ -24,7 +24,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "exactly one of -sql or -scalar is required")
 		os.Exit(2)
 	}
-	if err := validateAllowedPrefix(*allowPrefix, *allowTarget, *execQuery, *preQuery); err != nil {
+	if err := validateAllowedPrefix(*allowPrefix, *allowTarget, *execQuery, *preQuery, *scalarQuery); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
@@ -88,9 +88,25 @@ func validateAllowedPrefix(prefix, target string, queries ...string) error {
 		return nil
 	}
 	for _, query := range queries {
-		for _, statement := range splitStatements(query) {
+		statements, err := splitStatements(query)
+		if err != nil {
+			return fmt.Errorf("SQL rejected under allow-prefix: %s", err)
+		}
+		for _, statement := range statements {
 			tokens := tokenize(statement)
-			if len(tokens) == 0 || !isMutation(tokens[0]) {
+			if len(tokens) == 0 {
+				continue
+			}
+			if !isMutation(tokens[0]) {
+				// Fail closed: only known read-only statement shapes pass
+				// without naming a prefixed target, and they must not embed a
+				// mutation (for example WITH ... INSERT or a second verb).
+				if !isReadOnlyStarter(tokens[0]) {
+					return fmt.Errorf("SQL rejected under allow-prefix: unsupported statement %q: %s", tokens[0].text, statement)
+				}
+				if verb := embeddedMutation(tokens); verb != "" {
+					return fmt.Errorf("SQL rejected under allow-prefix: read-only statement embeds %s: %s", verb, statement)
+				}
 				continue
 			}
 			name, needsTarget, err := mutationTarget(tokens)
@@ -112,6 +128,61 @@ func validateAllowedPrefix(prefix, target string, queries ...string) error {
 		}
 	}
 	return nil
+}
+
+// isReadOnlyStarter reports whether a statement beginning with this bare
+// keyword is one the guard lets through without a prefixed target. ATTACH is
+// deliberately absent because "ATTACH 'md:name'" creates a MotherDuck
+// database; CALL is absent because MotherDuck table functions can mutate.
+func isReadOnlyStarter(first token) bool {
+	if first.quoted || first.literal {
+		return false
+	}
+	switch strings.ToUpper(first.text) {
+	case "SELECT", "FROM", "WITH", "VALUES", "SHOW", "DESCRIBE", "DESC", "SUMMARIZE", "EXPLAIN",
+		"USE", "SET", "RESET", "DETACH", "INSTALL", "LOAD", "PRAGMA":
+		return true
+	}
+	return false
+}
+
+// embeddedMutation returns the mutation verb found inside an otherwise
+// read-only statement, or "" when none is present. It looks for the shapes
+// DuckDB accepts after a CTE or in a compound statement: INSERT INTO,
+// DELETE FROM, UPDATE <name> SET, and CREATE/DROP/ALTER/TRUNCATE/GRANT/
+// REVOKE/COPY followed by a bare word. Quoted identifiers and string
+// literals never match, so a column named "update" is not a false positive.
+func embeddedMutation(tokens []token) string {
+	bare := func(i int) string {
+		if i >= len(tokens) || tokens[i].quoted || tokens[i].literal {
+			return ""
+		}
+		return strings.ToUpper(tokens[i].text)
+	}
+	isName := func(i int) bool {
+		return i < len(tokens) && !tokens[i].literal && (tokens[i].quoted || isBareIdentifier(tokens[i].text))
+	}
+	for i := range tokens {
+		switch bare(i) {
+		case "INSERT":
+			if bare(i+1) == "INTO" {
+				return "INSERT"
+			}
+		case "DELETE":
+			if bare(i+1) == "FROM" {
+				return "DELETE"
+			}
+		case "UPDATE":
+			if isName(i+1) && bare(i+2) == "SET" {
+				return "UPDATE"
+			}
+		case "CREATE", "DROP", "ALTER", "TRUNCATE", "GRANT", "REVOKE", "COPY":
+			if next := bare(i + 1); next != "" && isBareIdentifier(next) {
+				return strings.ToUpper(tokens[i].text)
+			}
+		}
+	}
+	return ""
 }
 
 func isMutation(first token) bool {
@@ -212,8 +283,12 @@ type token struct {
 	literal bool // 'single-quoted' string literal, unescaped
 }
 
-// splitStatements splits on semicolons outside quotes and comments.
-func splitStatements(query string) []string {
+// splitStatements splits on semicolons outside quotes and comments. Block
+// comments that contain another "/*" are rejected rather than parsed: DuckDB
+// nests block comments, so a scanner that stopped at the first "*/" would
+// expose text DuckDB still treats as a comment, and vice versa. Unterminated
+// block comments are rejected for the same reason.
+func splitStatements(query string) ([]string, error) {
 	var statements []string
 	var current strings.Builder
 	runes := []rune(query)
@@ -231,8 +306,19 @@ func splitStatements(query string) []string {
 			current.WriteRune(' ')
 		case r == '/' && i+1 < len(runes) && runes[i+1] == '*':
 			i += 2
-			for i+1 < len(runes) && (runes[i] != '*' || runes[i+1] != '/') {
+			closed := false
+			for i+1 < len(runes) {
+				if runes[i] == '/' && runes[i+1] == '*' {
+					return nil, fmt.Errorf("nested block comment is not supported")
+				}
+				if runes[i] == '*' && runes[i+1] == '/' {
+					closed = true
+					break
+				}
 				i++
+			}
+			if !closed {
+				return nil, fmt.Errorf("unterminated block comment")
 			}
 			i++
 			current.WriteRune(' ')
@@ -250,7 +336,7 @@ func splitStatements(query string) []string {
 			clean = append(clean, strings.TrimSpace(statement))
 		}
 	}
-	return clean
+	return clean, nil
 }
 
 // skipQuoted returns the index just past the closing quote starting at start,
