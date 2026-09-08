@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"strings"
+	"time"
 
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
 
@@ -268,7 +269,39 @@ func (r *accessTokenResource) Read(ctx context.Context, req resource.ReadRequest
 			return
 		}
 	}
+	// The token is absent from a listing the client walked to the last page,
+	// so it was deleted or expired out of band and must leave state. The API
+	// has no per-token GET to confirm, and the listing shape is unspecified
+	// enough that a future server-side cap could hide live tokens. A token
+	// past its recorded expire_at is expected to be gone; anything else is
+	// surfaced as a warning so a replacement never happens silently.
+	if !accessTokenExpired(state.ExpireAt, time.Now()) {
+		resp.Diagnostics.AddWarning(
+			"MotherDuck access token not found",
+			"Access token "+state.ID.ValueString()+" for user "+state.Username.ValueString()+" was not returned by the MotherDuck token listing and has been removed from state. "+
+				"The next apply will create a replacement token with a new secret. If the token still exists in MotherDuck, import it again instead of applying.",
+		)
+	}
 	resp.State.RemoveResource(ctx)
+}
+
+// accessTokenExpired reports whether expire_at is a known timestamp in the past.
+// Unknown, null, or unparseable values count as not expired so the caller stays
+// on the cautious path.
+func accessTokenExpired(expireAt types.String, now time.Time) bool {
+	if expireAt.IsNull() || expireAt.IsUnknown() {
+		return false
+	}
+	raw := strings.TrimSpace(expireAt.ValueString())
+	if raw == "" {
+		return false
+	}
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02T15:04:05.999999999", "2006-01-02 15:04:05.999999999-07:00", "2006-01-02 15:04:05.999999999"} {
+		if when, err := time.Parse(layout, raw); err == nil {
+			return when.Before(now)
+		}
+	}
+	return false
 }
 
 func (r *accessTokenResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {

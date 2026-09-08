@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
@@ -317,5 +318,151 @@ func TestValidateDucklingCooldownsDefersUnknownValues(t *testing.T) {
 	var diags diag.Diagnostics
 	if !validateDucklingCooldowns(&model, &diags) {
 		t.Fatalf("unknown cross-field values should defer validation: %v", diags)
+	}
+}
+
+func TestAccessTokenReadDeletionInference(t *testing.T) {
+	const username = "svc_reader"
+	const tokenID = "tok_123"
+	future := time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
+	past := time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339)
+
+	tests := map[string]struct {
+		status      int
+		body        string
+		expireAt    types.String
+		wantRemoved bool
+		wantWarning bool
+		wantErr     bool
+	}{
+		"present token refreshes state": {
+			status:   http.StatusOK,
+			body:     `{"tokens":[{"id":"` + tokenID + `","name":"reader","token_type":"read_write","created_ts":"2026-01-01T00:00:00Z","expire_at":"` + future + `"}]}`,
+			expireAt: types.StringValue(future),
+		},
+		"absent expired token drops state quietly": {
+			status:      http.StatusOK,
+			body:        `{"tokens":[]}`,
+			expireAt:    types.StringValue(past),
+			wantRemoved: true,
+		},
+		"absent live token drops state with warning": {
+			status:      http.StatusOK,
+			body:        `{"tokens":[{"id":"other","token_type":"read_write","created_ts":"2026-01-01T00:00:00Z"}]}`,
+			expireAt:    types.StringValue(future),
+			wantRemoved: true,
+			wantWarning: true,
+		},
+		"absent token without expiry drops state with warning": {
+			status:      http.StatusOK,
+			body:        `{"tokens":[]}`,
+			expireAt:    types.StringNull(),
+			wantRemoved: true,
+			wantWarning: true,
+		},
+		"list error preserves state": {
+			status:   http.StatusBadGateway,
+			body:     `<html>upstream unavailable</html>`,
+			expireAt: types.StringValue(future),
+			wantErr:  true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if want := "/v1/users/" + username + "/tokens"; r.URL.Path != want {
+					t.Errorf("path = %q, want %q", r.URL.Path, want)
+				}
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+
+			client, err := mdrest.New(server.URL, "admin-token", mdrest.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			res := NewAccessTokenResource().(*accessTokenResource)
+			var configureResp resource.ConfigureResponse
+			res.Configure(ctx, resource.ConfigureRequest{ProviderData: &providerctx.Context{REST: client}}, &configureResp)
+			if configureResp.Diagnostics.HasError() {
+				t.Fatalf("configure diagnostics: %v", configureResp.Diagnostics)
+			}
+			var schemaResp resource.SchemaResponse
+			res.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+			if schemaResp.Diagnostics.HasError() {
+				t.Fatalf("schema diagnostics: %v", schemaResp.Diagnostics)
+			}
+			priorState := tfsdk.State{Schema: schemaResp.Schema}
+			if diags := priorState.Set(ctx, accessTokenModel{
+				ID:        types.StringValue(tokenID),
+				Username:  types.StringValue(username),
+				Name:      types.StringValue("reader"),
+				TTL:       types.Int64Null(),
+				TokenType: types.StringValue("read_write"),
+				Token:     types.StringValue("secret-value"),
+				ExpireAt:  tc.expireAt,
+				CreatedTS: types.StringValue("2026-01-01T00:00:00Z"),
+				ReadOnly:  types.BoolValue(false),
+			}); diags.HasError() {
+				t.Fatalf("seeding prior state: %v", diags)
+			}
+
+			readResp := resource.ReadResponse{State: priorState}
+			res.Read(ctx, resource.ReadRequest{State: priorState}, &readResp)
+
+			if gotErr := readResp.Diagnostics.HasError(); gotErr != tc.wantErr {
+				t.Fatalf("read error = %t, want %t: %v", gotErr, tc.wantErr, readResp.Diagnostics)
+			}
+			if gotRemoved := readResp.State.Raw.IsNull(); gotRemoved != tc.wantRemoved {
+				t.Fatalf("state removed = %t, want %t", gotRemoved, tc.wantRemoved)
+			}
+			gotWarning := readResp.Diagnostics.WarningsCount() > 0
+			if gotWarning != tc.wantWarning {
+				t.Fatalf("warning present = %t, want %t: %v", gotWarning, tc.wantWarning, readResp.Diagnostics)
+			}
+			if tc.wantWarning {
+				text := readResp.Diagnostics.Warnings()[0].Detail()
+				if !strings.Contains(text, tokenID) || strings.Contains(text, "secret-value") {
+					t.Fatalf("warning should name the token ID and never the secret: %q", text)
+				}
+			}
+			if !tc.wantRemoved && !tc.wantErr {
+				var got accessTokenModel
+				if diags := readResp.State.Get(ctx, &got); diags.HasError() {
+					t.Fatalf("reading state: %v", diags)
+				}
+				if got.Token.ValueString() != "secret-value" {
+					t.Fatalf("secret was not preserved across Read: %q", got.Token.ValueString())
+				}
+			}
+		})
+	}
+}
+
+func TestAccessTokenExpired(t *testing.T) {
+	now := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+	tests := map[string]struct {
+		value types.String
+		want  bool
+	}{
+		"null":                {types.StringNull(), false},
+		"unknown":             {types.StringUnknown(), false},
+		"empty":               {types.StringValue(""), false},
+		"garbage":             {types.StringValue("soon"), false},
+		"rfc3339 past":        {types.StringValue("2026-09-01T00:00:00Z"), true},
+		"rfc3339 future":      {types.StringValue("2026-12-01T00:00:00Z"), false},
+		"fractional past":     {types.StringValue("2026-09-01T00:00:00.123456Z"), true},
+		"space separated":     {types.StringValue("2026-09-01 00:00:00.123456+00:00"), true},
+		"no zone in the past": {types.StringValue("2026-09-01T00:00:00"), true},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := accessTokenExpired(tc.value, now); got != tc.want {
+				t.Fatalf("accessTokenExpired(%v) = %t, want %t", tc.value, got, tc.want)
+			}
+		})
 	}
 }

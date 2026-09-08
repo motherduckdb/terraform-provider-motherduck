@@ -73,7 +73,10 @@ func New(baseURL, token string, opts ...Option) (*Client, error) {
 	}
 	client := &Client{
 		baseURL: strings.TrimRight(parsed.String(), "/"),
-		token:   token,
+		// Trim once here: a token sourced from a file often carries a trailing
+		// newline, which would otherwise surface as an opaque
+		// "invalid header field value" error on every request.
+		token: strings.TrimSpace(token),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -85,7 +88,7 @@ func New(baseURL, token string, opts ...Option) (*Client, error) {
 }
 
 func (c *Client) Available() bool {
-	return c != nil && strings.TrimSpace(c.token) != ""
+	return c != nil && c.token != ""
 }
 
 func (c *Client) CreateServiceAccount(ctx context.Context, username string) (*ServiceAccount, error) {
