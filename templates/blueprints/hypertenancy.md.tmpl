@@ -59,6 +59,28 @@ Generated reader tokens expire after `reader_token_ttl_seconds` (30 days by defa
 
 Removing a tenant from the `tenants` map destroys that tenant's database and all data inside it on the next apply. Snapshot or export tenant data first and treat tenant removal as deliberate offboarding.
 
+## Inputs And Outputs
+
+Inputs:
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `database_prefix` | Prefix for tenant database names. | `"tenant"` |
+| `reader_prefix` | Prefix for tenant reader service account usernames. | `"svc_reader"` |
+| `share_prefix` | Prefix for tenant share names. | `"share"` |
+| `reader_token_ttl_seconds` | TTL for generated tenant reader tokens, between 300 and 31536000 seconds. | `2592000` (30 days) |
+| `tenants` | Tenant definitions keyed by stable tenant id. Each value accepts optional `display_name`, `slug`, and `snapshot_retention_days` (default `7`). Normalized slugs must be unique across tenants. | required |
+
+Outputs:
+
+| Output | Description |
+| --- | --- |
+| `tenants` | Per-tenant summary keyed by tenant id: display name, database, share, and reader username. |
+| `tenant_databases` | Tenant database names keyed by tenant id. |
+| `tenant_shares` | Tenant share names keyed by tenant id. |
+| `reader_usernames` | Reader service account usernames keyed by tenant id. |
+| `reader_tokens` | Generated reader tokens keyed by tenant id (sensitive). Store these in a secret manager. |
+
 ## Example
 
 Key each tenant by a stable internal tenant id, not by an email or company name; renaming a tenant key replaces every resource for that tenant. Pin the module source to a release tag when consuming this blueprint from another repository.

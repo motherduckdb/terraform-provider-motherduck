@@ -18,6 +18,23 @@ Store the generated writer token in a secret manager immediately. Downstream dat
 
 The writer token expires after `writer_token_ttl_seconds` (30 days by default) and Terraform does not rotate it automatically. Rotate with `terraform apply -replace=module.writer_bootstrap.motherduck_access_token.writer`, update the secret manager, and refresh the credentials used by the data-plane Terraform and the ingestion runtime.
 
+## Inputs And Outputs
+
+Inputs:
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `writer_username` | Service account username that will own tenant databases and shares. Must start with an ASCII letter and contain only ASCII letters, digits, and underscores. | required |
+| `writer_token_name` | Name for the generated writer access token. | `"terraform-writer"` |
+| `writer_token_ttl_seconds` | TTL for the generated writer token, between 300 and 31536000 seconds. | `2592000` (30 days) |
+
+Outputs:
+
+| Output | Description |
+| --- | --- |
+| `writer_username` | Writer service account username. |
+| `writer_token` | Generated writer token (sensitive). Store it in a secret manager; downstream data-plane Terraform uses it as `MOTHERDUCK_TOKEN`. |
+
 ## Example
 
 ```hcl

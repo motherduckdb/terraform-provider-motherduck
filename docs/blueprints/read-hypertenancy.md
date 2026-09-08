@@ -61,9 +61,32 @@ Each tenant receives a reader service account and token. The token should be dis
 
 ## Token Lifecycle And Offboarding
 
-Generated writer and reader tokens expire after their configured TTLs (30 days by default) and Terraform does not rotate them automatically. Plan a rotation workflow, for example `terraform apply -replace='module.read_hypertenancy.motherduck_access_token.reader["acme"]'`, before the TTL elapses. Rotating the writer token also means updating the data-plane Terraform credentials.
+Generated writer and reader tokens expire after their configured TTLs (`writer_token_ttl_seconds` in the writer-bootstrap blueprint and `reader_token_ttl_seconds` here, 30 days by default) and Terraform does not rotate them automatically. Plan a rotation workflow, for example `terraform apply -replace='module.read_hypertenancy.motherduck_access_token.reader["acme"]'`, before the TTL elapses. Rotating the writer token also means updating the data-plane Terraform credentials.
 
 Removing a tenant from the `tenants` map destroys that tenant's database and all data inside it on the next apply. Snapshot or export tenant data first and treat tenant removal as deliberate offboarding.
+
+## Inputs And Outputs
+
+Inputs:
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `expected_writer_username` | Optional guard: fail the plan when the provider's SQL identity does not match this writer service account username. Leave null to skip the check. | `null` |
+| `database_prefix` | Prefix for tenant database names. | `"tenant"` |
+| `reader_prefix` | Prefix for tenant reader service account usernames. | `"svc_reader"` |
+| `share_prefix` | Prefix for tenant share names. | `"share"` |
+| `reader_token_ttl_seconds` | TTL for generated tenant reader tokens, between 300 and 31536000 seconds. | `2592000` (30 days) |
+| `tenants` | Tenant definitions keyed by stable tenant id. Each value accepts optional `display_name`, `slug`, and `snapshot_retention_days` (default `7`). Normalized slugs must be unique across tenants. | required |
+
+Outputs:
+
+| Output | Description |
+| --- | --- |
+| `tenants` | Per-tenant summary keyed by tenant id: display name, database, share, and reader username. |
+| `tenant_databases` | Tenant database names keyed by tenant id. |
+| `tenant_shares` | Tenant share names keyed by tenant id. |
+| `reader_usernames` | Reader service account usernames keyed by tenant id. |
+| `reader_tokens` | Generated reader tokens keyed by tenant id (sensitive). Store these in a secret manager. |
 
 ## Example
 
