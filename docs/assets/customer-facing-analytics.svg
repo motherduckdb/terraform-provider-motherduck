@@ -1,45 +1,146 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="382" viewBox="0 0 1120 382" role="img" aria-labelledby="title desc">
-<title id="title">Customer isolation</title><desc id="desc">A central writer owns Acme and Globex databases. Each restricted share is granted to its own reader account. The backend authenticates and routes each tenant.</desc>
-<rect width="1120" height="382" fill="#F8F8F7"/>
-<rect x="242" y="24" width="650" height="144" rx="2" fill="#F4EFEA" stroke="#C5BBB1"/>
-<text x="260" y="52" fill="#383838" font-family="Arial, sans-serif" font-size="16" font-weight="700">Acme</text>
-<rect x="242" y="214" width="650" height="144" rx="2" fill="#F4EFEA" stroke="#C5BBB1"/>
-<text x="260" y="242" fill="#383838" font-family="Arial, sans-serif" font-size="16" font-weight="700">Globex</text>
-<rect x="32" y="155" width="160" height="72" rx="2" fill="#D0EEE8" stroke="#383838"/>
-<text x="48" y="199.0" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Writer</text>
-<rect x="260" y="80" width="162" height="64" rx="2" fill="#FFFFFF" stroke="#383838"/>
-<text x="276" y="120.0" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Database</text>
-<rect x="461" y="80" width="186" height="64" rx="2" fill="#FFFFFF" stroke="#383838"/>
-<text x="477" y="112" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Share</text>
-<text x="477" y="134" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">Restricted</text>
-<rect x="686" y="80" width="186" height="64" rx="2" fill="#CEEBFF" stroke="#383838"/>
-<text x="702" y="112" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Reader account</text>
-<text x="702" y="134" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">Read pool</text>
-<polyline points="422,112 461,112" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="461,112 453,107 453,117" fill="#383838"/>
-<polyline points="647,112 686,112" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="686,112 678,107 678,117" fill="#383838"/>
-<rect x="260" y="270" width="162" height="64" rx="2" fill="#FFFFFF" stroke="#383838"/>
-<text x="276" y="310.0" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Database</text>
-<rect x="461" y="270" width="186" height="64" rx="2" fill="#FFFFFF" stroke="#383838"/>
-<text x="477" y="302" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Share</text>
-<text x="477" y="324" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">Restricted</text>
-<rect x="686" y="270" width="186" height="64" rx="2" fill="#CEEBFF" stroke="#383838"/>
-<text x="702" y="302" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Reader account</text>
-<text x="702" y="324" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">Read pool</text>
-<polyline points="422,302 461,302" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="461,302 453,297 453,307" fill="#383838"/>
-<polyline points="647,302 686,302" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="686,302 678,297 678,307" fill="#383838"/>
-<rect x="948" y="155" width="140" height="72" rx="2" fill="#FAF175" stroke="#383838"/>
-<text x="964" y="187" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Backend</text>
-<text x="964" y="209" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">Auth + routing</text>
-<polyline points="192,178 215,178 215,112 260,112" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="260,112 252,107 252,117" fill="#383838"/>
-<polyline points="192,204 215,204 215,302 260,302" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="260,302 252,297 252,307" fill="#383838"/>
-<polyline points="872,112 919,112 919,178 948,178" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="948,178 940,173 940,183" fill="#383838"/>
-<polyline points="872,302 919,302 919,204 948,204" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="948,204 940,199 940,209" fill="#383838"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="610" viewBox="0 0 1200 610" role="img" aria-labelledby="title desc">
+<title id="title">Customer-facing analytics</title><desc id="desc">A central writer owns both tenant databases and restricted shares. Each share is granted only to its tenant reader account with separate compute. The application backend authenticates the tenant and routes queries to the matching reader.</desc>
+<rect width="1200" height="610" fill="#F8F8F7"/>
+<g transform="translate(32 26) scale(1.52)">
+<path d="M1.22059 15.1467C1.22059 15.1467 8.01485 19.8856 8.42868 20.1226C8.82772 20.3586 9.41175 20.4144 9.92426 20.2199C10.4373 20.0253 10.822 19.5805 10.9359 19.1357C11.0642 18.6909 12.617 10.6847 12.617 10.6847C12.6313 10.5736 12.6737 10.2542 12.5026 9.94812C12.2604 9.53144 11.7193 9.30927 11.2349 9.44753C10.9684 9.52492 10.7401 9.69835 10.5941 9.9343C10.5083 10.0869 10.3519 10.3376 10.0668 10.5598C9.85323 10.7267 9.63964 10.8239 9.54 10.8654C8.67087 11.2134 7.7021 10.9212 7.14668 10.2265C6.80484 9.79556 6.19221 9.62869 5.65061 9.83704C5.39458 9.93693 5.17744 10.1165 5.03124 10.3492C4.88505 10.5819 4.81755 10.8555 4.8387 11.1295C4.93882 11.9915 4.44013 12.853 3.5567 13.2006C3.10486 13.3735 2.60777 13.3883 2.14645 13.2425C2.04633 13.2144 1.69067 13.1314 1.33453 13.3259C0.893055 13.5481 0.665165 14.0764 0.77911 14.5488C0.864449 14.8683 1.12094 15.0771 1.22059 15.1467Z" fill="#FF9538"/>
+<path d="M12.5454 4.76395C12.5454 4.76395 14.9673 12.5751 15.138 12.9923C15.3092 13.4233 15.7363 13.8123 16.2632 13.9649C16.7905 14.1179 17.3745 13.993 17.7449 13.7151C18.1154 13.4371 24.369 8.03022 24.369 8.03022C24.563 7.86085 24.6937 7.63051 24.7394 7.37706C24.8109 6.90459 24.5115 6.404 24.0558 6.22331C23.7937 6.12714 23.5059 6.12714 23.2438 6.22331C23.087 6.29291 22.8019 6.39017 22.4458 6.404C22.1611 6.4183 21.9475 6.36252 21.8336 6.33439C20.9359 6.0841 20.3375 5.27838 20.3375 4.40257C20.3288 4.12912 20.2329 3.86562 20.0637 3.65058C19.8946 3.43554 19.6611 3.28023 19.3974 3.20734C18.8276 3.0543 18.2436 3.29077 17.9447 3.74942C17.4741 4.49983 16.5483 4.87504 15.6367 4.62474C15.1523 4.486 14.7533 4.19423 14.4973 3.81902C14.4257 3.73511 14.1979 3.45716 13.7993 3.38803C13.3149 3.3046 12.7876 3.58255 12.5883 4.01354C12.4315 4.34727 12.5168 4.65239 12.5454 4.76395Z" fill="#FF9538"/>
+</g>
+<text x="83" y="55" fill="#383838" font-family="Arial, sans-serif" font-size="27" font-weight="700">MotherDuck</text>
+<text x="285" y="55" fill="#383838" font-family="Arial, sans-serif" font-size="22" font-weight="400">Customer-facing analytics</text>
+<text x="34" y="98" fill="#666666" font-family="Arial, sans-serif" font-size="15" font-weight="400">Writer-owned data · Tenant-specific access and compute</text>
+<rect x="32" y="125" width="535" height="450" rx="5" fill="#F4EFEA" stroke="#C5BBB1"/>
+<ellipse cx="58.5" cy="150.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
+<polyline points="48,169 48,165 54,161 63,161 69,165 69,169" fill="none" stroke="#383838" stroke-width="2"/>
+<text x="80" y="165" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Central writer account</text>
+<ellipse cx="144.0" cy="281.0" rx="64.0" ry="13.0" fill="#FAF175" stroke="#383838"/>
+<rect x="80" y="207" width="128" height="74" rx="0" fill="#FAF175" stroke="#FAF175"/>
+<polyline points="80,207 80,281" fill="none" stroke="#383838" stroke-width="1"/>
+<polyline points="208,207 208,281" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="144.0" cy="207.0" rx="64.0" ry="13.0" fill="#FFF9BF" stroke="#383838"/>
+<polyline points="99,239 189,239" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<polyline points="99,258 189,258" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<text x="78.0" y="330" fill="#383838" font-family="Arial, sans-serif" font-size="18" font-weight="700">Acme database</text>
+<rect x="373" y="218" width="108" height="58" rx="4" fill="#CEEBFF" stroke="#383838"/>
+<polyline points="401,247 455,235" fill="none" stroke="#383838" stroke-width="1"/>
+<polyline points="401,247 455,259" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="398.0" cy="247.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
+<ellipse cx="456.0" cy="235.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
+<ellipse cx="456.0" cy="259.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
+<text x="356.5" y="330" fill="#383838" font-family="Arial, sans-serif" font-size="18" font-weight="700">Restricted share</text>
+<polyline points="216,248 365,248" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="365,248 357,243 357,253" fill="#383838"/>
+<rect x="615" y="151" width="281" height="186" rx="5" fill="#F0F8FD" stroke="#AACADD"/>
+<ellipse cx="641.5" cy="176.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
+<polyline points="631,195 631,191 637,187 646,187 652,191 652,195" fill="none" stroke="#383838" stroke-width="2"/>
+<text x="663" y="191" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Acme reader</text>
+<rect x="724" y="216" width="96" height="66" rx="4" fill="#CEEBFF" stroke="#383838"/>
+<rect x="739" y="231" width="66" height="36" rx="2" fill="#97D4FF" stroke="#383838"/>
+<rect x="762.0" y="239.0" width="20" height="20" rx="1" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="744.0,209 744.0,216" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="744.0,282 744.0,289" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="762.6666666666666,209 762.6666666666666,216" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="762.6666666666666,282 762.6666666666666,289" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="781.3333333333334,209 781.3333333333334,216" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="781.3333333333334,282 781.3333333333334,289" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="800.0,209 800.0,216" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="800.0,282 800.0,289" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="717,234.0 724,234.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="820,234.0 827,234.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="717,249.0 724,249.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="820,249.0 827,249.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="717,264.0 724,264.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="820,264.0 827,264.0" fill="none" stroke="#383838" stroke-width="2"/>
+<rect x="697" y="243" width="96" height="66" rx="4" fill="#CEEBFF" stroke="#383838"/>
+<rect x="712" y="258" width="66" height="36" rx="2" fill="#97D4FF" stroke="#383838"/>
+<rect x="735.0" y="266.0" width="20" height="20" rx="1" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="717.0,236 717.0,243" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="717.0,309 717.0,316" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="735.6666666666666,236 735.6666666666666,243" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="735.6666666666666,309 735.6666666666666,316" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="754.3333333333334,236 754.3333333333334,243" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="754.3333333333334,309 754.3333333333334,316" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="773.0,236 773.0,243" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="773.0,309 773.0,316" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="690,261.0 697,261.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="793,261.0 800,261.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="690,276.0 697,276.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="793,276.0 800,276.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="690,291.0 697,291.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="793,291.0 800,291.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="489,248 684,248" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="684,248 676,243 676,253" fill="#383838"/>
+<ellipse cx="144.0" cy="482.0" rx="64.0" ry="13.0" fill="#FAF175" stroke="#383838"/>
+<rect x="80" y="408" width="128" height="74" rx="0" fill="#FAF175" stroke="#FAF175"/>
+<polyline points="80,408 80,482" fill="none" stroke="#383838" stroke-width="1"/>
+<polyline points="208,408 208,482" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="144.0" cy="408.0" rx="64.0" ry="13.0" fill="#FFF9BF" stroke="#383838"/>
+<polyline points="99,440 189,440" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<polyline points="99,459 189,459" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<text x="72.0" y="531" fill="#383838" font-family="Arial, sans-serif" font-size="18" font-weight="700">Globex database</text>
+<rect x="373" y="419" width="108" height="58" rx="4" fill="#CEEBFF" stroke="#383838"/>
+<polyline points="401,448 455,436" fill="none" stroke="#383838" stroke-width="1"/>
+<polyline points="401,448 455,460" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="398.0" cy="448.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
+<ellipse cx="456.0" cy="436.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
+<ellipse cx="456.0" cy="460.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
+<text x="356.5" y="531" fill="#383838" font-family="Arial, sans-serif" font-size="18" font-weight="700">Restricted share</text>
+<polyline points="216,449 365,449" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="365,449 357,444 357,454" fill="#383838"/>
+<rect x="615" y="352" width="281" height="186" rx="5" fill="#F0F8FD" stroke="#AACADD"/>
+<ellipse cx="641.5" cy="377.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
+<polyline points="631,396 631,392 637,388 646,388 652,392 652,396" fill="none" stroke="#383838" stroke-width="2"/>
+<text x="663" y="392" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Globex reader</text>
+<rect x="724" y="417" width="96" height="66" rx="4" fill="#CEEBFF" stroke="#383838"/>
+<rect x="739" y="432" width="66" height="36" rx="2" fill="#97D4FF" stroke="#383838"/>
+<rect x="762.0" y="440.0" width="20" height="20" rx="1" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="744.0,410 744.0,417" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="744.0,483 744.0,490" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="762.6666666666666,410 762.6666666666666,417" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="762.6666666666666,483 762.6666666666666,490" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="781.3333333333334,410 781.3333333333334,417" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="781.3333333333334,483 781.3333333333334,490" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="800.0,410 800.0,417" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="800.0,483 800.0,490" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="717,435.0 724,435.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="820,435.0 827,435.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="717,450.0 724,450.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="820,450.0 827,450.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="717,465.0 724,465.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="820,465.0 827,465.0" fill="none" stroke="#383838" stroke-width="2"/>
+<rect x="697" y="444" width="96" height="66" rx="4" fill="#CEEBFF" stroke="#383838"/>
+<rect x="712" y="459" width="66" height="36" rx="2" fill="#97D4FF" stroke="#383838"/>
+<rect x="735.0" y="467.0" width="20" height="20" rx="1" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="717.0,437 717.0,444" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="717.0,510 717.0,517" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="735.6666666666666,437 735.6666666666666,444" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="735.6666666666666,510 735.6666666666666,517" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="754.3333333333334,437 754.3333333333334,444" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="754.3333333333334,510 754.3333333333334,517" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="773.0,437 773.0,444" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="773.0,510 773.0,517" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="690,462.0 697,462.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="793,462.0 800,462.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="690,477.0 697,477.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="793,477.0 800,477.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="690,492.0 697,492.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="793,492.0 800,492.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="489,449 684,449" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="684,449 676,444 676,454" fill="#383838"/>
+<polyline points="56,365 543,365" fill="none" stroke="#D8CFC5" stroke-width="1"/>
+<rect x="1028" y="298" width="108" height="82" rx="4" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="1028,316 1136,316" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="1039.5" cy="306.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<ellipse cx="1048.5" cy="306.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<ellipse cx="1057.5" cy="306.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<rect x="1046" y="350" width="11" height="19" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1066" y="333" width="11" height="36" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1086" y="342" width="11" height="27" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1106" y="325" width="11" height="44" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<text x="1040.75" y="422" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Backend</text>
+<text x="1034.75" y="450" fill="#666666" font-family="Arial, sans-serif" font-size="15" font-weight="400">Auth + routing</text>
+<polyline points="1020,323 959,323 959,248 842,248" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="842,248 850,243 850,253" fill="#383838"/>
+<polyline points="1020,360 959,360 959,449 842,449" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="842,449 850,444 850,454" fill="#383838"/>
+<text x="943" y="225" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">queries</text>
 </svg>

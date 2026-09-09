@@ -8,7 +8,7 @@ infrastructure you can review, reproduce, and manage in Terraform.
 [Examples](examples/warehouses/README.md) ·
 [Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases)
 
-![Terraform provisions identities and warehouse structure. Pipelines write data, and readers query published shares with their own compute.](docs/assets/deployment-model.png)
+[![Terraform provisions MotherDuck resources. A pipeline writes through the writer account to its database. Shares publish read-only data to a separate reader account and read pool for BI and applications.](docs/assets/readme-architecture.png)](docs/guides/deployment-model.md)
 
 ## Start with a workload
 
