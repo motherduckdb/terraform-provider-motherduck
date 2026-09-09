@@ -3,9 +3,12 @@ package resources
 import (
 	"context"
 	stdsql "database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	duckdb "github.com/duckdb/duckdb-go/v2"
 
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
@@ -297,13 +300,25 @@ func (r *diveResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	if err := retry.SQL(ctx, func() error {
 		_, err := client.QueryRowsJSON(ctx, query)
 		return err
-	}); err != nil && !isNotFound(err) {
+	}); err != nil && !isDiveNotFound(err) {
 		resp.Diagnostics.AddError("Unable to delete MotherDuck Dive", err.Error())
 	}
 }
 
 func (r *diveResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importUUIDID(ctx, req.ID, resp)
+}
+
+// Dives report a missing ID as a typed Invalid Error, not a Catalog Error.
+// Match only that exact service response so permission and dependency failures
+// remain diagnostics rather than silently discarding the managed Dive's state.
+func isDiveNotFound(err error) bool {
+	if isNotFound(err) {
+		return true
+	}
+	var duckErr *duckdb.Error
+	return errors.As(err, &duckErr) && duckErr.Type == duckdb.ErrorTypeInvalid &&
+		strings.TrimSpace(duckErr.Msg) == "Invalid Error: MDExternalException: Could not find Dive"
 }
 
 func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *diag.Diagnostics) bool {
@@ -335,7 +350,7 @@ func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *di
 	err := retry.SQL(ctx, func() error {
 		return client.QueryRow(ctx, query).Scan(scanTargets...)
 	})
-	if err == stdsql.ErrNoRows || isNotFound(err) {
+	if err == stdsql.ErrNoRows || isDiveNotFound(err) {
 		return false
 	}
 	if err != nil {
@@ -860,9 +875,9 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 	wantStatus := normalizeFlightRunStatus(model.WaitForStatus.ValueString())
 	pollInterval := time.Duration(int64ValueOrDefault(model.PollIntervalSeconds, 10)) * time.Second
 	timeout := time.Duration(int64ValueOrDefault(model.TimeoutSeconds, 600)) * time.Second
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 	deadline := time.Now().Add(timeout)
+	ctx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
 
 	for {
 		status := normalizeFlightRunStatus(model.Status.ValueString())
@@ -887,7 +902,14 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 		if sleepFor <= 0 {
 			continue
 		}
-		if err := retry.Sleep(ctx, sleepFor); err != nil {
+		err := retry.Sleep(ctx, sleepFor)
+		// Timer and context completion can race. Once our deadline has passed,
+		// report the configured timeout above instead of querying with an
+		// expired context or describing the timeout as an interruption.
+		if !time.Now().Before(deadline) {
+			continue
+		}
+		if err != nil {
 			diags.AddError("Interrupted while waiting for MotherDuck Flight run", err.Error())
 			return
 		}

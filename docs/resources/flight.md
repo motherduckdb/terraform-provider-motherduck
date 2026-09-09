@@ -7,6 +7,14 @@ description: |-
 
 # motherduck_flight (Resource)
 
+> **Deployment recommendation:** Use Terraform for databases, service accounts,
+> access tokens, Duckling configuration, roles/grants, and shares. Keep Dives,
+> Flight Python, and Guide Markdown in version control and deploy them through
+> the MotherDuck CLI or a code deployment pipeline. Terraform apply does not
+> compile application code, validate every data dependency, or run a data load.
+
+See [resource scope and ownership migration](../guides/resource-scope.md).
+
 Manage a Flight's Python definition and optional schedule when Terraform is its
 sole deployment owner. For application packages with previews and promotion,
 use [Blueprints](../guides/blueprints-deployment.md).

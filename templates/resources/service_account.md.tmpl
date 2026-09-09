@@ -22,6 +22,9 @@ SQL identity or move existing databases to the new account.
 
 **Deleting the service account deletes the data it owns.** Destroy downstream
 warehouses with their original writer credential before removing their account.
+Revoke custom-role grants before an external account deletion. Recreating the
+same username creates a new account identity and may leave old role assignments
+that require service-side cleanup. See [role deletion order](role.md#deletion-order).
 Import by username when Terraform should own an existing account's lifecycle.
 
 See [environment bootstrap](../guides/environments.md) and

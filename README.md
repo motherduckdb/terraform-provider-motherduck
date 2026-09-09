@@ -63,6 +63,12 @@ are [separate deployment stages](docs/guides/authentication.md).
 
 ## What belongs in Terraform
 
+> **Deployment recommendation:** Use Terraform for databases, service accounts,
+> access tokens, Duckling configuration, roles/grants, and shares. Keep Dives,
+> Flight Python, and Guide Markdown in version control and deploy them through
+> the MotherDuck CLI or a code deployment pipeline. Terraform apply does not
+> compile application code, validate every data dependency, or run a data load.
+
 | Area | Managed resources |
 | --- | --- |
 | Warehouse structure | Databases, schemas, tables, views |

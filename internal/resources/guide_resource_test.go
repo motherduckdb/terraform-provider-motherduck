@@ -3,8 +3,13 @@ package resources
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"testing"
+
+	duckdb "github.com/duckdb/duckdb-go/v2"
+	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -212,5 +217,41 @@ func TestGuideReferencesFromJSONMapsResolvedIDs(t *testing.T) {
 	}
 	if len(references) != 1 || references[0].UUID.ValueString() != "123e4567-e89b-42d3-a456-426614174000" {
 		t.Fatalf("resolved references = %#v", references)
+	}
+}
+
+type missingGuideClient struct {
+	providerctx.SQLClient
+	err error
+}
+
+func (c missingGuideClient) Available() bool                                      { return true }
+func (c missingGuideClient) Exists(context.Context, string, ...any) (bool, error) { return true, nil }
+func (c missingGuideClient) QueryRow(context.Context, string, ...any) mdsql.RowScanner {
+	return errRowScanner{err: c.err}
+}
+func TestGuideRemoteDeletion(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		err     error
+		missing bool
+	}{
+		{"deleted", &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: "Catalog Error: Could not find guide"}, true},
+		{"permission", &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: "Catalog Error: Permission denied"}, false},
+		{"dependency", &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: "Catalog Error: Could not find guide reference"}, false},
+		{"untyped", errors.New("Catalog Error: Could not find guide"), false},
+		{"transport", context.DeadlineExceeded, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &guideResource{baseResource: baseResource{provider: &providerctx.Context{SQL: missingGuideClient{err: tc.err}}}}
+			model := guideModel{ID: types.StringValue("123e4567-e89b-42d3-a456-426614174000")}
+			var diags diag.Diagnostics
+			if r.readGuide(t.Context(), &model, &diags) {
+				t.Fatal("unexpected successful read")
+			}
+			if diags.HasError() == tc.missing {
+				t.Fatalf("unexpected diagnostics: %v", diags)
+			}
+		})
 	}
 }

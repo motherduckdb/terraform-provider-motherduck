@@ -1342,6 +1342,9 @@ echo "==> Stage 5: provider example validation"
 provider_dir="${root_test_dir}/provider"
 mkdir -p "${provider_dir}"
 cp "${ROOT_DIR}/examples/provider/provider.tf" "${provider_dir}/provider.tf"
+# The copied public example targets a released version. This suite must use
+# its isolated local build, even when PROVIDER_VERSION is a synthetic version.
+sed -E -i.bak "s/(^[[:space:]]*version[[:space:]]*=[[:space:]]*)\"[^\"]*\"/\\1\"= ${PROVIDER_VERSION}\"/" "${provider_dir}/provider.tf"
 run_tf_provider_example "${provider_dir}" init -backend=false -input=false >/dev/null
 run_tf_provider_example "${provider_dir}" validate >/dev/null
 run_tf_provider_example "${provider_dir}" plan -input=false >/dev/null

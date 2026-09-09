@@ -44,6 +44,12 @@ a database being created in the same apply.
 
 ## What Terraform manages
 
+> **Deployment recommendation:** Use Terraform for databases, service accounts,
+> access tokens, Duckling configuration, roles/grants, and shares. Keep Dives,
+> Flight Python, and Guide Markdown in version control and deploy them through
+> the MotherDuck CLI or a code deployment pipeline. Terraform apply does not
+> compile application code, validate every data dependency, or run a data load.
+
 | Area | Resources | Typical use |
 | --- | --- | --- |
 | Warehouse structure | [Database](resources/database.md), [schema](resources/schema.md), [table](resources/table.md), [view](resources/view.md) | Provision landing tables and SQL models |

@@ -7,6 +7,14 @@ description: |-
 
 # motherduck_guide (Resource)
 
+> **Deployment recommendation:** Use Terraform for databases, service accounts,
+> access tokens, Duckling configuration, roles/grants, and shares. Keep Dives,
+> Flight Python, and Guide Markdown in version control and deploy them through
+> the MotherDuck CLI or a code deployment pipeline. Terraform apply does not
+> compile application code, validate every data dependency, or run a data load.
+
+See [resource scope and ownership migration](../guides/resource-scope.md).
+
 Experimental: manage versioned Guide content and its audience as one unit.
 Prefer [Blueprints](../guides/blueprints-deployment.md) when Markdown and related
 application assets are deployed together.

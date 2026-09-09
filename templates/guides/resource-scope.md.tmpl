@@ -5,13 +5,20 @@ subcategory: "Operations"
 
 # Resource scope and migration
 
-The recommended default is Terraform for infrastructure and access controls,
-with application deployment tooling for code and content.
+> **Deployment recommendation:** Use Terraform for databases, service accounts,
+> access tokens, Duckling configuration, roles/grants, and shares. Keep Dives,
+> Flight Python, and Guide Markdown in version control and deploy them through
+> the MotherDuck CLI or a code deployment pipeline. Terraform apply does not
+> compile application code, validate every data dependency, or run a data load.
+
+Terraform's identity resources provision service accounts and manage tokens and
+role assignments. They do not invite or delete human users. Manage human account
+membership through MotherDuck's supported organization administration workflow.
 
 | Surface | Deployment posture |
 | --- | --- |
 | Databases, schemas, tables/views, shares, roles/grants, secrets, service accounts, tokens, Duckling configuration, snapshots | Core infrastructure; consult each resource's lifecycle constraints |
-| Flight definitions and schedules | Optional Terraform ownership; use only when Terraform is the authoritative deployment owner |
+| Flight definitions and schedules | Prefer CLI/code deployment; Terraform remains available when it is the sole owner |
 | Dive and Guide resources | Experimental, outside the stable provider support commitment |
 | Flight-run resource | Deprecated; use CLI/SQL or a deployment pipeline to execute runs |
 | Catalog data sources | Read-only integration with objects managed by either workflow; availability depends on the service |
@@ -19,6 +26,24 @@ with application deployment tooling for code and content.
 Experimental resources remain registered for compatibility. This label is not a
 promise that breaking changes will occur without notice; any migration or removal
 must be documented. It also does not change the service's own availability status.
+
+## CLI and code deployment
+
+Use the MotherDuck CLI for local file-based Dive, Flight, and Guide workflows, or
+[Blueprints](blueprints-deployment.md) for application packages and release
+pipelines. The CLI's `dive`, `flight`, and `guide` commands support local source
+and metadata files with pull/push workflows. Scripts can also use the public
+SQL/MCP functions. Check the installed CLI's help before choosing flags.
+
+Validate Python and dependencies, preview Dive code, and check Guide references
+before deployment. After deployment, verify the saved version, execute a Flight
+when required, and query the resulting data. A successful definition update is
+not proof that a Flight ran or a Dive rendered.
+
+Pass Terraform database names, share identifiers, and service-account names to
+the application pipeline. A missing externally managed database can leave a
+no-op Terraform plan, and recreating a managed table restores structure without
+reloading its rows. See [application lifecycle behavior](state-and-lifecycle.md).
 
 ## One owner per object
 

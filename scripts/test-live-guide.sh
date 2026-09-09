@@ -90,6 +90,21 @@ if [[ "${plan_exit}" -ne 0 ]]; then
   exit "${plan_exit}"
 fi
 
+# External deletion must lead to recreation, including dependent data sources.
+run_tf() { TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" "$@"; }
+for resource_name in foundation managed; do
+  object_id="$(run_tf show -json | python3 -c 'import json,sys; address=sys.argv[1]; print(next(r["values"]["id"] for r in json.load(sys.stdin)["values"]["root_module"]["resources"] if r["address"] == address))' "motherduck_guide.${resource_name}")"
+  go run "${ROOT_DIR}/internal/dev/mdexec" -sql "CALL MD_DELETE_GUIDE(id := '${object_id}'::UUID)"
+  drift_status=0
+  run_tf plan -detailed-exitcode -input=false || drift_status=$?
+  if [[ "${drift_status}" != "2" ]]; then
+    echo "Expected a recreation plan after external deletion, got ${drift_status}" >&2
+    exit 1
+  fi
+  run_tf apply -auto-approve -input=false
+  run_tf plan -detailed-exitcode -input=false
+done
+
 if [[ "${KEEP_LIVE_FIXTURE}" == "1" ]]; then
   trap - EXIT
   echo "Kept live fixture at ${work_dir}"
