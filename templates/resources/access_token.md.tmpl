@@ -41,7 +41,7 @@ See [authentication and rotation](../guides/authentication.md) and
 {{codefile "shell" "examples/resources/motherduck_access_token/import.sh"}}
 
 After import, run `terraform plan` with the token's name and type. Keep `ttl`
-omitted to adopt an existing token without requesting replacement; Terraform
+omitted to adopt an existing token without requesting replacement. Terraform
 cannot recover the original lifetime or token secret.
 
 {{ .SchemaMarkdown | trimspace }}

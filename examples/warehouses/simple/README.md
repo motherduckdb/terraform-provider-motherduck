@@ -28,11 +28,11 @@ resources: one database, two schemas, one table, and one view.
 
 After apply, obtain `terraform output -raw demo_sql`. Run that SQL with the
 same writer identity only in an empty disposable warehouse. It inserts three
-orders; the revenue view returns one row for 2026-01-01, with two completed
+orders. The revenue view returns one row for 2026-01-01, with two completed
 orders and revenue 125.00. Running seed SQL twice duplicates input rows.
 The view assumes one row per order_id and a single currency.
 
-`model_manifest.yml` describes dependencies; Terraform manages the view from
+`model_manifest.yml` describes dependencies. Terraform manages the view from
 `daily_revenue.sql.tftpl`. Types use DATE and DECIMAL instead of string dates or
 floating-point money. The provider's column map expresses types, not key or
 NOT NULL constraints: enforce source uniqueness and required values at ingestion.

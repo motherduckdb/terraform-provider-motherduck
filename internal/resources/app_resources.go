@@ -67,7 +67,7 @@ func (r *diveResource) Metadata(ctx context.Context, req resource.MetadataReques
 func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:             1,
-		MarkdownDescription: "Experimental: manages a MotherDuck Dive through public SQL table functions. Prefer application deployment tooling for Dive content; this surface is outside the provider's stable support commitment.",
+		MarkdownDescription: "Experimental: manages a MotherDuck Dive through public SQL table functions. Prefer application deployment tooling for Dive content. This surface is outside the provider's stable support commitment.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
@@ -80,7 +80,7 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"description": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional Dive description. Set this to an empty string to clear the visible description; removing an existing configured value is rejected because the public SQL update surface does not expose a null-clear operation.",
+				MarkdownDescription: "Optional Dive description. Set this to an empty string to clear the visible description. Removing an existing configured value is rejected because the public SQL update surface does not expose a null-clear operation.",
 			},
 			"content": schema.StringAttribute{
 				Required:            true,
@@ -88,7 +88,7 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"api_version": schema.Int64Attribute{
 				Optional:            true,
-				MarkdownDescription: "Optional Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default. The public MD_GET_DIVE output does not report this value, so import cannot recover it; keep it configured and expect one corrective update after import.",
+				MarkdownDescription: "Optional Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default. The public MD_GET_DIVE output does not report this value, so import cannot recover it. Keep it configured and expect one corrective update after import.",
 			},
 			"required_resources": schema.ListNestedAttribute{
 				Optional:            true,
@@ -113,7 +113,7 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"status": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Dive governance status. New Dives default to `draft`; owners can set `draft`, `ready`, or `archived`, while `endorsed` requires organization-admin permission.",
+				MarkdownDescription: "Dive governance status. New Dives default to `draft`. Owners can set `draft`, `ready`, or `archived`, while `endorsed` requires organization-admin permission.",
 				Validators:          diveStatusValidators(),
 				PlanModifiers:       stringUseStateForUnknown(),
 			},
@@ -797,7 +797,7 @@ func (r *flightRunResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			"wait_for_status": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`; if the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`.",
+				MarkdownDescription: "Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`. If the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`.",
 				Validators:          flightRunWaitStatusValidators(),
 			},
 			"poll_interval_seconds": schema.Int64Attribute{
@@ -885,12 +885,12 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 			return
 		}
 		if flightRunFailed(status) {
-			detail := fmt.Sprintf("Flight run %d reached status %q while waiting for %q. Inspect logs with the sensitive motherduck_flight_logs data source; logs are not copied into diagnostics because they can contain credentials or other sensitive output.", model.RunNumber.ValueInt64(), model.Status.ValueString(), wantStatus)
+			detail := fmt.Sprintf("Flight run %d reached status %q while waiting for %q. Inspect logs with the sensitive motherduck_flight_logs data source. Logs are not copied into diagnostics because they can contain credentials or other sensitive output.", model.RunNumber.ValueInt64(), model.Status.ValueString(), wantStatus)
 			diags.AddError("MotherDuck Flight run failed", detail)
 			return
 		}
 		if !time.Now().Before(deadline) {
-			detail := fmt.Sprintf("Timed out after %d seconds waiting for Flight run %d to reach %q. Last status was %q. Inspect logs with the sensitive motherduck_flight_logs data source; logs are not copied into diagnostics because they can contain credentials or other sensitive output.", int64ValueOrDefault(model.TimeoutSeconds, 600), model.RunNumber.ValueInt64(), wantStatus, model.Status.ValueString())
+			detail := fmt.Sprintf("Timed out after %d seconds waiting for Flight run %d to reach %q. Last status was %q. Inspect logs with the sensitive motherduck_flight_logs data source. Logs are not copied into diagnostics because they can contain credentials or other sensitive output.", int64ValueOrDefault(model.TimeoutSeconds, 600), model.RunNumber.ValueInt64(), wantStatus, model.Status.ValueString())
 			diags.AddError("Timed out waiting for MotherDuck Flight run", detail)
 			return
 		}

@@ -2,7 +2,7 @@
 page_title: "motherduck_guide Resource - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Experimental: manages a versioned MotherDuck Guide through public SQL functions. Prefer application deployment tooling for Guide content; this surface is outside the provider's stable support commitment.
+  Experimental: manages a versioned MotherDuck Guide through public SQL functions. Prefer application deployment tooling for Guide content. This surface is outside the provider's stable support commitment.
 ---
 
 # motherduck_guide (Resource)

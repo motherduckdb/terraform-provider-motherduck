@@ -1,8 +1,8 @@
 # Terraform test fixtures
 
 These are inputs to tests, not deployable examples. Copyable configurations live
-in [examples](../examples). Tests copy fixtures into an isolated working directory;
-never run `terraform apply` directly in this directory.
+in [examples](../examples). Tests copy fixtures into an isolated working directory.
+Never run `terraform apply` directly in this directory.
 
 | Fixture | Owner and purpose |
 | --- | --- |

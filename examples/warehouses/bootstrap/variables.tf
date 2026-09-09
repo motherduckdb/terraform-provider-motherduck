@@ -1,5 +1,5 @@
 variable "account_prefix" {
-  description = "Unique service-account prefix; resulting accounts represent environment ownership."
+  description = "Unique service-account prefix. Resulting accounts represent environment ownership."
   type        = string
   default     = "svc_example_dwh"
   nullable    = false

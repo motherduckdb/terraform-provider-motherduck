@@ -46,14 +46,14 @@ The Terraform compatibility job repeats the offline Terraform checks against sup
 Every matrix job runs `make test-cli-versions` with a checksum-verified CLI
 download. OpenTofu `1.12.6` is included alongside Terraform. Each job checks examples, invalid imports, invalid-configuration diagnostics, and missing-credential diagnostics against one freshly built local provider, without making live MotherDuck calls.
 
-The live-smoke workflow also runs the provider against OpenTofu. The default OpenTofu version is `1.12.6`; override it with the `opentofu_versions` manual workflow input or `TOFU_VERSIONS` locally.
+The live-smoke workflow also runs the provider against OpenTofu. The default OpenTofu version is `1.12.6`. Override it with the `opentofu_versions` manual workflow input or `TOFU_VERSIONS` locally.
 
 ## Native package checks
 
 Four native package jobs run on Linux amd64/arm64 and macOS Intel/ARM runners.
 Each builds the release ZIP, installs it through a filesystem mirror, starts the
 plugin through Terraform schema discovery, and validates its configuration.
-Static and CLI jobs have bounded runtimes; behavior tests run with race detection.
+Static and CLI jobs have bounded runtimes. Behavior tests run with race detection.
 
 ## Trusted live checks
 
@@ -63,11 +63,11 @@ The protected `motherduck-live` GitHub environment supplies:
 
 - `MOTHERDUCK_TOKEN`: read-write MotherDuck token for SQL-backed resources and data sources.
 
-Missing `MOTHERDUCK_TOKEN` fails the job instead of producing a successful skip. The exact-`main` job uses Terraform `1.16.1` and runs `make test-live-required` for SQL, import, no-op-plan, destroy, and cleanup behavior. REST administration behavior is gated hermetically in pull requests; hosted live jobs do not have an organization-admin token.
+Missing `MOTHERDUCK_TOKEN` fails the job instead of producing a successful skip. The exact-`main` job uses Terraform `1.16.1` and runs `make test-live-required` for SQL, import, no-op-plan, destroy, and cleanup behavior. REST administration behavior is gated hermetically in pull requests. Hosted live jobs do not have an organization-admin token.
 
-The weekly matrix runs read-only checks on every supported Terraform version and OpenTofu `1.12.6`. SQL lifecycle checks run on Terraform `1.5.7`, Terraform `1.16.1`, and OpenTofu `1.12.6`; the blueprint lifecycle runs on Terraform `1.16.1`. Manual inputs can request lifecycle coverage for every selected version.
+The weekly matrix runs read-only checks on every supported Terraform version and OpenTofu `1.12.6`. SQL lifecycle checks run on Terraform `1.5.7`, Terraform `1.16.1`, and OpenTofu `1.12.6`. The blueprint lifecycle runs on Terraform `1.16.1`. Manual inputs can request lifecycle coverage for every selected version.
 
-The SQL lifecycle matrix runs the database drop-with-objects smoke plus the Guide, Dive, Flight, Dive-and-Flight blueprint, and share-grant drift smokes. Each preview-surface smoke exits successfully with a skip when the account does not expose the required `MD_*` functions, so a green matrix is not proof of coverage; set the matching `MD_TF_ACC_REQUIRE_*` variable to turn a skip into a failure.
+The SQL lifecycle matrix runs the database drop-with-objects smoke plus the Guide, Dive, Flight, Dive-and-Flight blueprint, and share-grant drift smokes. Each preview-surface smoke exits successfully with a skip when the account does not expose the required `MD_*` functions, so a green matrix is not proof of coverage. Set the matching `MD_TF_ACC_REQUIRE_*` variable to turn a skip into a failure.
 
 ## Releases
 
@@ -84,7 +84,7 @@ git push origin v0.1.0
 
 The release workflow:
 
-1. Runs the release preflight gate (`make release-preflight-check`) and release packaging check. The preflight is the pull-request gate without `vulncheck`; vulnerability scanning still runs in the release job as an advisory step so a new advisory in an indirect dependency cannot block an unrelated release. Pull-request CI keeps `vulncheck` blocking.
+1. Runs the release preflight gate (`make release-preflight-check`) and release packaging check. The preflight is the pull-request gate without `vulncheck`. Vulnerability scanning still runs in the release job as an advisory step so a new advisory in an indirect dependency cannot block an unrelated release. Pull-request CI keeps `vulncheck` blocking.
 2. Runs the required SQL lifecycle on the exact tagged commit using the protected live environment.
 3. Builds native provider packages.
 4. Creates a SHA256 digest in each platform build job.
@@ -101,7 +101,7 @@ The release workflow:
 
 Signing is the only release step that needs credentials beyond the live test
 token. The publisher key and its passphrase are held as secrets on the protected
-`motherduck-release` environment; `GPG_FINGERPRINT` pins the expected key.
+`motherduck-release` environment. `GPG_FINGERPRINT` pins the expected key.
 
 Initial release targets:
 

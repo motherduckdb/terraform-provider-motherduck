@@ -94,7 +94,7 @@ set -e
 
 if [[ "${plan_exit}" -ne 0 ]]; then
   if [[ "${plan_exit}" -eq 2 && "${run_flight_hcl}" == "true" ]]; then
-    echo "Run-enabled Flight smoke reported a non-empty follow-up plan; Flight run rows are dynamic while runs transition status."
+    echo "Run-enabled Flight smoke reported a non-empty follow-up plan. Flight run rows are dynamic while runs transition status."
   else
     if [[ "${plan_exit}" -eq 2 ]]; then
       echo "Expected no-op plan after Flight update, but Terraform reported changes" >&2

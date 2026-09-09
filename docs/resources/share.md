@@ -9,7 +9,7 @@ description: |-
 
 Manages a MotherDuck share. Use `update_mode = "automatic"` for ongoing data
 publication, or `manual` when the data pipeline should explicitly publish a
-snapshot. Terraform manages the share configuration; a no-op apply does not
+snapshot. Terraform manages the share configuration. A no-op apply does not
 publish newly inserted source data to a manual share.
 
 The example uses manual publication. After changing source data, run this as the
@@ -21,11 +21,11 @@ UPDATE SHARE analytics_share;
 
 Consumers attach using the share's URL. An already connected consumer can run
 `REFRESH DATABASES` to read the published update. Automatic publication also has
-replication delay; see [updating shares](https://motherduck.com/docs/key-tasks/sharing-data/updating-shares/).
+replication delay. See [updating shares](https://motherduck.com/docs/key-tasks/sharing-data/updating-shares/).
 
 Name, source database, access mode, visibility, and update mode are replacement-only. Include patterns update in place with `ALTER SHARE`.
 
-Access, visibility, and update mode are optional and computed. If omitted, Terraform discovers and records live values during refresh and import. Explicit values are enforced; drift on them plans replacement. Removing an explicit value adopts the live value instead of resetting it.
+Access, visibility, and update mode are optional and computed. If omitted, Terraform discovers and records live values during refresh and import. Explicit values are enforced. Drift on them plans replacement. Removing an explicit value adopts the live value instead of resetting it.
 
 The computed `url` is sensitive. Treat share URLs as access-bearing metadata, especially for unrestricted shares. Terraform still stores sensitive values in state, so use an encrypted backend with restricted access and pass URLs through sensitive outputs or a secret manager.
 
@@ -97,7 +97,7 @@ terraform import motherduck_share.analytics 'analytics_share'
 ### Optional
 
 - `access` (String) Share access mode: `organization`, `restricted`, or `unrestricted`.
-- `include_pattern` (List of String) Optional preview catalog include patterns. Null shares the entire database; an empty list shares no objects. Changes are applied in place. The MotherDuck client must have filtered shares enabled.
+- `include_pattern` (List of String) Optional preview catalog include patterns. Null shares the entire database. An empty list shares no objects. Changes are applied in place. The MotherDuck client must have filtered shares enabled.
 - `update_mode` (String) Share update mode: `manual` or `automatic`.
 - `visibility` (String) Share visibility mode: `discoverable` or `hidden`.
 

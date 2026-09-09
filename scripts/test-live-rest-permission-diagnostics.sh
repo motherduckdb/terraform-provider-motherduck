@@ -31,7 +31,7 @@ if [[ "${preflight_exit}" -ne 42 ]]; then
   exit "${preflight_exit}"
 fi
 
-echo "REST admin lifecycle preflight rejected the token as non-admin; validating provider diagnostics."
+echo "REST admin lifecycle preflight rejected the token as non-admin. Validating provider diagnostics."
 
 prepare_provider_mirror
 

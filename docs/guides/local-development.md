@@ -30,7 +30,7 @@ provider_installation {
 ```
 
 Set `TF_CLI_CONFIG_FILE` to that file for your development shell. Terraform
-prints a development-override warning; this is expected. In a module containing
+prints a development-override warning. This is expected. In a module containing
 only this provider, run `terraform validate`, `plan`, and `apply` directly.
 `terraform init` still resolves provider versions against the Registry and can
 fail before initial publication despite the override. Initialize other providers

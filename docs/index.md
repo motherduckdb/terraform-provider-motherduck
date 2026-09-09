@@ -133,7 +133,7 @@ a [GitHub issue](https://github.com/motherduckdb/terraform-provider-motherduck/i
 
 - `admin_token` (String, Sensitive) MotherDuck organization admin token for REST/control-plane operations. Defaults to `MOTHERDUCK_ADMIN_TOKEN`.
 - `api_base_url` (String) MotherDuck REST API base URL. Must be an absolute HTTP or HTTPS URL with a host. Defaults to `https://api.motherduck.com`.
-- `attach_mode` (String) Optional MotherDuck attach mode. Supported values are `workspace` and `single`. Use `single` with `database` to attach that existing database without attaching other workspace databases; DuckDB/MotherDuck system catalogs such as `memory` and `md_information_schema` can still be present. Omit this argument for MotherDuck's default workspace attachment behavior.
+- `attach_mode` (String) Optional MotherDuck attach mode. Supported values are `workspace` and `single`. Use `single` with `database` to attach that existing database without attaching other workspace databases. DuckDB/MotherDuck system catalogs such as `memory` and `md_information_schema` can still be present. Omit this argument for MotherDuck's default workspace attachment behavior.
 - `custom_user_agent` (String) Optional custom user agent suffix sent on both the DuckDB/MotherDuck SQL connection and MotherDuck REST API requests.
 - `database` (String) Optional MotherDuck database to attach during provider SQL initialization.
 - `request_timeout_seconds` (Number) Optional timeout, in seconds, for MotherDuck REST API requests. Defaults to 30 seconds.

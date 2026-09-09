@@ -55,7 +55,7 @@ func TestSensitiveWriteDiagnosticDropsRawDuckDBMessage(t *testing.T) {
 
 func TestSensitiveWriteDiagnosticRedactsEscapedLiterals(t *testing.T) {
 	value := "md:_share/it's/abc"
-	err := errors.New("failed: url := 'md:_share/it''s/abc' rejected; also raw md:_share/it's/abc")
+	err := errors.New("failed: url := 'md:_share/it''s/abc' rejected. Also raw md:_share/it's/abc")
 	got := sensitiveWriteDiagnostic("Dive", err, []string{value, ""})
 	if strings.Contains(got, "it's") || strings.Contains(got, "it''s") {
 		t.Fatalf("escaped literal leaked: %q", got)

@@ -78,7 +78,7 @@ func (p *motherduckProvider) Schema(ctx context.Context, req provider.SchemaRequ
 			},
 			"attach_mode": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional MotherDuck attach mode. Supported values are `workspace` and `single`. Use `single` with `database` to attach that existing database without attaching other workspace databases; DuckDB/MotherDuck system catalogs such as `memory` and `md_information_schema` can still be present. Omit this argument for MotherDuck's default workspace attachment behavior.",
+				MarkdownDescription: "Optional MotherDuck attach mode. Supported values are `workspace` and `single`. Use `single` with `database` to attach that existing database without attaching other workspace databases. DuckDB/MotherDuck system catalogs such as `memory` and `md_information_schema` can still be present. Omit this argument for MotherDuck's default workspace attachment behavior.",
 				Validators:          []validator.String{attachModeValidator{}},
 			},
 			"custom_user_agent": schema.StringAttribute{

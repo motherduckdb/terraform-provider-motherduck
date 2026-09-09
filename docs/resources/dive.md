@@ -2,7 +2,7 @@
 page_title: "motherduck_dive Resource - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Experimental: manages a MotherDuck Dive through public SQL table functions. Prefer application deployment tooling for Dive content; this surface is outside the provider's stable support commitment.
+  Experimental: manages a MotherDuck Dive through public SQL table functions. Prefer application deployment tooling for Dive content. This surface is outside the provider's stable support commitment.
 ---
 
 # motherduck_dive (Resource)
@@ -83,10 +83,10 @@ resource "motherduck_dive" "revenue" {
 
 ### Optional
 
-- `api_version` (Number) Optional Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default. The public MD_GET_DIVE output does not report this value, so import cannot recover it; keep it configured and expect one corrective update after import.
-- `description` (String) Optional Dive description. Set this to an empty string to clear the visible description; removing an existing configured value is rejected because the public SQL update surface does not expose a null-clear operation.
+- `api_version` (Number) Optional Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default. The public MD_GET_DIVE output does not report this value, so import cannot recover it. Keep it configured and expect one corrective update after import.
+- `description` (String) Optional Dive description. Set this to an empty string to clear the visible description. Removing an existing configured value is rejected because the public SQL update surface does not expose a null-clear operation.
 - `required_resources` (Attributes List, Sensitive) Optional share resources to mount into the Dive. This is config-owned because the current public `MD_GET_DIVE` output does not expose mounted resources during refresh or import. (see [below for nested schema](#nestedatt--required_resources))
-- `status` (String) Dive governance status. New Dives default to `draft`; owners can set `draft`, `ready`, or `archived`, while `endorsed` requires organization-admin permission.
+- `status` (String) Dive governance status. New Dives default to `draft`. Owners can set `draft`, `ready`, or `archived`, while `endorsed` requires organization-admin permission.
 
 ### Read-Only
 

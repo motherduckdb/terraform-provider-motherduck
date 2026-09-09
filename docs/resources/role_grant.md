@@ -28,7 +28,7 @@ resource "motherduck_role_grant" "builder" {
 ```
 
 The same configuration works with an existing custom role name. The grantee must
-already exist; for an account or role created in the same configuration, reference
+already exist. For an account or role created in the same configuration, reference
 its resource attribute so Terraform orders creation and destruction correctly.
 
 ## Create a custom role, give it platform permissions, and assign it
@@ -63,8 +63,8 @@ separate [motherduck_share_grant](share_grant.md) resource.
 
 This resource owns one **direct** grant. Inherited membership alone does not
 satisfy it. If the direct grant is revoked outside Terraform, the next apply
-restores it. Destroy revokes that grant without deleting either role or principal;
-permissions received through other grants remain in effect.
+restores it. Destroy revokes that grant without deleting either role or principal.
+Permissions received through other grants remain in effect.
 
 ## Import
 

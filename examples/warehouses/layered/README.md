@@ -2,12 +2,12 @@
 
 One environment writer owns three databases:
 
-- raw: versioned orders from ingestion;
-- transform: a view selecting the latest source revision per order;
+- raw: versioned orders from ingestion.
+- transform: a view selecting the latest source revision per order.
 - marts: a physical daily-revenue table, refreshed by the writer pipeline.
 
 BI uses the environment writer's read-scaling token and queries marts directly.
-It can also read raw and transform; this layout is not a curated-only access
+It can also read raw and transform. This layout is not a curated-only access
 boundary. The physical marts table keeps dashboard queries independent of the
 cross-database transformation view.
 
@@ -34,7 +34,7 @@ In an empty disposable dev warehouse, run the SQL from
 `terraform output -raw refresh_sql` through the same writer's SQL client.
 
 Expect one row in marts.main.daily_revenue: 2026-01-01, two completed orders,
-revenue 145.00. The latest o1 revision replaces 100.00 with 120.00; cancelled o3
+revenue 145.00. The latest o1 revision replaces 100.00 with 120.00. Cancelled o3
 is excluded. Rerunning refresh keeps the same result. Do not rerun seed SQL.
 
 The refresh uses one transaction to replace table data with DELETE/INSERT.
@@ -55,7 +55,7 @@ to select the name. No share grant or attachment is needed. Read replicas are
 eventually consistent, so allow synchronization time after refreshing marts.
 
 Verify reads succeed and writes fail. Raw/transform reads in the same environment
-are expected; the other environment should remain inaccessible unless explicitly
+are expected. The other environment should remain inaccessible unless explicitly
 shared. For curated-only access, follow the
 [separate-reader alternative](../README.md#alternative-separate-readers-with-curated-shares),
 including its initial attachment using the reader's read-write token.

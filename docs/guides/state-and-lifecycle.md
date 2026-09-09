@@ -14,7 +14,7 @@ Managing the same object from two states creates conflicting plans.
 
 ## Credentials and state
 
-`sensitive` hides values in normal CLI output; it does not encrypt state or plan
+`sensitive` hides values in normal CLI output. It does not encrypt state or plan
 files. Use an encrypted remote backend with access controls and locking. Do not
 commit state, saved plans, or credential files.
 
@@ -50,17 +50,17 @@ produce diagnostics, not masquerade as absence.
 
 For important databases, consider `lifecycle { prevent_destroy = true }`.
 It protects against planned destruction while the resource block remains in
-configuration; it does not prevent manual deletion or protect an object after
+configuration. It does not prevent manual deletion or protect an object after
 its configuration is removed.
 
 Schema destruction is restrictive by default. Enable `cascade` only when
 Terraform is intended to own destruction of all contained objects. Snapshot
-destruction removes the name from the snapshot; it does not promise immediate
+destruction removes the name from the snapshot. It does not promise immediate
 physical deletion of retained historical data.
 
 Flight definitions are durable configuration. Flight runs are explicit
 operations: creating or replacing a run can execute Python again. Do not use
-them for recurring schedules; configure the Flight's schedule instead.
+them for recurring schedules. Configure the Flight's schedule instead.
 
 ## Dives and missing data dependencies
 

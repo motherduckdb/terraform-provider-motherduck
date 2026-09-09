@@ -79,7 +79,7 @@ variable "tenants" {
       length(replace(lower(coalesce(tenant.slug, tenant_id)), "/[^a-z0-9_]/", "_")) <= 120 &&
       tenant.snapshot_retention_days >= 0
     ])
-    error_message = "Each tenant key must be non-empty; the generated slug must be 1-120 characters after normalization; snapshot_retention_days must be nonnegative."
+    error_message = "Each tenant key must be non-empty. The generated slug must be 1-120 characters after normalization. The snapshot_retention_days value must be nonnegative."
   }
 
   validation {
@@ -87,6 +87,6 @@ variable "tenants" {
       for tenant_id, tenant in var.tenants :
       replace(lower(coalesce(tenant.slug, tenant_id)), "/[^a-z0-9_]/", "_")
     ])) == length(var.tenants)
-    error_message = "Tenant keys or slugs must remain unique after normalization; two tenants such as \"acme-1\" and \"acme_1\" would otherwise generate the same database, share, and service-account names."
+    error_message = "Tenant keys or slugs must remain unique after normalization. Two tenants such as \"acme-1\" and \"acme_1\" would otherwise generate the same database, share, and service-account names."
   }
 }

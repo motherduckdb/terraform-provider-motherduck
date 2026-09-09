@@ -9,8 +9,8 @@ description: |-
 
 Deprecated: trigger runs through a deployment pipeline or the MotherDuck CLI/SQL
 interface. See [resource scope and migration](../guides/resource-scope.md).
-Changing wait status, timeout, or polling interval updates stored preferences;
-it does not rerun a Flight or wait again. These settings apply when creating a
+Changing wait status, timeout, or polling interval updates stored preferences.
+It does not rerun a Flight or wait again. These settings apply when creating a
 new run. Changing Flight identity or run configuration still requires replacement.
 
 A Flight run is an operation recorded in Terraform state. Creating or replacing
@@ -62,7 +62,7 @@ resource "motherduck_flight_run" "heartbeat" {
 - `config` (Map of String) Optional string configuration for this on-demand Flight run. Keys must already exist on the Flight definition and must be valid Flight config names.
 - `poll_interval_seconds` (Number) Polling interval in seconds when `wait_for_status` is set. Defaults to 10 seconds.
 - `timeout_seconds` (Number) Maximum number of seconds to wait when `wait_for_status` is set. Defaults to 600 seconds.
-- `wait_for_status` (String) Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`; if the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`.
+- `wait_for_status` (String) Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`. If the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`.
 
 ### Read-Only
 

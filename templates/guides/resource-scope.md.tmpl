@@ -17,14 +17,14 @@ membership through MotherDuck's supported organization administration workflow.
 
 | Surface | Deployment posture |
 | --- | --- |
-| Databases, schemas, tables/views, shares, roles/grants, secrets, service accounts, tokens, Duckling configuration, snapshots | Core infrastructure; consult each resource's lifecycle constraints |
-| Flight definitions and schedules | Prefer CLI/code deployment; Terraform remains available when it is the sole owner |
+| Databases, schemas, tables/views, shares, roles/grants, secrets, service accounts, tokens, Duckling configuration, snapshots | Core infrastructure. Consult each resource's lifecycle constraints |
+| Flight definitions and schedules | Prefer CLI/code deployment. Terraform remains available when it is the sole owner |
 | Dive and Guide resources | Experimental, outside the stable provider support commitment |
-| Flight-run resource | Deprecated; use CLI/SQL or a deployment pipeline to execute runs |
-| Catalog data sources | Read-only integration with objects managed by either workflow; availability depends on the service |
+| Flight-run resource | Deprecated. Use CLI/SQL or a deployment pipeline to execute runs |
+| Catalog data sources | Read-only integration with objects managed by either workflow. Availability depends on the service |
 
 Experimental resources remain registered for compatibility. This label is not a
-promise that breaking changes will occur without notice; any migration or removal
+promise that breaking changes will occur without notice. Any migration or removal
 must be documented. It also does not change the service's own availability status.
 
 ## CLI and code deployment
@@ -62,8 +62,8 @@ Guide audience management also belongs to the same authoritative owner as its
 content until a separately managed, non-overlapping permissions surface exists.
 The public Guide access functions currently document user/private and
 organization audiences. Role audiences remain compatibility fields in the
-provider schema and require the account to expose the Guide grantee functions;
-check function availability before using `access = "role"` or
+provider schema and require the account to expose the Guide grantee functions.
+Check function availability before using `access = "role"` or
 `motherduck_guide_grantees`.
 
 ## Move existing content out of Terraform
@@ -85,5 +85,5 @@ that side effect, remove state ownership as above and delete its configuration.
 Future runs should be triggered by the execution workflow.
 
 Wait-policy changes on an existing run no longer cause replacement. They update
-stored settings only; they do not execute a new run or restart waiting. A changed
+stored settings only. They do not execute a new run or restart waiting. A changed
 Flight ID or run configuration still means a new execution.

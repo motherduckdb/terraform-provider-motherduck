@@ -238,7 +238,7 @@ func TestDiveImportedAPIVersionGetsOneCorrectiveUpdateThenConverges(t *testing.T
 	imported := &diveModel{Content: types.StringValue("content"), APIVersion: types.Int64Null()}
 	args, update := diveContentArgs(context.Background(), plan, imported, &diag.Diagnostics{})
 	if !update || args["api_version"] != "1" {
-		t.Fatalf("imported api_version correction = %#v, update=%v; want one update with api_version 1", args, update)
+		t.Fatalf("imported api_version correction = %#v, update=%v. Want one update with api_version 1", args, update)
 	}
 	refreshed := &diveModel{Content: types.StringValue("content"), APIVersion: types.Int64Value(1)}
 	if _, update = diveContentArgs(context.Background(), plan, refreshed, &diag.Diagnostics{}); update {

@@ -9,8 +9,8 @@ description: |-
 
 Deprecated: trigger runs through a deployment pipeline or the MotherDuck CLI/SQL
 interface. See [resource scope and migration](../guides/resource-scope.md).
-Changing wait status, timeout, or polling interval updates stored preferences;
-it does not rerun a Flight or wait again. These settings apply when creating a
+Changing wait status, timeout, or polling interval updates stored preferences.
+It does not rerun a Flight or wait again. These settings apply when creating a
 new run. Changing Flight identity or run configuration still requires replacement.
 
 A Flight run is an operation recorded in Terraform state. Creating or replacing

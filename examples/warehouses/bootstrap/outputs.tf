@@ -4,7 +4,7 @@ output "usernames" {
 }
 
 output "tokens" {
-  description = "Creation-only credentials. Transfer securely into separate environment secret stores. Tokens do not expire; revoke them when no longer needed."
+  description = "Creation-only credentials. Transfer securely into separate environment secret stores. Tokens do not expire. Revoke them when no longer needed."
   value       = { for key, token in motherduck_access_token.environment : key => token.token }
   sensitive   = true
 }

@@ -64,7 +64,7 @@ resource "motherduck_service_account" "test" {
 			mu.Lock()
 			defer mu.Unlock()
 			if exists || creates != 2 || deletes != 1 {
-				return fmt.Errorf("exists=%t creates=%d deletes=%d; want false,2,1", exists, creates, deletes)
+				return fmt.Errorf("exists=%t creates=%d deletes=%d. Want false,2,1", exists, creates, deletes)
 			}
 			return nil
 		},

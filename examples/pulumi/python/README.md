@@ -35,7 +35,7 @@ generates the local `pulumi_motherduck` SDK, and creates `.venv` from the
 checked-in runtime options and requirements. Do not run an unversioned
 `pulumi package add` command here because it can select a newer bridge. Keep
 `Pulumi.yaml` and `requirements.txt` under source control. Keep the matching
-release checksum beside the downloaded artifact while verifying it; `.venv`, `sdks`, `bin`, and
+release checksum beside the downloaded artifact while verifying it. `.venv`, `sdks`, `bin`, and
 `Pulumi.<stack>.yaml` are local files and are ignored.
 
 `PULUMI_CONFIG_PASSPHRASE` must come from a secret manager or protected CI
@@ -67,8 +67,8 @@ program. Remove protection deliberately before destroying imported resources.
 Keep the database and its owner identity in one clearly owned stack, or use an
 explicit stack dependency and teardown order. Protect production databases and
 owner service accounts, protect stored state and encrypt its secrets, and do not
-export raw access tokens. Pin both the Pulumi bridge and the wrapped provider;
-the bridge version and provider version are independent.
+export raw access tokens. Pin both the Pulumi bridge and the wrapped provider.
+The bridge version and provider version are independent.
 
 The service-account and access-token resources require an organization admin
 token. Pulumi `v3.261.0` was also verified with a same-program bootstrap: an admin
@@ -78,6 +78,6 @@ identity dependency during deployment and teardown.
 
 Keep the bootstrap and data resources in one stack when they share ownership and
 lifecycle. Use a separate, protected bootstrap stack when identities are shared
-or managed by a platform team; transfer the writer token through a secret manager
+or managed by a platform team. Transfer the writer token through a secret manager
 and remove consuming data stacks before deleting the identity. Keep admin
 credentials confined to the operations that require them.

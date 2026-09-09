@@ -9,6 +9,11 @@ Repository-specific guidance for coding agents working on the MotherDuck Terrafo
 - Treat `internal/` as implementation detail, not as a stable public Go API.
 - Preserve the public provider source address: `registry.terraform.io/motherduckdb/motherduck`.
 
+## Writing
+
+- Do not use semicolons or em dashes in authored prose, comments, descriptions, or user-facing messages.
+- Preserve punctuation required by code syntax, SQL examples, protocol values, parser tests, and the license text.
+
 ## Docs
 
 - Generated provider docs live under `docs/`.

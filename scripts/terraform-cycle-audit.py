@@ -73,7 +73,7 @@ def unchanged(before, after, changes):
         change = changes.get(address, {})
         if 'delete' in change.get('actions', []):
             continue
-        # Snapshot rename is an explicit identity-affecting operation; record it
+        # Snapshot rename is an explicit identity-affecting operation. Record it
         # separately rather than asserting an undocumented backend invariant.
         if address.startswith('motherduck_snapshot.') and (change.get('before') or {}).get('name') != (change.get('after') or {}).get('name'):
             record.setdefault('planned_snapshot_renames', []).append(address)
@@ -88,7 +88,7 @@ try:
     with tempfile.TemporaryDirectory(prefix='tf-cycle-') as temporary:
         changes, status = plan(temporary)
         if changes is None:
-            raise RuntimeError('Pre-apply plan failed; no apply was attempted')
+            raise RuntimeError('Pre-apply plan failed. No apply was attempted')
         replacements = [a for a, c in changes.items() if 'delete' in c['actions'] and 'create' in c['actions']]
         if replacements and os.environ.get('MD_CYCLE_ALLOW_REPLACE') != '1':
             raise RuntimeError('Unexpected replacement in apply plan: ' + ', '.join(replacements))

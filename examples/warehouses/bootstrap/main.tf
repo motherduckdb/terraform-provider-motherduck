@@ -30,5 +30,5 @@ resource "motherduck_access_token" "environment" {
   name       = "warehouse-example-${each.key}"
   token_type = each.value.type
   # Omit ttl so tokens never expire, keeping this example free of rotation setup.
-  # They remain valid until revoked; protect state and remove them during cleanup.
+  # They remain valid until revoked. Protect state and remove them during cleanup.
 }

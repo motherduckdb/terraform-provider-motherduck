@@ -10,6 +10,6 @@ output "refresh_sql" {
   })
 }
 output "demo_sql" {
-  description = "Optional seed SQL for an empty disposable warehouse; never run against production."
+  description = "Optional seed SQL for an empty disposable warehouse. Never run against production."
   value       = templatefile("${path.module}/demo.sql.tftpl", { raw_database = motherduck_database.layer["raw"].name })
 }

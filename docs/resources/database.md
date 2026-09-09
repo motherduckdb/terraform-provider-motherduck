@@ -52,8 +52,8 @@ resource "motherduck_database" "analytics" {
 
 - `data_path` (String) DuckLake-only non-empty data path used when creating the database.
 - `database_type` (String) `default` or `ducklake`. Use `transient = true` for transient databases.
-- `encrypted` (Boolean) DuckLake-only. When true, emits the `ENCRYPTED` database option at creation; when false, omits the option.
-- `snapshot_retention_days` (Number) Historical snapshot retention in days. Must be nonnegative; MotherDuck enforces any account-specific upper bound.
+- `encrypted` (Boolean) DuckLake-only. When true, emits the `ENCRYPTED` database option at creation. When false, omits the option.
+- `snapshot_retention_days` (Number) Historical snapshot retention in days. Must be nonnegative. MotherDuck enforces any account-specific upper bound.
 - `timeouts` (Attributes) Optional operation timeouts. Values use Go duration syntax such as `30s`, `10m`, or `1h`. (see [below for nested schema](#nestedatt--timeouts))
 - `transient` (Boolean) Whether to create the database as transient. Omit for the MotherDuck default.
 

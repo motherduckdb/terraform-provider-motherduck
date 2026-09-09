@@ -15,8 +15,8 @@ and Enterprise plans.
 
 | Role you want to use | Terraform configuration |
 | --- | --- |
-| Preset `admin`, `builder`, or `explorer` | Reference its name in `motherduck_role_grant`; do not create or import it as `motherduck_role` |
-| Existing custom role, managed elsewhere | Reference its name in `motherduck_role_grant`; Terraform owns only that grant |
+| Preset `admin`, `builder`, or `explorer` | Reference its name in `motherduck_role_grant`. Do not create or import it as `motherduck_role` |
+| Existing custom role, managed elsewhere | Reference its name in `motherduck_role_grant`. Terraform owns only that grant |
 | Existing custom role that Terraform should own | Declare `motherduck_role` and import it before applying |
 | New custom role | Declare `motherduck_role`, then reference its `.name` from grants |
 

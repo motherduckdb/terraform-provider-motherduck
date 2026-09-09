@@ -10,7 +10,7 @@ import (
 var ErrMissingAdminToken = errors.New("MotherDuck REST operations require admin_token or MOTHERDUCK_ADMIN_TOKEN")
 
 // maxEchoedBodyBytes caps how much of a non-JSON error body is copied into an
-// error string. Proxies and WAFs answer with whole HTML pages; echoing those
+// error string. Proxies and WAFs answer with whole HTML pages. Echoing those
 // verbatim floods Terraform diagnostics and CI logs without adding signal.
 const maxEchoedBodyBytes = 2048
 
@@ -37,7 +37,7 @@ func (e APIError) Error() string {
 		}
 	}
 	if len(issueMessages) > 0 {
-		issues := strings.Join(issueMessages, "; ")
+		issues := strings.Join(issueMessages, ", ")
 		if message == "" {
 			message = issues
 		} else {
@@ -145,7 +145,7 @@ type ActiveAccountsResponse struct {
 // is only sound while the client walks every page. If MotherDuck starts capping
 // list responses, unread pages would read as deleted tokens and Terraform would
 // destroy and recreate live credentials. Several cursor spellings are accepted
-// because the shape is unspecified; nextCursor() takes whichever appears.
+// because the shape is unspecified. The nextCursor() helper takes whichever appears.
 type pageInfo struct {
 	NextCursor    string `json:"next_cursor,omitempty"`
 	NextPageToken string `json:"next_page_token,omitempty"`
