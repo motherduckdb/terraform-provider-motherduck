@@ -1,26 +1,101 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="318" viewBox="0 0 1080 318" role="img" aria-labelledby="title desc">
-<title id="title">Layered warehouse</title><desc id="desc">One writer owns raw, transform, and marts databases. Its BI read pool can read all three layers. The pipeline refreshes rows outside Terraform.</desc>
-<rect width="1080" height="318" fill="#F8F8F7"/>
-<rect x="32" y="24" width="1016" height="160" rx="2" fill="#F4EFEA" stroke="#C5BBB1"/>
-<text x="50" y="52" fill="#383838" font-family="Arial, sans-serif" font-size="16" font-weight="700">Writer account</text>
-<rect x="52" y="80" width="242" height="74" rx="2" fill="#FFFFFF" stroke="#383838"/>
-<text x="68" y="112" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Raw</text>
-<text x="68" y="134" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">orders</text>
-<rect x="419" y="80" width="242" height="74" rx="2" fill="#FFFFFF" stroke="#383838"/>
-<text x="435" y="112" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Transform</text>
-<text x="435" y="134" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">orders_latest</text>
-<rect x="786" y="80" width="242" height="74" rx="2" fill="#FFFFFF" stroke="#383838"/>
-<text x="802" y="112" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Marts</text>
-<text x="802" y="134" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">daily_revenue</text>
-<polyline points="294,117 419,117" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="419,117 411,112 411,122" fill="#383838"/>
-<text x="324" y="104" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">dedupe</text>
-<polyline points="661,117 786,117" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="786,117 778,112 778,122" fill="#383838"/>
-<text x="693" y="104" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">refresh</text>
-<rect x="786" y="232" width="242" height="62" rx="2" fill="#CEEBFF" stroke="#383838"/>
-<text x="802" y="264" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">BI</text>
-<text x="802" y="286" fill="#383838" font-family="Arial, sans-serif" font-size="14" font-weight="400">Writer&#x27;s read pool</text>
-<polyline points="907,154 907,232" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="907,232 902,224 912,224" fill="#383838"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-labelledby="title desc">
+<title id="title">Layered warehouse</title><desc id="desc">One writer account owns raw, transform, and marts databases. Raw orders feed the orders_latest view, then a pipeline refreshes the daily_revenue physical table. BI uses the same writer identity&#x27;s read pool, which can access all three layers.</desc>
+<rect width="1200" height="560" fill="#F8F8F7"/>
+<g transform="translate(32 26) scale(1.52)">
+<path d="M1.22059 15.1467C1.22059 15.1467 8.01485 19.8856 8.42868 20.1226C8.82772 20.3586 9.41175 20.4144 9.92426 20.2199C10.4373 20.0253 10.822 19.5805 10.9359 19.1357C11.0642 18.6909 12.617 10.6847 12.617 10.6847C12.6313 10.5736 12.6737 10.2542 12.5026 9.94812C12.2604 9.53144 11.7193 9.30927 11.2349 9.44753C10.9684 9.52492 10.7401 9.69835 10.5941 9.9343C10.5083 10.0869 10.3519 10.3376 10.0668 10.5598C9.85323 10.7267 9.63964 10.8239 9.54 10.8654C8.67087 11.2134 7.7021 10.9212 7.14668 10.2265C6.80484 9.79556 6.19221 9.62869 5.65061 9.83704C5.39458 9.93693 5.17744 10.1165 5.03124 10.3492C4.88505 10.5819 4.81755 10.8555 4.8387 11.1295C4.93882 11.9915 4.44013 12.853 3.5567 13.2006C3.10486 13.3735 2.60777 13.3883 2.14645 13.2425C2.04633 13.2144 1.69067 13.1314 1.33453 13.3259C0.893055 13.5481 0.665165 14.0764 0.77911 14.5488C0.864449 14.8683 1.12094 15.0771 1.22059 15.1467Z" fill="#FF9538"/>
+<path d="M12.5454 4.76395C12.5454 4.76395 14.9673 12.5751 15.138 12.9923C15.3092 13.4233 15.7363 13.8123 16.2632 13.9649C16.7905 14.1179 17.3745 13.993 17.7449 13.7151C18.1154 13.4371 24.369 8.03022 24.369 8.03022C24.563 7.86085 24.6937 7.63051 24.7394 7.37706C24.8109 6.90459 24.5115 6.404 24.0558 6.22331C23.7937 6.12714 23.5059 6.12714 23.2438 6.22331C23.087 6.29291 22.8019 6.39017 22.4458 6.404C22.1611 6.4183 21.9475 6.36252 21.8336 6.33439C20.9359 6.0841 20.3375 5.27838 20.3375 4.40257C20.3288 4.12912 20.2329 3.86562 20.0637 3.65058C19.8946 3.43554 19.6611 3.28023 19.3974 3.20734C18.8276 3.0543 18.2436 3.29077 17.9447 3.74942C17.4741 4.49983 16.5483 4.87504 15.6367 4.62474C15.1523 4.486 14.7533 4.19423 14.4973 3.81902C14.4257 3.73511 14.1979 3.45716 13.7993 3.38803C13.3149 3.3046 12.7876 3.58255 12.5883 4.01354C12.4315 4.34727 12.5168 4.65239 12.5454 4.76395Z" fill="#FF9538"/>
+</g>
+<text x="83" y="55" fill="#383838" font-family="Arial, sans-serif" font-size="27" font-weight="700">MotherDuck</text>
+<text x="285" y="55" fill="#383838" font-family="Arial, sans-serif" font-size="22" font-weight="400">Layered warehouse</text>
+<text x="34" y="98" fill="#666666" font-family="Arial, sans-serif" font-size="15" font-weight="400">Pipeline-managed refreshes · One writer identity across all layers</text>
+<rect x="32" y="124" width="922" height="404" rx="5" fill="#F4EFEA" stroke="#C5BBB1"/>
+<ellipse cx="58.5" cy="149.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
+<polyline points="48,168 48,164 54,160 63,160 69,164 69,168" fill="none" stroke="#383838" stroke-width="2"/>
+<text x="80" y="164" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Writer account</text>
+<ellipse cx="156.0" cy="296.0" rx="66.0" ry="13.0" fill="#FAF175" stroke="#383838"/>
+<rect x="90" y="222" width="132" height="74" rx="0" fill="#FAF175" stroke="#FAF175"/>
+<polyline points="90,222 90,296" fill="none" stroke="#383838" stroke-width="1"/>
+<polyline points="222,222 222,296" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="156.0" cy="222.0" rx="66.0" ry="13.0" fill="#FFF9BF" stroke="#383838"/>
+<polyline points="109,254 203,254" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<polyline points="109,273 203,273" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<text x="134.5" y="346" fill="#383838" font-family="Arial, sans-serif" font-size="21" font-weight="700">Raw</text>
+<text x="108.25" y="373" fill="#666666" font-family="Arial, sans-serif" font-size="16" font-weight="400">orders · table</text>
+<ellipse cx="436.0" cy="296.0" rx="66.0" ry="13.0" fill="#FAF175" stroke="#383838"/>
+<rect x="370" y="222" width="132" height="74" rx="0" fill="#FAF175" stroke="#FAF175"/>
+<polyline points="370,222 370,296" fill="none" stroke="#383838" stroke-width="1"/>
+<polyline points="502,222 502,296" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="436.0" cy="222.0" rx="66.0" ry="13.0" fill="#FFF9BF" stroke="#383838"/>
+<polyline points="389,254 483,254" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<polyline points="389,273 483,273" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<text x="384.2578125" y="346" fill="#383838" font-family="Arial, sans-serif" font-size="21" font-weight="700">Transform</text>
+<text x="366.0" y="373" fill="#666666" font-family="Arial, sans-serif" font-size="16" font-weight="400">orders_latest · view</text>
+<ellipse cx="716.0" cy="296.0" rx="66.0" ry="13.0" fill="#FAF175" stroke="#383838"/>
+<rect x="650" y="222" width="132" height="74" rx="0" fill="#FAF175" stroke="#FAF175"/>
+<polyline points="650,222 650,296" fill="none" stroke="#383838" stroke-width="1"/>
+<polyline points="782,222 782,296" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="716.0" cy="222.0" rx="66.0" ry="13.0" fill="#FFF9BF" stroke="#383838"/>
+<polyline points="669,254 763,254" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<polyline points="669,273 763,273" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<text x="688.25" y="346" fill="#383838" font-family="Arial, sans-serif" font-size="21" font-weight="700">Marts</text>
+<text x="641.0" y="373" fill="#666666" font-family="Arial, sans-serif" font-size="16" font-weight="400">daily_revenue · table</text>
+<polyline points="230,258 362,258" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="362,258 354,253 354,263" fill="#383838"/>
+<text x="272.0" y="242" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">dedupe</text>
+<polyline points="510,258 642,258" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="642,258 634,253 634,263" fill="#383838"/>
+<text x="554.0" y="242" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">refresh</text>
+<polyline points="156,391 156,426 717,426" fill="none" stroke="#5796BD" stroke-width="2"/>
+<polyline points="436,391 436,426" fill="none" stroke="#5796BD" stroke-width="2"/>
+<polyline points="716,391 716,426" fill="none" stroke="#5796BD" stroke-width="2"/>
+<polyline points="717,426 775,426" fill="none" stroke="#5796BD" stroke-width="2"/>
+<polygon points="775,426 767,421 767,431" fill="#5796BD"/>
+<rect x="816" y="393" width="96" height="66" rx="4" fill="#CEEBFF" stroke="#383838"/>
+<rect x="831" y="408" width="66" height="36" rx="2" fill="#97D4FF" stroke="#383838"/>
+<rect x="854.0" y="416.0" width="20" height="20" rx="1" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="836.0,386 836.0,393" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="836.0,459 836.0,466" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="854.6666666666666,386 854.6666666666666,393" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="854.6666666666666,459 854.6666666666666,466" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="873.3333333333334,386 873.3333333333334,393" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="873.3333333333334,459 873.3333333333334,466" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="892.0,386 892.0,393" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="892.0,459 892.0,466" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="809,411.0 816,411.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="912,411.0 919,411.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="809,426.0 816,426.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="912,426.0 919,426.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="809,441.0 816,441.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="912,441.0 919,441.0" fill="none" stroke="#383838" stroke-width="2"/>
+<rect x="789" y="420" width="96" height="66" rx="4" fill="#CEEBFF" stroke="#383838"/>
+<rect x="804" y="435" width="66" height="36" rx="2" fill="#97D4FF" stroke="#383838"/>
+<rect x="827.0" y="443.0" width="20" height="20" rx="1" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="809.0,413 809.0,420" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="809.0,486 809.0,493" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="827.6666666666666,413 827.6666666666666,420" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="827.6666666666666,486 827.6666666666666,493" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="846.3333333333334,413 846.3333333333334,420" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="846.3333333333334,486 846.3333333333334,493" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="865.0,413 865.0,420" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="865.0,486 865.0,493" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="782,438.0 789,438.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="885,438.0 892,438.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="782,453.0 789,453.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="885,453.0 892,453.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="782,468.0 789,468.0" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="885,468.0 892,468.0" fill="none" stroke="#383838" stroke-width="2"/>
+<text x="86" y="484" fill="#666666" font-family="Arial, sans-serif" font-size="17" font-weight="400">Read access to every layer</text>
+<text x="810.75" y="514" fill="#383838" font-family="Arial, sans-serif" font-size="16" font-weight="700">Read pool</text>
+<rect x="1034" y="388" width="108" height="82" rx="4" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="1034,406 1142,406" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="1045.5" cy="396.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<ellipse cx="1054.5" cy="396.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<ellipse cx="1063.5" cy="396.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<rect x="1052" y="440" width="11" height="19" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1072" y="423" width="11" height="36" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1092" y="432" width="11" height="27" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1112" y="415" width="11" height="44" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<polyline points="920,430 1026,430" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="1026,430 1018,425 1018,435" fill="#383838"/>
+<text x="1078.5" y="514" fill="#383838" font-family="Arial, sans-serif" font-size="19" font-weight="700">BI</text>
 </svg>
