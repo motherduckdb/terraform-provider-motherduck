@@ -3,9 +3,12 @@ package resources
 import (
 	"context"
 	stdsql "database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	duckdb "github.com/duckdb/duckdb-go/v2"
 
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
@@ -64,7 +67,7 @@ func (r *diveResource) Metadata(ctx context.Context, req resource.MetadataReques
 func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:             1,
-		MarkdownDescription: "Experimental: manages a MotherDuck Dive through public SQL table functions. Prefer application deployment tooling for Dive content; this surface is outside the provider's stable support commitment.",
+		MarkdownDescription: "Experimental: manages a MotherDuck Dive through public SQL table functions. Prefer application deployment tooling for Dive content. This surface is outside the provider's stable support commitment.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
@@ -77,7 +80,7 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"description": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional Dive description. Set this to an empty string to clear the visible description; removing an existing configured value is rejected because the public SQL update surface does not expose a null-clear operation.",
+				MarkdownDescription: "Optional Dive description. Set this to an empty string to clear the visible description. Removing an existing configured value is rejected because the public SQL update surface does not expose a null-clear operation.",
 			},
 			"content": schema.StringAttribute{
 				Required:            true,
@@ -85,7 +88,7 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"api_version": schema.Int64Attribute{
 				Optional:            true,
-				MarkdownDescription: "Optional Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default. The public MD_GET_DIVE output does not report this value, so import cannot recover it; keep it configured and expect one corrective update after import.",
+				MarkdownDescription: "Optional Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default. The public MD_GET_DIVE output does not report this value, so import cannot recover it. Keep it configured and expect one corrective update after import.",
 			},
 			"required_resources": schema.ListNestedAttribute{
 				Optional:            true,
@@ -110,7 +113,7 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"status": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Dive governance status. New Dives default to `draft`; owners can set `draft`, `ready`, or `archived`, while `endorsed` requires organization-admin permission.",
+				MarkdownDescription: "Dive governance status. New Dives default to `draft`. Owners can set `draft`, `ready`, or `archived`, while `endorsed` requires organization-admin permission.",
 				Validators:          diveStatusValidators(),
 				PlanModifiers:       stringUseStateForUnknown(),
 			},
@@ -297,13 +300,25 @@ func (r *diveResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	if err := retry.SQL(ctx, func() error {
 		_, err := client.QueryRowsJSON(ctx, query)
 		return err
-	}); err != nil && !isNotFound(err) {
+	}); err != nil && !isDiveNotFound(err) {
 		resp.Diagnostics.AddError("Unable to delete MotherDuck Dive", err.Error())
 	}
 }
 
 func (r *diveResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importUUIDID(ctx, req.ID, resp)
+}
+
+// Dives report a missing ID as a typed Invalid Error, not a Catalog Error.
+// Match only that exact service response so permission and dependency failures
+// remain diagnostics rather than silently discarding the managed Dive's state.
+func isDiveNotFound(err error) bool {
+	if isNotFound(err) {
+		return true
+	}
+	var duckErr *duckdb.Error
+	return errors.As(err, &duckErr) && duckErr.Type == duckdb.ErrorTypeInvalid &&
+		strings.TrimSpace(duckErr.Msg) == "Invalid Error: MDExternalException: Could not find Dive"
 }
 
 func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *diag.Diagnostics) bool {
@@ -335,7 +350,7 @@ func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *di
 	err := retry.SQL(ctx, func() error {
 		return client.QueryRow(ctx, query).Scan(scanTargets...)
 	})
-	if err == stdsql.ErrNoRows || isNotFound(err) {
+	if err == stdsql.ErrNoRows || isDiveNotFound(err) {
 		return false
 	}
 	if err != nil {
@@ -782,7 +797,7 @@ func (r *flightRunResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			"wait_for_status": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`; if the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`.",
+				MarkdownDescription: "Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`. If the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`.",
 				Validators:          flightRunWaitStatusValidators(),
 			},
 			"poll_interval_seconds": schema.Int64Attribute{
@@ -860,9 +875,9 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 	wantStatus := normalizeFlightRunStatus(model.WaitForStatus.ValueString())
 	pollInterval := time.Duration(int64ValueOrDefault(model.PollIntervalSeconds, 10)) * time.Second
 	timeout := time.Duration(int64ValueOrDefault(model.TimeoutSeconds, 600)) * time.Second
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
 	deadline := time.Now().Add(timeout)
+	ctx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
 
 	for {
 		status := normalizeFlightRunStatus(model.Status.ValueString())
@@ -870,12 +885,12 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 			return
 		}
 		if flightRunFailed(status) {
-			detail := fmt.Sprintf("Flight run %d reached status %q while waiting for %q. Inspect logs with the sensitive motherduck_flight_logs data source; logs are not copied into diagnostics because they can contain credentials or other sensitive output.", model.RunNumber.ValueInt64(), model.Status.ValueString(), wantStatus)
+			detail := fmt.Sprintf("Flight run %d reached status %q while waiting for %q. Inspect logs with the sensitive motherduck_flight_logs data source. Logs are not copied into diagnostics because they can contain credentials or other sensitive output.", model.RunNumber.ValueInt64(), model.Status.ValueString(), wantStatus)
 			diags.AddError("MotherDuck Flight run failed", detail)
 			return
 		}
 		if !time.Now().Before(deadline) {
-			detail := fmt.Sprintf("Timed out after %d seconds waiting for Flight run %d to reach %q. Last status was %q. Inspect logs with the sensitive motherduck_flight_logs data source; logs are not copied into diagnostics because they can contain credentials or other sensitive output.", int64ValueOrDefault(model.TimeoutSeconds, 600), model.RunNumber.ValueInt64(), wantStatus, model.Status.ValueString())
+			detail := fmt.Sprintf("Timed out after %d seconds waiting for Flight run %d to reach %q. Last status was %q. Inspect logs with the sensitive motherduck_flight_logs data source. Logs are not copied into diagnostics because they can contain credentials or other sensitive output.", int64ValueOrDefault(model.TimeoutSeconds, 600), model.RunNumber.ValueInt64(), wantStatus, model.Status.ValueString())
 			diags.AddError("Timed out waiting for MotherDuck Flight run", detail)
 			return
 		}
@@ -887,7 +902,14 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 		if sleepFor <= 0 {
 			continue
 		}
-		if err := retry.Sleep(ctx, sleepFor); err != nil {
+		err := retry.Sleep(ctx, sleepFor)
+		// Timer and context completion can race. Once our deadline has passed,
+		// report the configured timeout above instead of querying with an
+		// expired context or describing the timeout as an interruption.
+		if !time.Now().Before(deadline) {
+			continue
+		}
+		if err != nil {
 			diags.AddError("Interrupted while waiting for MotherDuck Flight run", err.Error())
 			return
 		}

@@ -104,7 +104,7 @@ func (r *databaseResource) Schema(ctx context.Context, req resource.SchemaReques
 			"snapshot_retention_days": schema.Int64Attribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Historical snapshot retention in days. Must be nonnegative; MotherDuck enforces any account-specific upper bound.",
+				MarkdownDescription: "Historical snapshot retention in days. Must be nonnegative. MotherDuck enforces any account-specific upper bound.",
 				PlanModifiers:       int64UseStateForUnknown(),
 				Validators:          snapshotRetentionValidators(),
 			},
@@ -122,7 +122,7 @@ func (r *databaseResource) Schema(ctx context.Context, req resource.SchemaReques
 			},
 			"encrypted": schema.BoolAttribute{
 				Optional:            true,
-				MarkdownDescription: "DuckLake-only. When true, emits the `ENCRYPTED` database option at creation; when false, omits the option.",
+				MarkdownDescription: "DuckLake-only. When true, emits the `ENCRYPTED` database option at creation. When false, omits the option.",
 				PlanModifiers:       boolRequiresReplace(),
 			},
 			"uuid": schema.StringAttribute{
@@ -1101,7 +1101,7 @@ func (r *shareResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"include_pattern": schema.ListAttribute{
 				Optional:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Optional preview catalog include patterns. Null shares the entire database; an empty list shares no objects. Changes are applied in place. The MotherDuck client must have filtered shares enabled.",
+				MarkdownDescription: "Optional preview catalog include patterns. Null shares the entire database. An empty list shares no objects. Changes are applied in place. The MotherDuck client must have filtered shares enabled.",
 			},
 			"url": schema.StringAttribute{
 				Computed:            true,
@@ -1142,7 +1142,7 @@ func validateShareIncludePattern(includePattern types.List, diags *diag.Diagnost
 		diags.AddAttributeError(
 			path.Root("include_pattern"),
 			"Invalid MotherDuck share include pattern",
-			fmt.Sprintf("The combined include-pattern length is %d characters; MotherDuck accepts at most 16384.", totalLength),
+			fmt.Sprintf("The combined include-pattern length is %d characters. MotherDuck accepts at most 16384.", totalLength),
 		)
 	}
 }

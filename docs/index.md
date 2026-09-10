@@ -62,6 +62,12 @@ a database being created in the same apply.
 
 ## What Terraform manages
 
+> **Deployment recommendation:** Use Terraform for databases, service accounts,
+> access tokens, Duckling configuration, roles/grants, and shares. Keep Dives,
+> Flight Python, and Guide Markdown in version control and deploy them through
+> the MotherDuck CLI or a code deployment pipeline. Terraform apply does not
+> compile application code, validate every data dependency, or run a data load.
+
 | Area | Resources | Typical use |
 | --- | --- | --- |
 | Warehouse structure | [Database](resources/database.md), [schema](resources/schema.md), [table](resources/table.md), [view](resources/view.md) | Provision landing tables and SQL models |
@@ -127,7 +133,7 @@ a [GitHub issue](https://github.com/motherduckdb/terraform-provider-motherduck/i
 
 - `admin_token` (String, Sensitive) MotherDuck organization admin token for REST/control-plane operations. Defaults to `MOTHERDUCK_ADMIN_TOKEN`.
 - `api_base_url` (String) MotherDuck REST API base URL. Must be an absolute HTTP or HTTPS URL with a host. Defaults to `https://api.motherduck.com`.
-- `attach_mode` (String) Optional MotherDuck attach mode. Supported values are `workspace` and `single`. Use `single` with `database` to attach that existing database without attaching other workspace databases; DuckDB/MotherDuck system catalogs such as `memory` and `md_information_schema` can still be present. Omit this argument for MotherDuck's default workspace attachment behavior.
+- `attach_mode` (String) Optional MotherDuck attach mode. Supported values are `workspace` and `single`. Use `single` with `database` to attach that existing database without attaching other workspace databases. DuckDB/MotherDuck system catalogs such as `memory` and `md_information_schema` can still be present. Omit this argument for MotherDuck's default workspace attachment behavior.
 - `custom_user_agent` (String) Optional custom user agent suffix sent on both the DuckDB/MotherDuck SQL connection and MotherDuck REST API requests.
 - `database` (String) Optional MotherDuck database to attach during provider SQL initialization.
 - `request_timeout_seconds` (Number) Optional timeout, in seconds, for MotherDuck REST API requests. Defaults to 30 seconds.

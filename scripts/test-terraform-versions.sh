@@ -61,7 +61,7 @@ if [[ "${mode}" == live ]]; then
   fi
 
   if [[ -z "${MOTHERDUCK_ADMIN_TOKEN:-}" ]]; then
-    echo "MOTHERDUCK_ADMIN_TOKEN is not set; running Terraform version matrix in SQL-only mode."
+    echo "MOTHERDUCK_ADMIN_TOKEN is not set. Running Terraform version matrix in SQL-only mode."
     rest_admin_available=false
     rest_admin_skip_reason="MOTHERDUCK_ADMIN_TOKEN is not set"
   else
@@ -118,7 +118,7 @@ run_cli_smoke() {
     # Preview-surface lifecycles. Each script skips with exit 0 when the
     # account does not expose the required MD_* functions (or, for share
     # grants, when neither an admin token nor MD_TF_ACC_SHARE_GRANTEE_USERNAME
-    # is present); set MD_TF_ACC_REQUIRE_* to turn a skip into a failure.
+    # is present). Set MD_TF_ACC_REQUIRE_* to turn a skip into a failure.
     for fixture in guide dive flight dive-flight-blueprint share-grant-drift; do
       TERRAFORM_BIN="${terraform_bin}" RUN_ID="${version_run_id}" "${ROOT_DIR}/scripts/test-live-${fixture}.sh"
     done

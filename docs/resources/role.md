@@ -15,8 +15,8 @@ and Enterprise plans.
 
 | Role you want to use | Terraform configuration |
 | --- | --- |
-| Preset `admin`, `builder`, or `explorer` | Reference its name in `motherduck_role_grant`; do not create or import it as `motherduck_role` |
-| Existing custom role, managed elsewhere | Reference its name in `motherduck_role_grant`; Terraform owns only that grant |
+| Preset `admin`, `builder`, or `explorer` | Reference its name in `motherduck_role_grant`. Do not create or import it as `motherduck_role` |
+| Existing custom role, managed elsewhere | Reference its name in `motherduck_role_grant`. Terraform owns only that grant |
 | Existing custom role that Terraform should own | Declare `motherduck_role` and import it before applying |
 | New custom role | Declare `motherduck_role`, then reference its `.name` from grants |
 
@@ -28,6 +28,19 @@ another custom role. Use [motherduck_role_grant](role_grant.md) with
 
 See MotherDuck's [CREATE ROLE](https://motherduck.com/docs/sql-reference/motherduck-sql-reference/access-control/create-role/)
 reference for permission and naming rules.
+
+## Deletion order
+
+A role with active assignments cannot be dropped. Revoke its user and role
+memberships first. Reference managed role and service-account attributes from
+grant resources so Terraform can revoke grants before deleting their targets.
+
+Revoke custom-role grants before deleting a service account outside Terraform.
+Live lifecycle testing found that external account deletion followed by
+recreation can leave a service-side assignment that blocks `DROP ROLE`, even
+when the deleted account is no longer listed as a member. If this occurs, keep
+the failed role in state and resolve the stale assignment with MotherDuck
+support. Recreating the same username does not restore the old account identity.
 
 ## Example Usage
 

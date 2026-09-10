@@ -207,7 +207,7 @@ cleanup() {
   done
   destroy_status="${child_status}"
   if [[ "${destroy_status}" -ne 0 ]]; then
-    echo "warehouse cleanup failed; preserving bootstrap state and credentials" >&2
+    echo "warehouse cleanup failed. Preserving bootstrap state and credentials" >&2
   fi
   for example in service_account access_token duckling_config; do
     work_dir="${rest_dir}/${example}"
@@ -217,7 +217,7 @@ cleanup() {
     fi
   done
   if [[ "${destroy_status}" -ne 0 ]]; then
-    echo "REST example cleanup failed; preserving bootstrap state" >&2
+    echo "REST example cleanup failed. Preserving bootstrap state" >&2
   fi
   for example in hypertenancy read-hypertenancy; do
     work_dir="${blueprint_dir}/${example}"
@@ -228,7 +228,7 @@ cleanup() {
     fi
   done
   if [[ "${destroy_status}" -ne 0 ]]; then
-    echo "blueprint data cleanup failed; preserving bootstrap state" >&2
+    echo "blueprint data cleanup failed. Preserving bootstrap state" >&2
   fi
   if [[ "${destroy_status}" -eq 0 && -d "${blueprint_dir}/writer-bootstrap/.terraform" ]]; then
     TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${blueprint_dir}/writer-bootstrap" \

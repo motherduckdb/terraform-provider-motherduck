@@ -45,7 +45,7 @@ organizations or protection against privileged administrators.
 4. Copy the chosen warehouse root, including SQL templates, into separate
    working directories for dev and prod. Keep their backend states and state
    access controls separate. Use your organization's encrypted, locking remote
-   backend before production use; these copyable examples leave backend choice
+   backend before production use. These copyable examples leave backend choice
    to the caller and otherwise use Terraform's local state.
 5. In each job, inject that environment's writer token as `MOTHERDUCK_TOKEN`.
    Do not inject admin credentials into the warehouse job. Check `SELECT md_user()`
@@ -89,7 +89,7 @@ see curated data. For each environment:
    `update_mode = "automatic"`. Add `motherduck_share_grant` with
    `grantee_type = "user"` and that environment's reader username.
    In the layered layout, share only the physical marts database. In the simple
-   layout, sharing the whole database also exposes raw data; materialize a
+   layout, sharing the whole database also exposes raw data. Materialize a
    separate curated database if that is unsuitable.
 3. **Connect as the reader with its read-write token and attach the share at
    least once**, before starting BI. Obtain the exact share URL from the writer's
@@ -113,14 +113,14 @@ not restrict BI to marts. See [read-scaling permissions](https://motherduck.com/
 ## Lifecycle and operation boundaries
 
 Terraform owns database, schema, table, and view definitions. Ingestion
-and data refresh are separate SQL/pipeline operations; these examples create no
+and data refresh are separate SQL/pipeline operations. These examples create no
 Flight runs, Dives, or Guides. A fresh apply creates an empty warehouse.
 
 The table resource uses replacement for schema changes. For important data,
 add literal `prevent_destroy = true` to protected database/table resources and
 use a reviewed migration or transfer schema ownership to a modeling tool.
 Never let Terraform and dbt/another tool manage the same table definition.
-Review raw retention and compute sizes for your workload; this is not a sizing
+Review raw retention and compute sizes for your workload. This is not a sizing
 recommendation. The examples use native storage, not DuckLake.
 
 Token outputs are sensitive but still stored in bootstrap state. Example tokens
@@ -156,5 +156,5 @@ Review the replacement plan, detach old shares as the old reader with a
 read-write token, remove the old layered grants/shares with the writer, then
 apply bootstrap and securely update both pipeline and BI credentials. Keep the
 original writer credentials available until warehouse changes finish. Do not
-apply this switch if existing BI consumers still require curated-only access;
-retain the separate-reader design above instead.
+apply this switch if existing BI consumers still require curated-only access.
+Retain the separate-reader design above instead.

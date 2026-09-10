@@ -51,15 +51,15 @@ includes the audit. A run matching zero tests does not prove coverage.
 
 ## Comparison with other providers
 
-Selected public files reviewed September 6, 2026; this is not an exhaustive
+Selected public files reviewed September 6, 2026. This is not an exhaustive
 assessment of those projects.
 
 | Provider | Observed pattern | Application here |
 | --- | --- | --- |
 | Snowflake | Remote-object and Terraform-state assertions through create/import/update/re-import | Add independent SQL checks and update/import cycles |
 | Google BigQuery | Table lifecycle sequences, remote checks, scoped import exclusions, VCR harness | Adopt the lifecycle checks using our existing SQL/HTTP seams |
-| ClickHouse Cloud | Shared Make targets, generated docs checks, E2E upgrade inputs | Keep local/CI commands aligned; test upgrades once a published baseline exists |
-| Databricks | Docs formatting, link integrity, schema comparison, separate unit/integration tests | Retain generated docs checks; review schema compatibility explicitly |
+| ClickHouse Cloud | Shared Make targets, generated docs checks, E2E upgrade inputs | Keep local/CI commands aligned. Test upgrades once a published baseline exists |
+| Databricks | Docs formatting, link integrity, schema comparison, separate unit/integration tests | Retain generated docs checks. Review schema compatibility explicitly |
 
 Sources:
 
@@ -98,7 +98,7 @@ MotherDuck credentials.
 ## CI and upgrade policy
 
 Keep PR gates deterministic, credential-free, and bounded. Native package jobs
-own artifact installation; static checks should not duplicate them. Trusted main
+own artifact installation. Static checks should not duplicate them. Trusted main
 checks own live SQL behavior.
 
 Once an immutable first release exists, add old-provider create → new-provider

@@ -1,4 +1,4 @@
-# Provider review — September 5, 2026
+# Provider review: September 5, 2026
 
 Baseline: `2ad3cb6e12b2ec7d66c081db0db68945580c2eb7`.
 
@@ -23,7 +23,7 @@ Baseline: `2ad3cb6e12b2ec7d66c081db0db68945580c2eb7`.
    column metadata once per result set. A three-run local DuckDB benchmark over
    1,000 rows reduced allocations from approximately 18,827 to 15,830 per read
    (16%) and memory from 749 KB to 701 KB. Observed time fell from roughly
-   0.92–0.95 ms to 0.84–0.87 ms; these are local measurements, not a guarantee
+   0.92–0.95 ms to 0.84–0.87 ms. These are local measurements, not a guarantee
    of equivalent gains for network-bound MotherDuck workloads.
 5. **Remove duplicate retry sleep code.** REST requests now reuse `retry.Sleep`,
    retaining one implementation of cancellation-aware delay handling.
@@ -69,7 +69,7 @@ and the generated signature, without passing the passphrase on the command line.
 
 Documentation now includes setup, development, architecture, state/import
 semantics, and an explicit release-readiness checklist. Registered surfaces must
-have example/schema documentation; resources must explain import behavior.
+have example/schema documentation. Resources must explain import behavior.
 Stale notes for unpublished versions were removed and the initial candidate
 notes were linked to current public history.
 

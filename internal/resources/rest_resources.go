@@ -273,7 +273,7 @@ func (r *accessTokenResource) Read(ctx context.Context, req resource.ReadRequest
 	// so it was deleted or expired out of band and must leave state. The API
 	// has no per-token GET to confirm, and the listing shape is unspecified
 	// enough that a future server-side cap could hide live tokens. A token
-	// past its recorded expire_at is expected to be gone; anything else is
+	// past its recorded expire_at is expected to be gone. Anything else is
 	// surfaced as a warning so a replacement never happens silently.
 	if !accessTokenExpired(state.ExpireAt, time.Now()) {
 		resp.Diagnostics.AddWarning(
@@ -296,7 +296,7 @@ func accessTokenExpired(expireAt types.String, now time.Time) bool {
 	if raw == "" {
 		return false
 	}
-	// The REST API returns expire_at as RFC 3339; RFC3339Nano also accepts
+	// The REST API returns expire_at as RFC 3339. RFC3339Nano also accepts
 	// values without fractional seconds.
 	when, err := time.Parse(time.RFC3339Nano, raw)
 	return err == nil && when.Before(now)

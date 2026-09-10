@@ -4,7 +4,7 @@ Creates one tenant database, restricted share, reader service account, and reade
 
 ## Why The Writer Must Run This Module
 
-MotherDuck databases are writable only by the identity that owns them, and only the owner of a share can run `GRANT READ ON SHARE`. So the writer service account cannot be a bystander that Terraform merely creates: the provider's `MOTHERDUCK_TOKEN` for this module must **be** the writer's token. Everything the module creates — tenant databases, schemas, shares, grants — is then owned by the writer, which is exactly what lets the ingestion pipeline write and the reader accounts read.
+MotherDuck databases are writable only by the identity that owns them, and only the owner of a share can run `GRANT READ ON SHARE`. So the writer service account cannot be a bystander that Terraform merely creates: the provider's `MOTHERDUCK_TOKEN` for this module must **be** the writer's token. Everything the module creates (tenant databases, schemas, shares, grants) is then owned by the writer, which is exactly what lets the ingestion pipeline write and the reader accounts read.
 
 Deployment is therefore two stages, each with its own state:
 
@@ -13,7 +13,7 @@ Deployment is therefore two stages, each with its own state:
 
 ## Requirements
 
-- `MOTHERDUCK_TOKEN` — the **writer service account's** token, minted by the writer-bootstrap stage.
+- `MOTHERDUCK_TOKEN`: the **writer service account's** token, minted by the writer-bootstrap stage.
 - `MOTHERDUCK_ADMIN_TOKEN` from an organization admin, for reader service accounts and access tokens.
 
 ## Quick Start
@@ -83,7 +83,7 @@ Keep `database_prefix`, `share_prefix`, and `reader_prefix` simple: they must st
 
 ## Writer And Reader Tokens
 
-The writer token has read-write scope over all tenant databases; distribute it only to the ingestion or modeling runtime, never to tenant-facing services. Generated reader tokens are sensitive Terraform state: move them into the appropriate runtime secret managers immediately, restrict access to the backend that stores this module's state, and do not print them in CI logs.
+The writer token has read-write scope over all tenant databases. Distribute it only to the ingestion or modeling runtime, never to tenant-facing services. Generated reader tokens are sensitive Terraform state: move them into the appropriate runtime secret managers immediately, restrict access to the backend that stores this module's state, and do not print them in CI logs.
 
 Reader tokens expire after `reader_token_ttl_seconds` (30 days by default) and Terraform does not rotate them automatically. Plan a rotation workflow before the TTL elapses, for example:
 

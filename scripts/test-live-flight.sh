@@ -94,13 +94,29 @@ set -e
 
 if [[ "${plan_exit}" -ne 0 ]]; then
   if [[ "${plan_exit}" -eq 2 && "${run_flight_hcl}" == "true" ]]; then
-    echo "Run-enabled Flight smoke reported a non-empty follow-up plan; Flight run rows are dynamic while runs transition status."
+    echo "Run-enabled Flight smoke reported a non-empty follow-up plan. Flight run rows are dynamic while runs transition status."
   else
     if [[ "${plan_exit}" -eq 2 ]]; then
       echo "Expected no-op plan after Flight update, but Terraform reported changes" >&2
     fi
     exit "${plan_exit}"
   fi
+fi
+
+if [[ "${MD_TF_ACC_ENABLE_FLIGHT_RUNS:-0}" != "1" ]]; then
+  # External deletion must lead to recreation, including dependent data sources.
+  run_tf() { TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" "$@"; }
+  object_id="$(run_tf show -json | python3 -c 'import json,sys; address=sys.argv[1]; print(next(r["values"]["id"] for r in json.load(sys.stdin)["values"]["root_module"]["resources"] if r["address"] == address))' "motherduck_flight.smoke")"
+  go run "${ROOT_DIR}/internal/dev/mdexec" -sql "CALL MD_DELETE_FLIGHT(flight_id := '${object_id}'::UUID)"
+  drift_status=0
+  run_tf plan -detailed-exitcode -input=false || drift_status=$?
+  if [[ "${drift_status}" != "2" ]]; then
+    echo "Expected a recreation plan after external deletion, got ${drift_status}" >&2
+    exit 1
+  fi
+  run_tf apply -auto-approve -input=false
+  run_tf plan -detailed-exitcode -input=false
+
 fi
 
 if [[ "${KEEP_LIVE_FIXTURE}" == "1" ]]; then

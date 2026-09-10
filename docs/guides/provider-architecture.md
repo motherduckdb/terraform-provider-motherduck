@@ -37,16 +37,16 @@ On a fresh empty account, that first connection can create the platform default
 `my_db`. Configure an existing database explicitly and use single-database mode
 when the connection must avoid workspace initialization.
 
-Resources own Terraform state semantics. Clients should report service outcomes;
-they should not decide that permission failures mean a Terraform resource was
+Resources own Terraform state semantics. Clients should report service outcomes.
+They should not decide that permission failures mean a Terraform resource was
 deleted. New abstractions should have a concrete caller or test need.
 
 ## Change contracts
 
 Public schemas are compatibility contracts. Preserve attribute names, types,
 defaults, sensitivity, and import formats unless a planned breaking change is
-documented. Use Framework state upgrades when a stored schema shape changes;
-changing the schema version alone does not migrate state.
+documented. Use Framework state upgrades when a stored schema shape changes.
+Changing the schema version alone does not migrate state.
 
 Optional/computed values require special care: unknown plan values must not be
 validated as empty strings, and refresh must not substitute server defaults in a
@@ -54,4 +54,4 @@ way that contradicts configured values. Test create, no-op refresh, import, drif
 and destroy using the real Terraform protocol.
 
 Generated docs describe every registered surface. Edit schemas, examples, and
-templates, then run `make docs`; do not hand-edit generated reference pages.
+templates, then run `make docs`. Do not hand-edit generated reference pages.

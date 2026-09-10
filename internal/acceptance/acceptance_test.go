@@ -197,7 +197,7 @@ resource "motherduck_view" "test" {
 				ImportState:             true,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"query"},
-				// The server canonicalizes SQL; verify recovered SQL explicitly
+				// The server canonicalizes SQL. Verify recovered SQL explicitly
 				// instead of silently excluding it from the import contract.
 				ImportStateCheck: checkImportedViewQuery(probe, "2"),
 			},

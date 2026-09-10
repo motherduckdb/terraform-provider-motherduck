@@ -36,7 +36,7 @@ done
 write_provider_cli_config "${fixture}/terraformrc"
 [[ "$(grep -c 'registry.opentofu.org/motherduckdb/motherduck' "${fixture}/terraformrc")" == 2 ]]
 
-# Explicit suite reuse must not trigger another compile; standalone reuse must
+# Explicit suite reuse must not trigger another compile. Standalone reuse must
 # refuse an old binary rather than test stale code or overwrite a running one.
 export TF_TEST_PROVIDER_BINARY="${provider_binary}"
 prepare_provider_mirror

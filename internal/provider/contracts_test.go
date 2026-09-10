@@ -131,7 +131,7 @@ resource "motherduck_table" "test" {
 				ImportState:       true,
 				ImportStateId:     "contract_database.app.facts",
 				ImportStateVerify: true,
-				// Imported metadata uses INTEGER; the configured INT spelling is
+				// Imported metadata uses INTEGER. The configured INT spelling is
 				// intentionally preserved only in the original managed state.
 				ImportStateVerifyIgnore: []string{"columns"},
 				ImportStateCheck: func(states []*terraform.InstanceState) error {

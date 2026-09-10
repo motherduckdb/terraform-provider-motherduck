@@ -2,10 +2,18 @@
 page_title: "motherduck_guide Resource - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Experimental: manages a versioned MotherDuck Guide through public SQL functions. Prefer application deployment tooling for Guide content; this surface is outside the provider's stable support commitment.
+  Experimental: manages a versioned MotherDuck Guide through public SQL functions. Prefer application deployment tooling for Guide content. This surface is outside the provider's stable support commitment.
 ---
 
 # motherduck_guide (Resource)
+
+> **Deployment recommendation:** Use Terraform for databases, service accounts,
+> access tokens, Duckling configuration, roles/grants, and shares. Keep Dives,
+> Flight Python, and Guide Markdown in version control and deploy them through
+> the MotherDuck CLI or a code deployment pipeline. Terraform apply does not
+> compile application code, validate every data dependency, or run a data load.
+
+See [resource scope and ownership migration](../guides/resource-scope.md).
 
 Experimental: manage versioned Guide content and its audience as one unit.
 Prefer [Blueprints](../guides/blueprints-deployment.md) when Markdown and related

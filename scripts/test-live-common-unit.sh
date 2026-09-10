@@ -127,7 +127,7 @@ if [[ "${secret_status}" -ne 31 ]]; then
 fi
 grep -F 'Live cleanup failed (drop secret secret): stub secret failure' "${test_dir}/secret.stderr" >/dev/null
 
-# A missing named snapshot is a successful no-op; a matching row is updated.
+# A missing named snapshot is a successful no-op. A matching row is updated.
 unset LIVE_COMMON_TEST_FAILURE
 export LIVE_COMMON_TEST_SCALAR_OUTPUT=""
 : > "${LIVE_COMMON_TEST_LOG}"

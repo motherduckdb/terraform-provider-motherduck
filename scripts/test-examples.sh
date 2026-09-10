@@ -174,7 +174,7 @@ planned_count=0
 while IFS= read -r example_dir; do
   relative_dir="${example_dir#"${ROOT_DIR}/"}"
   if [[ "${relative_dir}" == examples/ephemeral-resources/* && "${EPHEMERAL_EXAMPLES_SUPPORTED}" != "1" ]]; then
-    echo "==> Skipping ${relative_dir}; Terraform ${TERRAFORM_CLI_VERSION:-unknown} does not support ephemeral blocks"
+    echo "==> Skipping ${relative_dir}. Terraform ${TERRAFORM_CLI_VERSION:-unknown} does not support ephemeral blocks"
     continue
   fi
 
@@ -207,11 +207,11 @@ HCL
   validated_count=$((validated_count + 1))
 
   if [[ "${relative_dir}" == examples/data-sources/* ]]; then
-    echo "==> Skipping offline plan for ${relative_dir}; Terraform reads data sources during plan"
+    echo "==> Skipping offline plan for ${relative_dir}. Terraform reads data sources during plan"
     continue
   fi
   if [[ "${relative_dir}" == examples/ephemeral-resources/* ]]; then
-    echo "==> Skipping offline plan for ${relative_dir}; Terraform opens ephemeral resources during plan"
+    echo "==> Skipping offline plan for ${relative_dir}. Terraform opens ephemeral resources during plan"
     continue
   fi
 

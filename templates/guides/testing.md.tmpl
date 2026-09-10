@@ -35,12 +35,12 @@ make workflow-check
 
 `make test-unit` runs hermetic Go tests, including embedded DuckDB and direct ephemeral-resource checks, with the race detector, randomized ordering, a five-minute timeout, and package coverage summaries. Coverage is diagnostic information, not a line-percentage gate.
 
-`make test-contract` runs only `TestContract*` tests in the provider package against the real Terraform protocol. It covers database/table/service-account lifecycles, import, drift repair, token secret preservation, Flight wait policy, nullable owned-share state, and SQL/REST read-error recovery. Unexpected backend operations and duplicate creates fail the test. A backend read error must produce a diagnostic and preserve existing state; recovery must plan no changes. Unit tests are not rerun in this target.
+`make test-contract` runs only `TestContract*` tests in the provider package against the real Terraform protocol. It covers database/table/service-account lifecycles, import, drift repair, token secret preservation, Flight wait policy, nullable owned-share state, and SQL/REST read-error recovery. Unexpected backend operations and duplicate creates fail the test. A backend read error must produce a diagnostic and preserve existing state. Recovery must plan no changes. Unit tests are not rerun in this target.
 
 `make test-cli` builds the current provider once, then runs example validation/plans,
 invalid-import diagnostics, invalid-configuration diagnostics, and missing-credential
 checks. Each case has its own Terraform directory. The same executable is linked
-into Terraform and OpenTofu filesystem mirrors; tests do not install a published
+into Terraform and OpenTofu filesystem mirrors. Tests do not install a published
 provider or implicitly reuse a previous build. Offline cases remove inherited
 MotherDuck credentials, Terraform CLI arguments, variables, and provider reattachment
 settings before executing.
@@ -72,7 +72,7 @@ make docs
 | Layer | What it proves | What it does not prove |
 | --- | --- | --- |
 | Unit and embedded DuckDB | Validation, serialization, cancellation, SQL behavior | MotherDuck service availability |
-| Protocol contracts | Database and service-account lifecycle/import/drift; table import/type/replacement; token secret preservation/import/recreation; owned-share state and read-error recovery | Live API permissions |
+| Protocol contracts | Database and service-account lifecycle/import/drift. Table import/type/replacement. Token secret preservation/import/recreation. Owned-share state and read-error recovery | Live API permissions |
 | CLI compatibility | Examples and diagnostics across supported Terraform versions | Every resource lifecycle on every CLI |
 | Native packages | ZIP layout, mirror installation, plugin startup, schema, validation on four platforms | Registry signing or discovery |
 | Required live SQL | Database/schema/table/view lifecycles and imports, in-place view updates, execution of imported SQL, cleanup | All SQL resources or REST administration |
@@ -86,7 +86,7 @@ Use a strict local HTTP server for REST and the existing SQL seam for protocol
 tests. Never count a missing credential or skipped optional feature as coverage.
 
 Regression tests should fail on the original bug. Use benchmarks to establish
-performance changes; do not use noisy wall-clock thresholds as ordinary PR gates.
+performance changes. Do not use noisy wall-clock thresholds as ordinary PR gates.
 
 ## Live test credentials
 
@@ -103,7 +103,7 @@ Run the required SQL lifecycle gate:
 MOTHERDUCK_TOKEN=... make test-live-required
 ```
 
-All three targets require `MOTHERDUCK_TOKEN` and fail when it is missing. `test-integration` runs the Go SQL-client integration tests, `test-acceptance` runs Terraform provider lifecycles, and `test-live-required` runs both followed by a cleanup audit. REST administration behavior is required in the hermetic protocol suite; admin-only Go acceptance tests additionally require the `admin_acceptance` build tag and remain optional because the hosted environment has no organization-admin token.
+All three targets require `MOTHERDUCK_TOKEN` and fail when it is missing. `test-integration` runs the Go SQL-client integration tests, `test-acceptance` runs Terraform provider lifecycles, and `test-live-required` runs both followed by a cleanup audit. REST administration behavior is required in the hermetic protocol suite. Admin-only Go acceptance tests additionally require the `admin_acceptance` build tag and remain optional because the hosted environment has no organization-admin token.
 
 Run the broad stable SQL smoke before release candidates or larger SQL lifecycle changes:
 
@@ -141,8 +141,8 @@ injected into the environment:
 make test-live-examples
 ```
 
-The role suite also needs a SQL token with role-administration privileges;
-the REST admin token does not grant SQL permissions. The app suite requires
+The role suite also needs a SQL token with role-administration privileges.
+The REST admin token does not grant SQL permissions. The app suite requires
 Terraform 1.10 or later for the ephemeral embed-session example.
 
 For core object-storage coverage, inject `AWS_ACCESS_KEY_ID`,
@@ -150,7 +150,7 @@ For core object-storage coverage, inject `AWS_ACCESS_KEY_ID`,
 `MD_TF_ACC_OBJECT_STORAGE_PATH` to an S3 prefix containing `fixtures/orders.csv`.
 The credentials need to read that fixture, list the bucket, and create/delete a
 run-scoped probe below the prefix. Missing storage configuration reports
-unavailable coverage; failures with supplied credentials fail the suite.
+unavailable coverage. Failures with supplied credentials fail the suite.
 
 The suites create disposable service accounts and deploy the files under
 `examples/`. They check the resulting state and permissions, refresh and no-op
@@ -242,14 +242,14 @@ Use the blueprint matrix when architecture modules should be proven across Terra
 MOTHERDUCK_TOKEN=... make test-terraform-versions-blueprint
 ```
 
-The SQL lifecycle matrix runs the database drop-with-objects smoke and the Guide, Dive, Flight, Dive-and-Flight blueprint, and share-grant drift smokes. Preview-surface smokes skip with a successful exit when the account lacks the required `MD_*` functions; set `MD_TF_ACC_REQUIRE_GUIDES`, `MD_TF_ACC_REQUIRE_DIVES`, `MD_TF_ACC_REQUIRE_FLIGHTS`, or `MD_TF_ACC_REQUIRE_DIVE_FLIGHT_BLUEPRINT` to fail instead of skipping.
+The SQL lifecycle matrix runs the database drop-with-objects smoke and the Guide, Dive, Flight, Dive-and-Flight blueprint, and share-grant drift smokes. Preview-surface smokes skip with a successful exit when the account lacks the required `MD_*` functions. Set `MD_TF_ACC_REQUIRE_GUIDES`, `MD_TF_ACC_REQUIRE_DIVES`, `MD_TF_ACC_REQUIRE_FLIGHTS`, or `MD_TF_ACC_REQUIRE_DIVE_FLIGHT_BLUEPRINT` to fail instead of skipping.
 
 Both lifecycle matrices create durable MotherDuck objects while they run and clean them up on exit.
 
 ## Output And Cleanup
 
 The CLI suite prints one result per group and saves detailed logs under
-`test-results/cli-<run-id>/`; failures print the failed group's log. Live smoke
+`test-results/cli-<run-id>/`. Failures print the failed group's log. Live smoke
 fixtures retain Terraform directories and logs under ignored `test-results/`.
 Provider binaries and symlink mirrors live under `tools/`. The stable live SQL
 suite and CLI version matrix explicitly reuse one freshly built provider across
@@ -258,7 +258,7 @@ their child scripts. Resource-specific assertions stay in the individual scripts
 Live scripts use one EXIT cleanup path. Cleanup attempts all named fixture objects,
 propagates failures, and preserves the original test's nonzero exit status. It
 never turns a failed test or failed cleanup into success. An interrupted or failed
-fixture retains state for diagnosis; it is not evidence that cleanup succeeded. Treat live output as account metadata because it can include catalog names, share URLs, tenant names, and snapshot metadata even when Terraform masks sensitive values.
+fixture retains state for diagnosis. It is not evidence that cleanup succeeded. Treat live output as account metadata because it can include catalog names, share URLs, tenant names, and snapshot metadata even when Terraform masks sensitive values.
 
 After interrupted live runs, audit common `tf_` leftovers:
 

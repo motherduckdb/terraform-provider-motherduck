@@ -9,7 +9,7 @@ description: |-
 
 This experimental data source requires `MD_LIST_GUIDE_GRANTEES` in the connected
 MotherDuck SQL session. It returns an explicit unavailable-function diagnostic
-when that function is absent; an organization-admin token alone does not make
+when that function is absent. An organization-admin token alone does not make
 the function available.
 
 Check the authenticated session before using it:

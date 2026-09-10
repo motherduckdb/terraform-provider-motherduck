@@ -53,7 +53,7 @@ def tf(directory, *args, token=None, allowed=(0,), private_output=False):
     if not private_output:
         log.write_text(redact(result.stdout + result.stderr))
     if result.returncode not in allowed:
-        raise RuntimeError(f"{directory.name}: {args[0]} exited {result.returncode}; see {log}")
+        raise RuntimeError(f"{directory.name}: {args[0]} exited {result.returncode}. See {log}")
     return result
 
 
@@ -62,7 +62,7 @@ def sql(query, token):
                             cwd=ROOT, env=environment(token), capture_output=True, text=True, timeout=180)
     if result.returncode:
         (BASE / "sql-error.log").write_text(redact(result.stderr))
-        raise RuntimeError("Independent SQL check failed; see sql-error.log")
+        raise RuntimeError("Independent SQL check failed. See sql-error.log")
     return result.stdout.strip()
 
 
@@ -157,7 +157,7 @@ def verify_catalogs(token, expected):
             raise RuntimeError(f"{item['address']} did not return its requested object")
     if any(item["mode"] == "ephemeral" for item in resources):
         raise RuntimeError("Ephemeral embed session unexpectedly persisted in state")
-    check("catalogs return fixture objects; embed credentials retain secret state semantics")
+    check("catalogs return fixture objects. Embed credentials retain secret state semantics")
 
 
 def run_examples(token):
@@ -178,7 +178,7 @@ def run_examples(token):
                               "Revenue is calculated from finalized invoices. Refunds reduce revenue.")
     updated = updated.replace('print("hello")', 'print("hello updated")')
     if updated == text:
-        raise RuntimeError("Example content changed; update probes need review")
+        raise RuntimeError("Example content changed. Update probes need review")
     previous_version = initial["guide_version"]
     for cycle in range(int(os.environ.get("MD_EXAMPLE_UPDATE_CYCLES", "1"))):
         selected = updated if cycle % 2 == 0 else text
@@ -199,7 +199,7 @@ def run_examples(token):
         tf(APP, "state", "rm", address, token=token)
         tf(APP, "import", "-input=false", address, str(after[kind]), token=token)
         if kind == "dive":
-            # Public getters cannot recover api_version; one configured content update restores it.
+            # Public getters cannot recover api_version. One configured content update restores it.
             tf(APP, "apply", "-auto-approve", "-input=false", token=token)
         plan(token)
         check(kind + " import and no-op")
@@ -288,7 +288,7 @@ def main():
                 cleanup_errors.append(str(failure))
         if cleanup_errors:
             REPORT["cleanup"]["errors"] = cleanup_errors
-            error = (error or "") + "; cleanup failed, retain bootstrap state: " + "; ".join(cleanup_errors)
+            error = (error or "") + ". Cleanup failed, retain bootstrap state: " + ". ".join(cleanup_errors)
         if error:
             REPORT["error"] = redact(error)
         save_report()

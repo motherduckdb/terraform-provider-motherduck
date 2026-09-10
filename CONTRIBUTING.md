@@ -46,12 +46,18 @@ Run release packaging checks after changing release scripts or workflows:
 make release-check
 ```
 
-When updating Go modules, test the DuckDB/MotherDuck path before keeping a `duckdb-go` or `duckdb-go-bindings` bump. Newer embedded DuckDB builds can be published before MotherDuck supports that DuckDB version, so a clean `go test` is not enough; run at least `MOTHERDUCK_TOKEN=... make test-terraform-versions` or a focused live SQL smoke. For that reason Dependabot is configured in `.github/dependabot.yml` to ignore `github.com/duckdb/duckdb-go/*` and `github.com/duckdb/duckdb-go-bindings*`; bump those modules manually in a dedicated PR and record the live smoke you ran in the PR description.
+When updating Go modules, test the DuckDB/MotherDuck path before keeping a `duckdb-go` or `duckdb-go-bindings` bump. Newer embedded DuckDB builds can be published before MotherDuck supports that DuckDB version, so a clean `go test` is not enough. Run at least `MOTHERDUCK_TOKEN=... make test-terraform-versions` or a focused live SQL smoke. For that reason Dependabot is configured in `.github/dependabot.yml` to ignore `github.com/duckdb/duckdb-go/*` and `github.com/duckdb/duckdb-go-bindings*`. Bump those modules manually in a dedicated PR and record the live smoke you ran in the PR description.
 
 ShellCheck is a required local dependency, matching CI. Install it with
 `brew install shellcheck` on macOS or your system package manager. The CLI gate
-builds the provider once and runs isolated fixtures; see [testing](docs/guides/testing.md)
+builds the provider once and runs isolated fixtures. See [testing](docs/guides/testing.md)
 for narrower commands, logs, and the distinction between validation and live coverage.
+
+## Writing
+
+Do not use semicolons or em dashes in authored prose, comments, descriptions, or
+user-facing messages. Preserve required code and SQL syntax, protocol values,
+parser test inputs, and the license text.
 
 ## Adding A Resource Or Data Source
 
@@ -94,9 +100,9 @@ The required live gate uses the SQL credential and fails rather than skipping wh
 MOTHERDUCK_TOKEN=... make test-live-required
 ```
 
-`make test-unit` uses the race detector, randomized ordering, a five-minute timeout, and coverage summaries. `make test-contract` runs only the `TestContract*` Terraform protocol lifecycles against strict in-memory SQL and REST clients. Coverage is diagnostic; contracts gate observable state and backend side effects. Credentialed Go tests use the `acceptance` build tag and are only run by explicit live targets.
+`make test-unit` uses the race detector, randomized ordering, a five-minute timeout, and coverage summaries. `make test-contract` runs only the `TestContract*` Terraform protocol lifecycles against strict in-memory SQL and REST clients. Coverage is diagnostic. Contracts gate observable state and backend side effects. Credentialed Go tests use the `acceptance` build tag and are only run by explicit live targets.
 
-The hosted environment does not have an organization-admin token. REST administration behavior is covered by hermetic protocol contracts; admin-only Go acceptance tests require both the `acceptance` and `admin_acceptance` build tags, and admin-only live scripts must be run explicitly in an environment that supplies `MOTHERDUCK_ADMIN_TOKEN`. `make test-terraform-versions` and the hosted exact-main and release gates run SQL-only live coverage.
+The hosted environment does not have an organization-admin token. REST administration behavior is covered by hermetic protocol contracts. Admin-only Go acceptance tests require both the `acceptance` and `admin_acceptance` build tags, and admin-only live scripts must be run explicitly in an environment that supplies `MOTHERDUCK_ADMIN_TOKEN`. `make test-terraform-versions` and the hosted exact-main and release gates run SQL-only live coverage.
 
 Use focused live smoke tests for changed surfaces instead of running every live fixture on every edit. The broad stable SQL gate is:
 

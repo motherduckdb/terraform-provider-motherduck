@@ -107,7 +107,7 @@ preflight_existing_share_grantee() {
 
   if ! go run "${ROOT_DIR}/internal/dev/mdexec" -sql "GRANT READ ON SHARE $(sql_identifier "${preflight_share}") TO $(sql_identifier "${grantee_username}")" >"${error_file}" 2>&1; then
     echo "MD_TF_ACC_SHARE_GRANTEE_USERNAME is not accepted by GRANT READ ON SHARE." >&2
-    echo "Set it to a grantable MotherDuck user or service-account username; the motherduck_current_user value and PAT metadata are often not grantable." >&2
+    echo "Set it to a grantable MotherDuck user or service-account username. The motherduck_current_user value and PAT metadata are often not grantable." >&2
     print_preflight_error "${grantee_username}" "${error_file}"
     live_drop_share "${preflight_share}"
     live_drop_database "${preflight_database}"

@@ -18,7 +18,7 @@ for suite in examples import-validation invalid-configuration missing-credential
   echo "==> CLI ${suite}"
   if ! "${ROOT_DIR}/scripts/test-${suite}.sh" > "${result_dir}/${suite}.log" 2>&1; then
     cat "${result_dir}/${suite}.log" >&2
-    echo "CLI ${suite} failed; log: ${result_dir}/${suite}.log" >&2
+    echo "CLI ${suite} failed. Log: ${result_dir}/${suite}.log" >&2
     exit 1
   fi
   echo "PASS ${suite}"

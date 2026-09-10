@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	duckdb "github.com/duckdb/duckdb-go/v2"
+
 	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
@@ -236,7 +238,7 @@ func TestDiveImportedAPIVersionGetsOneCorrectiveUpdateThenConverges(t *testing.T
 	imported := &diveModel{Content: types.StringValue("content"), APIVersion: types.Int64Null()}
 	args, update := diveContentArgs(context.Background(), plan, imported, &diag.Diagnostics{})
 	if !update || args["api_version"] != "1" {
-		t.Fatalf("imported api_version correction = %#v, update=%v; want one update with api_version 1", args, update)
+		t.Fatalf("imported api_version correction = %#v, update=%v. Want one update with api_version 1", args, update)
 	}
 	refreshed := &diveModel{Content: types.StringValue("content"), APIVersion: types.Int64Value(1)}
 	if _, update = diveContentArgs(context.Background(), plan, refreshed, &diag.Diagnostics{}); update {
@@ -601,5 +603,89 @@ func TestDiveCreatePersistsIDWhenReadbackFails(t *testing.T) {
 	}
 	if id.ValueString() != "123e4567-e89b-42d3-a456-426614174000" {
 		t.Fatalf("state id = %q, want the created Dive ID so the resource is tainted rather than orphaned", id.ValueString())
+	}
+}
+
+// The live MD_GET_DIVE/MD_DELETE_DIVE surface reports absence as an Invalid
+// Error, rather than DuckDB's Catalog Error.
+type missingDiveClient struct {
+	diveReadbackClient
+	err error
+}
+
+func (c missingDiveClient) QueryRow(context.Context, string, ...any) mdsql.RowScanner {
+	return errRowScanner{err: c.err}
+}
+func (c missingDiveClient) QueryRowsJSON(context.Context, string, ...any) (string, error) {
+	return "", c.err
+}
+func TestDiveMissingRemoteLifecycle(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		err     error
+		missing bool
+	}{
+		{"deleted", &duckdb.Error{Type: duckdb.ErrorTypeInvalid, Msg: "Invalid Error: MDExternalException: Could not find Dive"}, true},
+		{"permission", &duckdb.Error{Type: duckdb.ErrorTypeInvalid, Msg: "Invalid Error: MDExternalException: Permission denied for Dive"}, false},
+		{"other missing dependency", &duckdb.Error{Type: duckdb.ErrorTypeInvalid, Msg: "Invalid Error: MDExternalException: Could not find Dive dependency"}, false},
+		{"untyped", errors.New("Invalid Error: MDExternalException: Could not find Dive"), false},
+		{"transport", context.DeadlineExceeded, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			res := &diveResource{baseResource: baseResource{provider: &providerctx.Context{SQL: missingDiveClient{err: tc.err}}}}
+			var schemaResp resource.SchemaResponse
+			res.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+			state := tfsdk.State{Schema: schemaResp.Schema}
+			model := diveModel{ID: types.StringValue("123e4567-e89b-42d3-a456-426614174000"), Title: types.StringValue("test"), Content: types.StringValue("content"), RequiredResources: types.ListNull(types.ObjectType{AttrTypes: map[string]attr.Type{"alias": types.StringType, "url": types.StringType}})}
+			if d := state.Set(ctx, &model); d.HasError() {
+				t.Fatal(d)
+			}
+			read := resource.ReadResponse{State: state}
+			res.Read(ctx, resource.ReadRequest{State: state}, &read)
+			if read.Diagnostics.HasError() == tc.missing {
+				t.Fatalf("read diagnostics: %v", read.Diagnostics)
+			}
+			if read.State.Raw.IsNull() != tc.missing {
+				t.Fatalf("state removed = %t, want %t", read.State.Raw.IsNull(), tc.missing)
+			}
+			deleted := resource.DeleteResponse{State: state}
+			res.Delete(ctx, resource.DeleteRequest{State: state}, &deleted)
+			if deleted.Diagnostics.HasError() == tc.missing {
+				t.Fatalf("delete diagnostics: %v", deleted.Diagnostics)
+			}
+		})
+	}
+}
+
+func TestFlightWaitReportsConfiguredTimeout(t *testing.T) {
+	res := &flightRunResource{}
+	model := flightRunModel{
+		Status: types.StringValue("RUNNING"), WaitForStatus: types.StringValue("succeeded"),
+		TimeoutSeconds: types.Int64Value(1), PollIntervalSeconds: types.Int64Value(10),
+		RunNumber: types.Int64Value(42),
+	}
+	var diags diag.Diagnostics
+	res.waitForFlightRun(t.Context(), &model, &diags)
+	if len(diags) != 1 || diags[0].Summary() != "Timed out waiting for MotherDuck Flight run" {
+		t.Fatalf("expected configured timeout diagnostic, got %v", diags)
+	}
+	if !strings.Contains(diags[0].Detail(), "Flight run 42") || !strings.Contains(diags[0].Detail(), "RUNNING") {
+		t.Fatalf("timeout must identify the run and last status: %v", diags)
+	}
+}
+
+func TestFlightWaitPreservesCallerCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	res := &flightRunResource{}
+	model := flightRunModel{
+		Status: types.StringValue("RUNNING"), WaitForStatus: types.StringValue("succeeded"),
+		TimeoutSeconds: types.Int64Value(60), PollIntervalSeconds: types.Int64Value(10),
+	}
+	var diags diag.Diagnostics
+	res.waitForFlightRun(ctx, &model, &diags)
+	if len(diags) != 1 || diags[0].Summary() != "Interrupted while waiting for MotherDuck Flight run" {
+		t.Fatalf("expected caller cancellation diagnostic, got %v", diags)
 	}
 }

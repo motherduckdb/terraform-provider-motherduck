@@ -61,7 +61,7 @@ if ! gpg_batch --passphrase-file "${key_home}/passphrase" \
 fi
 
 # Only primary-key fingerprints matter here. In gpg's colon output the primary
-# fingerprint is the first "fpr" record after each "sec" record; later ones
+# fingerprint is the first "fpr" record after each "sec" record. Later ones
 # belong to subkeys.
 fingerprints="$(
   gpg_batch --list-secret-keys --with-colons 2>/dev/null |
@@ -105,7 +105,7 @@ gpg_batch \
 # The Registry requires a binary signature. Fail loudly rather than publishing
 # an armored file that would be rejected after the release is already created.
 if head -c 30 "${signature_file}" | grep -q -- "-----BEGIN"; then
-  echo "Signature ${signature_file} is ASCII-armored; the Registry requires a binary signature." >&2
+  echo "Signature ${signature_file} is ASCII-armored. The Registry requires a binary signature." >&2
   exit 1
 fi
 

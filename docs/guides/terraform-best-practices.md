@@ -42,7 +42,7 @@ module "tenant_data" {
 
 Use provider-level `database` only for an existing database that should be attached when the provider starts. Terraform configures providers before it creates resources, so `database = motherduck_database.example.name` cannot attach a database created in the same apply. For databases created by Terraform, set the `database` attribute on each SQL resource instead.
 
-Use `attach_mode = "single"` only when the provider should attach the configured existing `database` without attaching other workspace databases during SQL initialization. DuckDB and MotherDuck system catalogs such as `memory` and `md_information_schema` can still appear in attached-database metadata. Leave `attach_mode` unset for MotherDuck's default workspace attachment behavior, or use `attach_mode = "workspace"` when making that behavior explicit helps reviewers. Workspace attachment is convenient for broad account administration, but it can expose a large attached-database catalog on real accounts; avoid publishing full attached-catalog outputs from reusable modules. Single attach mode is useful for BI, IDE, and app-style modules that should not see every workspace database, but it is a poor fit for bootstrap modules that create databases in the same Terraform run.
+Use `attach_mode = "single"` only when the provider should attach the configured existing `database` without attaching other workspace databases during SQL initialization. DuckDB and MotherDuck system catalogs such as `memory` and `md_information_schema` can still appear in attached-database metadata. Leave `attach_mode` unset for MotherDuck's default workspace attachment behavior, or use `attach_mode = "workspace"` when making that behavior explicit helps reviewers. Workspace attachment is convenient for broad account administration, but it can expose a large attached-database catalog on real accounts. Avoid publishing full attached-catalog outputs from reusable modules. Single attach mode is useful for BI, IDE, and app-style modules that should not see every workspace database, but it is a poor fit for bootstrap modules that create databases in the same Terraform run.
 
 ## Credentials
 
@@ -68,14 +68,14 @@ the recommended Blueprints ownership boundary.
 
 Good Terraform fits:
 
-- databases, schemas, tables, views, shares, share grants, secrets, snapshots, service accounts, access tokens, and Duckling configuration;
-- read-only inspection with data sources;
+- databases, schemas, tables, views, shares, share grants, secrets, snapshots, service accounts, access tokens, and Duckling configuration.
+- read-only inspection with data sources.
 - Flight definitions that should be managed as durable desired state.
 
 Poor Terraform fits:
 
-- one-off query execution;
-- short-lived credentials that should not be persisted as durable resources;
+- one-off query execution.
+- short-lived credentials that should not be persisted as durable resources.
 - manual tenant data loads, backfills, and incident operations.
 
 ## Module Design
@@ -112,7 +112,7 @@ locals {
 
 Keep generated names short enough for surrounding tools and logs. When a tenant identifier contains PII, use an internal tenant ID rather than an email or company name.
 
-SQL object names may contain spaces, and table column names may contain spaces or embedded double quotes; the provider quotes those identifiers when issuing MotherDuck SQL. Prefer lowercase snake_case names for reusable modules anyway. They are easier to read in plans, pass through shell commands, and import later. Literal dots are not allowed in SQL resource names because Terraform import IDs use dots to separate database, schema, and object parts.
+SQL object names may contain spaces, and table column names may contain spaces or embedded double quotes. The provider quotes those identifiers when issuing MotherDuck SQL. Prefer lowercase snake_case names for reusable modules anyway. They are easier to read in plans, pass through shell commands, and import later. Literal dots are not allowed in SQL resource names because Terraform import IDs use dots to separate database, schema, and object parts.
 
 ## Catalog Data Sources
 
@@ -137,7 +137,7 @@ Do not print sensitive outputs with `terraform output -raw` in CI logs.
 
 ## SQL Function Availability
 
-Dive and Flight SQL resources and data sources are enabled by default. Function availability can still vary by account, plan, region, and client version; the provider checks required SQL functions before resource operations and fails with an explicit availability diagnostic when a surface is not exposed.
+Dive and Flight SQL resources and data sources are enabled by default. Function availability can still vary by account, plan, region, and client version. The provider checks required SQL functions before resource operations and fails with an explicit availability diagnostic when a surface is not exposed.
 
 ## Lifecycle Behavior
 
@@ -145,19 +145,19 @@ Treat identity and create-only arguments as replacements. For example, changing 
 
 SQL resource names must be non-empty, must not contain dots, and must not have leading or trailing whitespace. Spaces inside identifiers are supported for resources such as databases, schemas, tables, views, secrets, shares, and snapshots, but dots are reserved for Terraform import IDs such as `<database>.<schema>.<name>`.
 
-Mutable configuration should update in place. `motherduck_duckling_config` updates instance sizes, read-scaling flock size, and cooldown settings for the same username. Public REST limits are validated locally: username fields must be non-blank and 1-255 characters; instance sizes accept `pulse`, `standard`, `jumbo`, `mega`, or `giga`; read-scaling flock size must be 0-64; cooldown values must be 60-86400 seconds; Dive/Flight SQL data-source IDs, Dive/Flight import IDs, and Dive embed-session IDs must be UUIDs with no leading or trailing whitespace. `motherduck_database.snapshot_retention_days`, `motherduck_view.query`, `motherduck_secret` parameters, and snapshot names also update in place.
+Mutable configuration should update in place. `motherduck_duckling_config` updates instance sizes, read-scaling flock size, and cooldown settings for the same username. Public REST limits are validated locally: username fields must be non-blank and 1-255 characters. Instance sizes accept `pulse`, `standard`, `jumbo`, `mega`, or `giga`. Read-scaling flock size must be 0-64. Cooldown values must be 60-86400 seconds. Dive/Flight SQL data-source IDs, Dive/Flight import IDs, and Dive embed-session IDs must be UUIDs with no leading or trailing whitespace. `motherduck_database.snapshot_retention_days`, `motherduck_view.query`, `motherduck_secret` parameters, and snapshot names also update in place.
 
 Enum-like values must use lowercase canonical values. Use `database_type = "ducklake"`, `type = "s3"`, `access = "restricted"`, `token_type = "read_scaling"`, and Duckling instance sizes such as `standard`. Terraform validates this before apply so case-only differences do not turn into noisy post-apply plans.
 
-Row-style data source pagination values must be nonnegative. Use `limit = 0` only when the underlying MotherDuck table function should return zero rows; otherwise set a positive limit or omit it. Flight log `run_number` values start at 1. Terraform validates these bounds before opening a MotherDuck SQL connection.
+Row-style data source pagination values must be nonnegative. Use `limit = 0` only when the underlying MotherDuck table function should return zero rows. Otherwise set a positive limit or omit it. Flight log `run_number` values start at 1. Terraform validates these bounds before opening a MotherDuck SQL connection.
 
-`motherduck_dive` metadata, content, and configured `required_resources` update in place when the public SQL table functions are available. Set `description = ""` to clear the visible description; removing an existing configured `description` is rejected because the current public Dive SQL surface does not expose a null-clear operation. The current public `MD_GET_DIVE` output does not expose mounted resources, so `required_resources` is config-owned during refresh and import.
+`motherduck_dive` metadata, content, and configured `required_resources` update in place when the public SQL table functions are available. Set `description = ""` to clear the visible description. Removing an existing configured `description` is rejected because the current public Dive SQL surface does not expose a null-clear operation. The current public `MD_GET_DIVE` output does not expose mounted resources, so `required_resources` is config-owned during refresh and import.
 
-`motherduck_flight` refreshes both the Flight summary and current FlightVersion. `config` and `flight_secret_names` replace the full stored map/list on update, so send the complete desired value instead of only the changed entry. Flight config keys become runtime environment variables, so they must be non-empty, must not use reserved MotherDuck runner parameter names, and must not contain `=` or NULL bytes. Omitting `access_token_name` uses MotherDuck's default Flight token behavior and remains unset in Terraform state. Removing `schedule_cron`, `requirements_txt`, `config`, or `flight_secret_names` from configuration clears the live value. Removing `access_token_name` is not supported as an in-place update by the current public Flight SQL surface; replace the Flight resource to return to default token behavior.
+`motherduck_flight` refreshes both the Flight summary and current FlightVersion. `config` and `flight_secret_names` replace the full stored map/list on update, so send the complete desired value instead of only the changed entry. Flight config keys become runtime environment variables, so they must be non-empty, must not use reserved MotherDuck runner parameter names, and must not contain `=` or NULL bytes. Omitting `access_token_name` uses MotherDuck's default Flight token behavior and remains unset in Terraform state. Removing `schedule_cron`, `requirements_txt`, `config`, or `flight_secret_names` from configuration clears the live value. Removing `access_token_name` is not supported as an in-place update by the current public Flight SQL surface. Replace the Flight resource to return to default token behavior.
 
 MotherDuck Pulse Duckling instances do not support cooldown seconds. Omit `read_write_cooldown_seconds` and `read_scaling_cooldown_seconds` when either corresponding instance size is `pulse`.
 
-Snapshot resources manage snapshot names, not immediate physical deletion of retained snapshot bytes. Destroying a `motherduck_snapshot` removes the configured name and MotherDuck retention controls when unnamed snapshot data ages out. If a snapshot is unnamed outside Terraform, the next apply restores the configured named resource; MotherDuck may attach the name back to the same underlying `snapshot_id` while the unnamed snapshot remains retained.
+Snapshot resources manage snapshot names, not immediate physical deletion of retained snapshot bytes. Destroying a `motherduck_snapshot` removes the configured name and MotherDuck retention controls when unnamed snapshot data ages out. If a snapshot is unnamed outside Terraform, the next apply restores the configured named resource. MotherDuck may attach the name back to the same underlying `snapshot_id` while the unnamed snapshot remains retained.
 
 Creating shares and snapshots depends on catalog metadata being visible immediately after SQL execution. The provider retries transient MotherDuck catalog errors such as timeouts or temporary unavailability and keeps Terraform state values known if a post-create read still fails. If an apply fails because MotherDuck cannot return share or snapshot metadata, rerun `terraform apply` after the transient clears so Terraform can refresh the created object before making further changes.
 
@@ -171,9 +171,9 @@ Table column changes replace `motherduck_table`. MotherDuck allows dropping the 
 
 `motherduck_view` stores the server-rendered view definition in Terraform private state after create and update. User configuration stays authoritative in visible state, while out-of-band changes to the live `information_schema.views` definition appear as drift and are repaired by the next apply. View queries must be a single SELECT body and must not contain semicolons.
 
-Share grants are reconciled from the share's public grantee metadata. If someone revokes a managed grant outside Terraform, the next plan should recreate it. Avoid managing the same share grants in both Terraform and ad hoc SQL unless you intentionally want Terraform to repair that drift. Share grants need a real grantable MotherDuck user or service-account principal; `motherduck_current_user` can return `duckdb`, and a PAT email or session name may not be accepted by `GRANT READ ON SHARE`. Share-grant usernames must be non-blank and free of leading or trailing whitespace, while still allowing email-like principals.
+Share grants are reconciled from the share's public grantee metadata. If someone revokes a managed grant outside Terraform, the next plan should recreate it. Avoid managing the same share grants in both Terraform and ad hoc SQL unless you intentionally want Terraform to repair that drift. Share grants need a real grantable MotherDuck user or service-account principal. `motherduck_current_user` can return `duckdb`, and a PAT email or session name may not be accepted by `GRANT READ ON SHARE`. Share-grant usernames must be non-blank and free of leading or trailing whitespace, while still allowing email-like principals.
 
-Share option values are validated locally. Use `access = "organization"`, `restricted`, or `unrestricted`; `visibility = "discoverable"` or `hidden`; and `update_mode = "manual"` or `automatic`. Omit options when you want MotherDuck defaults.
+Share option values are validated locally. Use `access = "organization"`, `restricted`, or `unrestricted`, `visibility = "discoverable"` or `hidden`, and `update_mode = "manual"` or `automatic`. Omit options when you want MotherDuck defaults.
 
 Treat share option drift as a replacement event. MotherDuck can recreate a share with different access, visibility, or update mode outside Terraform, but Terraform models those options as immutable desired state. The next plan should replace the share to restore configuration, which creates a new share URL and may require consumers to reattach.
 
@@ -202,13 +202,13 @@ Access tokens import with `<username>/<token_id>`:
 terraform import motherduck_access_token.reader svc_reader_tenant/c04c2f00-10ad-4ed7-acb7-f2b993b536b3
 ```
 
-After import, run `terraform plan` and align configuration to the imported state before applying changes. Imported views read the canonical SELECT body from `information_schema.views.view_definition`; put that SELECT body in `query`, not the surrounding `CREATE VIEW ... AS` DDL. Imported databases can recover readable fields such as `database_type` and `snapshot_retention_days`, but DuckLake `encrypted` and `data_path` are create-only and are not exposed by the public catalog; omit those fields after import unless you intentionally want Terraform to replace the database. Imported secrets can recover public metadata such as `type`, `secret_provider`, `storage`, and `scope`, but secret parameters are write-only and must be supplied intentionally if you want Terraform to rotate or replace the secret body. Imported access tokens can recover metadata such as name, type, timestamps, and read-only status, but the token secret is only returned at creation time.
+After import, run `terraform plan` and align configuration to the imported state before applying changes. Imported views read the canonical SELECT body from `information_schema.views.view_definition`. Put that SELECT body in `query`, not the surrounding `CREATE VIEW ... AS` DDL. Imported databases can recover readable fields such as `database_type` and `snapshot_retention_days`, but DuckLake `encrypted` and `data_path` are create-only and are not exposed by the public catalog. Omit those fields after import unless you intentionally want Terraform to replace the database. Imported secrets can recover public metadata such as `type`, `secret_provider`, `storage`, and `scope`, but secret parameters are write-only and must be supplied intentionally if you want Terraform to rotate or replace the secret body. Imported access tokens can recover metadata such as name, type, timestamps, and read-only status, but the token secret is only returned at creation time.
 
 SQL resource names must be non-empty, cannot contain literal dots, and cannot have leading or trailing whitespace. Terraform import IDs use dots as separators, such as `database.schema.table`, so the provider rejects dotted SQL resource names during validation instead of creating resources that cannot be imported or addressed unambiguously.
 
-Import IDs may contain spaces when the underlying MotherDuck object names contain spaces. Quote the entire import ID as one shell argument, for example `terraform import motherduck_table.events "tenant db.app schema.fact table"`. Import ID segments must be non-empty; malformed IDs such as `db..table`, `share/`, or `/token_id` are rejected before any live read. Service-account imports use the same username rules as configuration, and Duckling/access-token username import segments must be non-blank, at most 255 characters, and free of leading or trailing whitespace. Share-grant username import segments must be non-blank and free of leading or trailing whitespace, while still allowing email-like principals. Access-token ID import segments must also omit leading and trailing whitespace. For reusable modules, prefer simple names so imports, shell commands, and operational runbooks remain copy-pasteable.
+Import IDs may contain spaces when the underlying MotherDuck object names contain spaces. Quote the entire import ID as one shell argument, for example `terraform import motherduck_table.events "tenant db.app schema.fact table"`. Import ID segments must be non-empty. Malformed IDs such as `db..table`, `share/`, or `/token_id` are rejected before any live read. Service-account imports use the same username rules as configuration, and Duckling/access-token username import segments must be non-blank, at most 255 characters, and free of leading or trailing whitespace. Share-grant username import segments must be non-blank and free of leading or trailing whitespace, while still allowing email-like principals. Access-token ID import segments must also omit leading and trailing whitespace. For reusable modules, prefer simple names so imports, shell commands, and operational runbooks remain copy-pasteable.
 
-For database kind, use `database_type = "ducklake"` only when you are intentionally creating a DuckLake-backed database. Omit `database_type` or set `database_type = "default"` for ordinary databases. Use `transient = true` for transient databases; `database_type = "transient"` is rejected during validation. `data_path` and `encrypted` are DuckLake-only settings. Use `encrypted = true` for encrypted DuckLake storage; the provider emits the parser-supported bare `ENCRYPTED` option.
+For database kind, use `database_type = "ducklake"` only when you are intentionally creating a DuckLake-backed database. Omit `database_type` or set `database_type = "default"` for ordinary databases. Use `transient = true` for transient databases. `database_type = "transient"` is rejected during validation. `data_path` and `encrypted` are DuckLake-only settings. Use `encrypted = true` for encrypted DuckLake storage. The provider emits the parser-supported bare `ENCRYPTED` option.
 
 `snapshot_retention_days` must be nonnegative. The provider validates negative values locally and lets MotherDuck enforce any account-specific upper bound.
 

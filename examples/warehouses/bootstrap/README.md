@@ -15,7 +15,7 @@ terraform plan -out=bootstrap.tfplan
 terraform apply bootstrap.tfplan
 ```
 
-Outputs: `usernames` is non-secret; `tokens` is sensitive and creation-only.
+Outputs: `usernames` is non-secret. `tokens` is sensitive and creation-only.
 Securely transfer each token to the matching environment's secret store before
 running another root. Terraform state and saved plan files must remain protected.
 
@@ -25,10 +25,10 @@ in prod. Override `read_scaling_flock_size = { dev = 1, prod = 4 }`, for example
 after considering concurrency and cost. The fleet starts on demand.
 
 `tokens` retains the keys `dev_writer`, `dev_bi`, `prod_writer`, and `prod_bi`.
-Both dev tokens belong to `usernames.dev_writer`; both prod tokens belong to
+Both dev tokens belong to `usernames.dev_writer`. Both prod tokens belong to
 `usernames.prod_writer`. Connect with the writer token and apply its warehouse
 before the first BI connection to initialize the account. `ttl` is intentionally
-omitted so the example needs no expiration/rotation setup; revoke tokens during
+omitted so the example needs no expiration/rotation setup. Revoke tokens during
 cleanup. See the [BI access decision and separate-reader alternative](../README.md#bi-access-decision).
 
 Follow the [shared deployment and cleanup procedure](../README.md). Destroy this

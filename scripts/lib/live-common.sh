@@ -10,7 +10,7 @@ require_safe_run_id() {
 
   if [[ ! "${run_id}" =~ ^[A-Za-z0-9_-]+$ ]]; then
     echo "RUN_ID must contain only letters, numbers, underscores, or hyphens." >&2
-    echo "Live smoke fixtures use RUN_ID in SQL object names after normalizing hyphens; dots, spaces, slashes, and other punctuation are not safe for Terraform import IDs." >&2
+    echo "Live smoke fixtures use RUN_ID in SQL object names after normalizing hyphens. Dots, spaces, slashes, and other punctuation are not safe for Terraform import IDs." >&2
     echo "Got RUN_ID=${run_id}" >&2
     return 1
   fi

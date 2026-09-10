@@ -4,7 +4,7 @@ output "writer_username" {
 }
 
 output "writer_token" {
-  description = "Generated writer token. Store this in a secret manager; downstream data-plane Terraform uses it as MOTHERDUCK_TOKEN."
+  description = "Generated writer token. Store this in a secret manager. Downstream data-plane Terraform uses it as MOTHERDUCK_TOKEN."
   value       = motherduck_access_token.writer.token
   sensitive   = true
 }

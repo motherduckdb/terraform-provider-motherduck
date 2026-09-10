@@ -16,14 +16,14 @@ func main() {
 	// Repeated -scalar flags share one connection, so several reads pay the
 	// MotherDuck boot sequence (extension install, duckling start) once.
 	var scalarQueryList []string
-	flag.Func("scalar", "SQL scalar query to print; repeat to run several on one connection", func(value string) error {
+	flag.Func("scalar", "SQL scalar query to print. Repeat to run several on one connection", func(value string) error {
 		scalarQueryList = append(scalarQueryList, value)
 		return nil
 	})
 	database := flag.String("database", "", "MotherDuck database to attach before running SQL")
 	preQuery := flag.String("pre", "", "Optional SQL statement to execute before the main statement")
 	allowPrefix := flag.String("allow-prefix", "", "When set, every mutating SQL statement must target an object whose name starts with this prefix")
-	allowTarget := flag.String("allow-target", "", "Name of the object a mutation targets when the statement itself does not name it (for example ALTER SNAPSHOT by id); checked against -allow-prefix")
+	allowTarget := flag.String("allow-target", "", "Name of the object a mutation targets when the statement itself does not name it (for example ALTER SNAPSHOT by id). Checked against -allow-prefix")
 	timeout := flag.Duration("timeout", 2*time.Minute, "Total timeout for connection setup and statements")
 	flag.Parse()
 
@@ -148,7 +148,7 @@ func validateAllowedPrefix(prefix, target string, queries ...string) error {
 // isReadOnlyStarter reports whether a statement beginning with this bare
 // keyword is one the guard lets through without a prefixed target. ATTACH is
 // deliberately absent because "ATTACH 'md:name'" creates a MotherDuck
-// database; CALL is absent because MotherDuck table functions can mutate.
+// database. CALL is absent because MotherDuck table functions can mutate.
 func isReadOnlyStarter(first token) bool {
 	if first.quoted || first.literal {
 		return false

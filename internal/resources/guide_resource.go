@@ -3,10 +3,13 @@ package resources
 import (
 	"context"
 	stdsql "database/sql"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	duckdb "github.com/duckdb/duckdb-go/v2"
 
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
@@ -81,7 +84,7 @@ func (r *guideResource) Metadata(ctx context.Context, req resource.MetadataReque
 func (r *guideResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:             1,
-		MarkdownDescription: "Experimental: manages a versioned MotherDuck Guide through public SQL functions. Prefer application deployment tooling for Guide content; this surface is outside the provider's stable support commitment.",
+		MarkdownDescription: "Experimental: manages a versioned MotherDuck Guide through public SQL functions. Prefer application deployment tooling for Guide content. This surface is outside the provider's stable support commitment.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
@@ -389,13 +392,23 @@ func (r *guideResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 	if err := retry.SQL(ctx, func() error {
 		_, err := client.QueryRowsJSON(ctx, query)
 		return err
-	}); err != nil && !isNotFound(err) {
+	}); err != nil && !isGuideNotFound(err) {
 		resp.Diagnostics.AddError("Unable to delete MotherDuck Guide", err.Error())
 	}
 }
 
 func (r *guideResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importUUIDID(ctx, req.ID, resp)
+}
+
+// The Guide service uses this exact catalog response for a deleted Guide.
+// Do not classify permission or missing-reference failures as remote deletion.
+func isGuideNotFound(err error) bool {
+	if isNotFound(err) {
+		return true
+	}
+	var duckErr *duckdb.Error
+	return errors.As(err, &duckErr) && duckErr.Type == duckdb.ErrorTypeCatalog && strings.TrimSpace(duckErr.Msg) == "Catalog Error: Could not find guide"
 }
 
 func (r *guideResource) readGuide(ctx context.Context, model *guideModel, diags *diag.Diagnostics) bool {
@@ -416,7 +429,7 @@ func (r *guideResource) readGuide(ctx context.Context, model *guideModel, diags 
 			&ownerID, &ownerName, &currentVersion, &createdAt, &updatedAt, &versionCreatedAt, &referencesJSON,
 		)
 	})
-	if err == stdsql.ErrNoRows || isNotFound(err) {
+	if err == stdsql.ErrNoRows || isGuideNotFound(err) {
 		return false
 	}
 	if err != nil {

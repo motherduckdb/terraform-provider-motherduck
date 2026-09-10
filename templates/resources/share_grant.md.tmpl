@@ -9,7 +9,7 @@ description: |-
 
 Grants `READ` on an existing restricted MotherDuck share to one grantable MotherDuck user, service account, or role.
 
-Use this resource when Terraform owns the desired grantee list for a restricted share. During refresh, the provider reads typed principal metadata from `MD_LIST_SHARE_GRANTEES`; if the grant is revoked outside Terraform, the next plan recreates it.
+Use this resource when Terraform owns the desired grantee list for a restricted share. During refresh, the provider reads typed principal metadata from `MD_LIST_SHARE_GRANTEES`. If the grant is revoked outside Terraform, the next plan recreates it.
 
 The `username` value must be accepted by MotherDuck SQL as a `GRANT READ ON SHARE ... TO ...` principal. It must be non-blank and must not include leading or trailing whitespace. Email-like principals are allowed by Terraform validation, then MotherDuck SQL decides whether the principal is grantable. A PAT email, PAT session name, or `motherduck_current_user` result may not be a grantable username. For service-account readers, use the service-account username.
 

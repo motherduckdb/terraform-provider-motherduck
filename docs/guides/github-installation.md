@@ -14,7 +14,7 @@ Use this guide to install a release directly from
 [GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases)
 instead: in an air-gapped environment, to pin a locally verified artifact, or
 for a version predating Registry publication (v0.2.1 and earlier are not on the
-Registry). The source address identifies the provider; a filesystem mirror tells
+Registry). The source address identifies the provider. A filesystem mirror tells
 Terraform where to obtain it.
 
 ## Download and verify
@@ -80,7 +80,7 @@ provider_installation {
 ```
 
 Set `TF_CLI_CONFIG_FILE` to that file's absolute path in the shell or CI job that
-runs Terraform. This overrides your usual CLI configuration; include any other
+runs Terraform. This overrides your usual CLI configuration. Include any other
 installation settings your environment requires. Do not commit downloaded
 binaries or machine-specific paths.
 
@@ -106,4 +106,4 @@ when performing authenticated plans or applies.
 
 For CI and remote runners, make the mirror and CLI configuration available on
 each runner before `terraform init`. Install the ZIP matching that runner's
-platform; a laptop-only mirror is not available remotely.
+platform. A laptop-only mirror is not available remotely.

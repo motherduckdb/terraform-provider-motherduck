@@ -69,7 +69,7 @@ table_id="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work
 view_id="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw view_id)"
 
 if [[ "${table_id}" != *"facts table" || "${view_id}" != *"facts view" ]]; then
-  echo "Expected quoted relation IDs to include space-containing names; table=${table_id} view=${view_id}" >&2
+  echo "Expected quoted relation IDs to include space-containing names. Table=${table_id} view=${view_id}" >&2
   exit 1
 fi
 

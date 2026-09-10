@@ -47,7 +47,7 @@ func TestRowSpecsCoverPlannedSQLDataSources(t *testing.T) {
 	}
 	for name := range want {
 		if !got[name] {
-			t.Fatalf("missing spec %s; all specs: %#v", name, got)
+			t.Fatalf("missing spec %s. All specs: %#v", name, got)
 		}
 	}
 	if len(got) != len(want) {

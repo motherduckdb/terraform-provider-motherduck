@@ -8,6 +8,6 @@ output "revenue_relation" {
 }
 
 output "demo_sql" {
-  description = "Optional seed SQL for an empty disposable warehouse; never run against production."
+  description = "Optional seed SQL for an empty disposable warehouse. Never run against production."
   value       = templatefile("${path.module}/demo.sql.tftpl", { database = motherduck_database.warehouse.name })
 }

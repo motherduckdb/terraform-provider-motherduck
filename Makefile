@@ -118,7 +118,7 @@ pre-push-check: static-check test-unit test-contract
 
 # The pull-request gate without the live vulnerability feed. The tag-driven
 # release workflow uses this so a new advisory in an indirect dependency cannot
-# block an unrelated release; vulncheck still runs there as an advisory step
+# block an unrelated release. Vulncheck still runs there as an advisory step
 # and stays blocking in pull-request CI through static-check.
 release-preflight-check: $(STATIC_CHECKS) test-unit test-contract
 

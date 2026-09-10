@@ -659,7 +659,7 @@ safe_update_resource() {
     schema|table|share_grant)
       # These public resources intentionally have replacement-only or
       # grant-identity fields. The post-apply no-op is their safe lifecycle
-      # check; changing them would destroy a useful fixture or alter identity.
+      # check. Changing them would destroy a useful fixture or alter identity.
       ;;
     *)
       echo "Unknown resource ${kind}" >&2
@@ -815,7 +815,7 @@ run_resource_example() {
   copy_actual_example "${kind}" "${dir}"
   # Every resource example creates its own database where needed. The provider
   # must therefore use the default attachment while the resource establishes
-  # that database; imported and data-only roots may attach an existing one.
+  # that database. Imported and data-only roots may attach an existing one.
   write_provider "${dir}"
   substitute_resource_example "${kind}" "${dir}"
   if [[ "${kind}" == "share_grant" ]]; then
@@ -1107,7 +1107,7 @@ bootstrap_account() {
   if [[ "${reader_mode}" -eq 1 ]]; then
     # Keep the recipe's read-write token for one initial share attachment.
     # MotherDuck can require a write-capable session to initialize a reader's
-    # workspace; all reader assertions below use the separate read_scaling
+    # workspace. All reader assertions below use the separate read_scaling
     # token minted by this same copied recipe.
     cat >> "${dir}/main.tf" <<HCL
 
@@ -1180,7 +1180,7 @@ cleanup() {
       fi
       if [[ "${child_status}" -ne 0 ]]; then
         status="${child_status}"
-        echo "Discoverable share cleanup failed; retaining bootstrap accounts" >&2
+        echo "Discoverable share cleanup failed. Retaining bootstrap accounts" >&2
         return "${status}"
       fi
       if [[ "${child_dirs[$i]}" == "${root_test_dir}/resource-secret" ]]; then
@@ -1192,7 +1192,7 @@ cleanup() {
       fi
       if [[ "${child_status}" -ne 0 ]]; then
         status="${child_status}"
-        echo "Child cleanup failed; retaining bootstrap accounts for retry: ${child_dirs[$i]}" >&2
+        echo "Child cleanup failed. Retaining bootstrap accounts for retry: ${child_dirs[$i]}" >&2
         return "${status}"
       fi
     fi
@@ -1342,6 +1342,9 @@ echo "==> Stage 5: provider example validation"
 provider_dir="${root_test_dir}/provider"
 mkdir -p "${provider_dir}"
 cp "${ROOT_DIR}/examples/provider/provider.tf" "${provider_dir}/provider.tf"
+# The copied public example targets a released version. This suite must use
+# its isolated local build, even when PROVIDER_VERSION is a synthetic version.
+sed -E -i.bak "s/(^[[:space:]]*version[[:space:]]*=[[:space:]]*)\"[^\"]*\"/\\1\"= ${PROVIDER_VERSION}\"/" "${provider_dir}/provider.tf"
 run_tf_provider_example "${provider_dir}" init -backend=false -input=false >/dev/null
 run_tf_provider_example "${provider_dir}" validate >/dev/null
 run_tf_provider_example "${provider_dir}" plan -input=false >/dev/null
@@ -1355,7 +1358,7 @@ if [[ "${storage_hard_failure}" -eq 1 ]]; then
 fi
 if [[ "${storage_unavailable}" -eq 1 ]]; then
   echo "External storage unavailable: ${storage_unavailable_reason}" >&2
-  echo "Core examples completed; returning 42 for the optional storage stage." >&2
+  echo "Core examples completed. Returning 42 for the optional storage stage." >&2
   exit 42
 fi
 
