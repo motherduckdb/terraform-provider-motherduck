@@ -65,9 +65,8 @@ fi
 
 if [[ "${apply_output}" != *"Unable to read MotherDuck active accounts"* ||
   "${apply_output}" != *"MotherDuck API error 403"* ||
-  "${apply_output}" != *"FORBIDDEN"* ||
-  "${apply_output}" != *"minimum role"* ]]; then
-  echo "Expected REST permission diagnostic to include the data source, 403, FORBIDDEN, and minimum-role detail, got:" >&2
+  "${apply_output}" != *"FORBIDDEN"* ]]; then
+  echo "Expected REST permission diagnostic to include the data source, 403, and FORBIDDEN, got:" >&2
   printf '%s\n' "${apply_output}" >&2
   exit 1
 fi

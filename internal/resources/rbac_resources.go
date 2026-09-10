@@ -89,8 +89,19 @@ func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 	plan.ID = types.StringValue(plan.Name.ValueString())
-	if !r.readRole(ctx, &plan, &resp.Diagnostics) && !resp.Diagnostics.HasError() {
-		resp.Diagnostics.AddError("Unable to read MotherDuck role", "Role was created but was not returned by SHOW ALL ROLES.")
+	plan.RoleType = types.StringNull()
+	plan.IncludedRoles = types.ListNull(types.StringType)
+	plan.CreatedAt = types.StringNull()
+	// Save the created identity before catalog read-back so failed reads do not
+	// leave an untracked role that Terraform cannot destroy or replace.
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !r.readRole(ctx, &plan, &resp.Diagnostics) {
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Unable to read MotherDuck role", "Role was created but was not returned by SHOW ALL ROLES.")
+		}
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -291,8 +302,15 @@ func (r *roleGrantResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 	plan.ID = roleGrantID(plan)
-	if !r.readRoleGrant(ctx, &plan, &resp.Diagnostics) && !resp.Diagnostics.HasError() {
-		resp.Diagnostics.AddError("Unable to read MotherDuck role grant", "Role was granted but the direct membership was not returned by MotherDuck.")
+	plan.GrantedAt = types.StringNull()
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !r.readRoleGrant(ctx, &plan, &resp.Diagnostics) {
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Unable to read MotherDuck role grant", "Role was granted but the direct membership was not returned by MotherDuck.")
+		}
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
