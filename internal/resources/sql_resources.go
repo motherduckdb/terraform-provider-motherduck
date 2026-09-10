@@ -214,9 +214,27 @@ func (r *databaseResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	plan.ID = types.StringValue(plan.Name.ValueString())
-	found := r.readDatabase(ctx, &plan, &resp.Diagnostics)
-	if !found && !resp.Diagnostics.HasError() {
-		resp.Diagnostics.AddError("Unable to read MotherDuck database", "Database was created but was not visible in MD_INFORMATION_SCHEMA.DATABASES.")
+	plan.UUID = types.StringNull()
+	plan.CreatedTS = types.StringNull()
+	if plan.Transient.IsUnknown() {
+		plan.Transient = types.BoolNull()
+	}
+	if plan.DatabaseType.IsUnknown() {
+		plan.DatabaseType = types.StringNull()
+	}
+	if plan.SnapshotRetentionDays.IsUnknown() {
+		plan.SnapshotRetentionDays = types.Int64Null()
+	}
+	// Preserve configuration and a known identity before read-back, including
+	// the configured timeout needed to clean up a failed creation.
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !r.readDatabase(ctx, &plan, &resp.Diagnostics) {
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Unable to read MotherDuck database", "Database was created but was not visible in MD_INFORMATION_SCHEMA.DATABASES.")
+		}
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
