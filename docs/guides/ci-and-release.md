@@ -61,10 +61,11 @@ Static and CLI jobs have bounded runtimes. Behavior tests run with race detectio
 
 The protected `motherduck-live` GitHub environment supplies:
 
-- `MOTHERDUCK_TOKEN`: read-write MotherDuck token for SQL-backed resources and data sources.
-- `MOTHERDUCK_ADMIN_TOKEN`: organization-admin token for the isolated admin lifecycle job.
+- `MOTHERDUCK_TOKEN`: read-write MotherDuck token for SQL-backed resources and data sources. The admin lifecycle job also uses it when no separate admin token is configured.
+- `MOTHERDUCK_ADMIN_TOKEN`: optional separate organization-admin token for the isolated admin lifecycle job.
 
-Use credentials from a dedicated test organization. Store both values as secrets
+Use credentials from a dedicated test organization. The token selected for the
+admin job must have organization-admin permission. Store credentials as secrets
 in the protected `motherduck-live` environment, never in repository files.
 Rotate them from the approved secret-manager entry and run the live workflow on
 `main` to verify the replacement. Environment deployment rules must remain
