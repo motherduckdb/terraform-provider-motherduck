@@ -76,17 +76,8 @@ assert_output share_visibility hidden
 assert_output share_update_mode automatic
 assert_output secret_type s3
 
-set +e
-TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
-plan_exit=$?
-set -e
-
-if [[ "${plan_exit}" -ne 0 ]]; then
-  if [[ "${plan_exit}" -eq 2 ]]; then
-    echo "Expected no-op plan after canonical value apply, but Terraform reported changes" >&2
-  fi
-  exit "${plan_exit}"
-fi
+expect_noop_plan "Expected no-op plan after canonical value apply, but Terraform reported changes" \
+  env TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
 
 if [[ "${KEEP_LIVE_FIXTURE}" == "1" ]]; then
   trap - EXIT

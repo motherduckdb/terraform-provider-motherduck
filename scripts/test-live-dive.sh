@@ -90,17 +90,8 @@ write_vars "archived" "Archived Terraform Dive smoke" "Archived content" '"archi
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false
 assert_status "archived"
 
-set +e
-TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
-plan_exit=$?
-set -e
-
-if [[ "${plan_exit}" -ne 0 ]]; then
-  if [[ "${plan_exit}" -eq 2 ]]; then
-    echo "Expected no-op plan after Dive update, but Terraform reported changes" >&2
-  fi
-  exit "${plan_exit}"
-fi
+expect_noop_plan "Expected no-op plan after Dive update, but Terraform reported changes" \
+  env TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
 
 # External deletion must lead to recreation, including dependent data sources.
 run_tf() { TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" "$@"; }

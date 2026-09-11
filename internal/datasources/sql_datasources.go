@@ -1,6 +1,7 @@
 package datasources
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -948,6 +949,12 @@ func (s rowSpec) typedRowsValue(rowsJSON string) (types.List, diag.Diagnostics) 
 func typedRowStringValue(value json.RawMessage) types.String {
 	if len(value) == 0 || string(value) == "null" {
 		return types.StringNull()
+	}
+	// Raw row values have already passed JSON validation. Only strings need
+	// unescaping. Keep null handling and the fallback representation unchanged.
+	trimmed := bytes.TrimSpace(value)
+	if len(trimmed) > 0 && trimmed[0] != '"' && trimmed[0] != 'n' {
+		return types.StringValue(string(value))
 	}
 	var text string
 	if json.Unmarshal(value, &text) == nil {

@@ -231,3 +231,34 @@ grep -F 'Live cleanup failed (unname snapshot snapshot in db): stub snapshot upd
   cleanup
   [[ "$(tail -n 1 "${test_dir}/writer-cleanup.log")" == "${bootstrap_dir}" ]]
 )
+
+# Plan assertions preserve command arguments, shell options, and failure codes.
+for plan_status in 0 1 2 37; do
+  result=0
+  PLAN_STATUS="${plan_status}" PLAN_MARKER="${test_dir}/plan-args" \
+    bash -e -c '
+      source "$1"
+      cleanup() { : > "$PLAN_MARKER.cleanup"; }
+      trap cleanup EXIT
+      expect_noop_plan "expected no drift" bash -c '\''
+        printf "%s\\n" "$@" > "$PLAN_MARKER"
+        exit "$PLAN_STATUS"
+      '\'' _ "argument with spaces" "-var=value"
+      [[ $- == *e* ]]
+      : > "$PLAN_MARKER.continued"
+    ' _ "${ROOT_DIR}/scripts/lib/live-common.sh" 2> "${test_dir}/plan.stderr" || result=$?
+  [[ "${result}" == "${plan_status}" ]]
+  [[ "$(cat "${test_dir}/plan-args")" == $'argument with spaces\n-var=value' ]]
+  [[ -e "${test_dir}/plan-args.cleanup" ]]
+  if [[ "${plan_status}" -eq 0 ]]; then
+    [[ -e "${test_dir}/plan-args.continued" ]]
+    rm "${test_dir}/plan-args.continued"
+  else
+    [[ ! -e "${test_dir}/plan-args.continued" ]]
+  fi
+  if [[ "${plan_status}" -eq 2 ]]; then
+    [[ "$(cat "${test_dir}/plan.stderr")" == "expected no drift" ]]
+  else
+    [[ ! -s "${test_dir}/plan.stderr" ]]
+  fi
+done

@@ -28,6 +28,19 @@ sql_literal() {
   printf "'%s'" "${escaped}"
 }
 
+# Run a Terraform plan command without changing the caller's shell options.
+# Exit 2 means drift. Other failures keep their original status and diagnostics.
+expect_noop_plan() {
+  local drift_message="$1"
+  shift
+  local status=0
+  "$@" || status=$?
+  if [[ "${status}" -eq 2 ]]; then
+    echo "${drift_message}" >&2
+  fi
+  return "${status}"
+}
+
 live_terraform_destroy() {
   local cli_config="$1"
   local terraform_bin="$2"

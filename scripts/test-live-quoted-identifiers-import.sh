@@ -98,17 +98,8 @@ TF_CLI_CONFIG_FILE="${import_dir}/terraformrc" "${TERRAFORM_BIN}" -chdir="${impo
 TF_CLI_CONFIG_FILE="${import_dir}/terraformrc" "${TERRAFORM_BIN}" -chdir="${import_dir}" import -input=false motherduck_snapshot.imported "${database_name}.${snapshot_name}"
 TF_CLI_CONFIG_FILE="${import_dir}/terraformrc" "${TERRAFORM_BIN}" -chdir="${import_dir}" import -input=false motherduck_secret.imported "${secret_name}"
 
-set +e
-TF_CLI_CONFIG_FILE="${import_dir}/terraformrc" "${TERRAFORM_BIN}" -chdir="${import_dir}" plan -detailed-exitcode -input=false
-plan_exit=$?
-set -e
-
-if [[ "${plan_exit}" -ne 0 ]]; then
-  if [[ "${plan_exit}" -eq 2 ]]; then
-    echo "Expected no-op plan after quoted identifier import, but Terraform reported changes" >&2
-  fi
-  exit "${plan_exit}"
-fi
+expect_noop_plan "Expected no-op plan after quoted identifier import, but Terraform reported changes" \
+  env TF_CLI_CONFIG_FILE="${import_dir}/terraformrc" "${TERRAFORM_BIN}" -chdir="${import_dir}" plan -detailed-exitcode -input=false
 
 if [[ "${KEEP_LIVE_FIXTURE}" == "1" ]]; then
   trap - EXIT

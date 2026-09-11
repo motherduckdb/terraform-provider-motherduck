@@ -78,17 +78,8 @@ print(f"provider database {database_name} was not found in attached database row
 sys.exit(1)
 PY
 
-set +e
-TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
-plan_exit=$?
-set -e
-
-if [[ "${plan_exit}" -ne 0 ]]; then
-  if [[ "${plan_exit}" -eq 2 ]]; then
-    echo "Expected no-op plan after provider database attach, but Terraform reported changes" >&2
-  fi
-  exit "${plan_exit}"
-fi
+expect_noop_plan "Expected no-op plan after provider database attach, but Terraform reported changes" \
+  env TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
 
 if [[ "${KEEP_LIVE_FIXTURE}" == "1" ]]; then
   trap - EXIT

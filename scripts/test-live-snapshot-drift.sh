@@ -91,17 +91,8 @@ if [[ "${repaired_named_count}" != "1" ]]; then
   exit 1
 fi
 
-set +e
-TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
-repair_plan_exit=$?
-set -e
-
-if [[ "${repair_plan_exit}" -ne 0 ]]; then
-  if [[ "${repair_plan_exit}" -eq 2 ]]; then
-    echo "Expected no-op plan after repairing snapshot drift, but Terraform reported changes" >&2
-  fi
-  exit "${repair_plan_exit}"
-fi
+expect_noop_plan "Expected no-op plan after repairing snapshot drift, but Terraform reported changes" \
+  env TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
 
 if [[ "${KEEP_LIVE_FIXTURE}" == "1" ]]; then
   trap - EXIT
