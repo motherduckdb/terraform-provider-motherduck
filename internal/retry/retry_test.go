@@ -87,8 +87,8 @@ func TestSQLStopsWhenContextIsCanceled(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("sql() error = %v, want context canceled", err)
 	}
-	if attempts != 1 {
-		t.Fatalf("sql() attempts = %d, want 1", attempts)
+	if attempts != 0 {
+		t.Fatalf("sql() attempts = %d, want 0", attempts)
 	}
 }
 
@@ -108,5 +108,29 @@ func TestIsTransientMotherDuckError(t *testing.T) {
 				t.Fatalf("isTransientMotherDuckError() = %t, want %t", got, test.want)
 			}
 		})
+	}
+}
+
+func TestSQLDoesNotStartAfterDeadline(t *testing.T) {
+	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	defer cancel()
+	called := false
+	err := SQL(ctx, func() error { called = true; return nil })
+	if called || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("called=%t, error=%v, want no operation and expired deadline", called, err)
+	}
+}
+
+func TestSQLStopsBetweenAttempts(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	attempts := 0
+	err := sql(ctx, 0, func() error {
+		attempts++
+		cancel()
+		return errors.New("UNAVAILABLE")
+	})
+	if attempts != 1 || !errors.Is(err, context.Canceled) {
+		t.Fatalf("attempts=%d, error=%v, want one attempt and cancellation", attempts, err)
 	}
 }

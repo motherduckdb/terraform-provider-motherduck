@@ -80,29 +80,11 @@ HCL
 TF_CLI_CONFIG_FILE="${import_dir}/terraformrc" "${TERRAFORM_BIN}" -chdir="${import_dir}" init -backend=false -input=false
 TF_CLI_CONFIG_FILE="${import_dir}/terraformrc" "${TERRAFORM_BIN}" -chdir="${import_dir}" import -input=false motherduck_database.imported "${database_name}"
 
-set +e
-TF_CLI_CONFIG_FILE="${import_dir}/terraformrc" "${TERRAFORM_BIN}" -chdir="${import_dir}" plan -detailed-exitcode -input=false
-import_plan_exit=$?
-set -e
+expect_noop_plan "Expected no-op plan after DuckLake database import, but Terraform reported changes" \
+  env TF_CLI_CONFIG_FILE="${import_dir}/terraformrc" "${TERRAFORM_BIN}" -chdir="${import_dir}" plan -detailed-exitcode -input=false
 
-if [[ "${import_plan_exit}" -ne 0 ]]; then
-  if [[ "${import_plan_exit}" -eq 2 ]]; then
-    echo "Expected no-op plan after DuckLake database import, but Terraform reported changes" >&2
-  fi
-  exit "${import_plan_exit}"
-fi
-
-set +e
-TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
-plan_exit=$?
-set -e
-
-if [[ "${plan_exit}" -ne 0 ]]; then
-  if [[ "${plan_exit}" -eq 2 ]]; then
-    echo "Expected no-op plan after DuckLake database apply, but Terraform reported changes" >&2
-  fi
-  exit "${plan_exit}"
-fi
+expect_noop_plan "Expected no-op plan after DuckLake database apply, but Terraform reported changes" \
+  env TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
 
 if [[ "${KEEP_LIVE_FIXTURE}" == "1" ]]; then
   trap - EXIT

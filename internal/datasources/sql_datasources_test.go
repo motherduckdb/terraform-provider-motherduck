@@ -779,3 +779,40 @@ func (f *fakeRoleMembersClient) QueryRowsJSON(_ context.Context, query string, _
 func (f fakeRowsClient) QueryRowsJSON(context.Context, string, ...any) (string, error) {
 	return f.rowsJSON, f.err
 }
+
+func BenchmarkTypedCatalogRows(b *testing.B) {
+	spec := rowSpec{typedRows: []typedRowAttribute{{name: "name"}, {name: "count"}, {name: "enabled"}}}
+	row := `{"name":"catalog row","count":9007199254740993,"enabled":true}`
+	payload := "[" + strings.Repeat(row+",", 999) + row + "]"
+	b.ReportAllocs()
+	for b.Loop() {
+		_, diags := spec.typedRowsValue(payload)
+		if diags.HasError() {
+			b.Fatal(diags)
+		}
+	}
+}
+
+func TestTypedRowConversionPreservesJSONValues(t *testing.T) {
+	for _, tc := range []struct {
+		input string
+		want  types.String
+	}{
+		{"", types.StringNull()},
+		{"null", types.StringNull()},
+		{`"escaped\ntext"`, types.StringValue("escaped\ntext")},
+		{` "padded" `, types.StringValue("padded")},
+		{"9007199254740993", types.StringValue("9007199254740993")},
+		{"1.2300", types.StringValue("1.2300")},
+		{" true ", types.StringValue(" true ")},
+		{`{"nested":[1,false]}`, types.StringValue(`{"nested":[1,false]}`)},
+		{`["text",null]`, types.StringValue(`["text",null]`)},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			got := typedRowStringValue([]byte(tc.input))
+			if !got.Equal(tc.want) {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

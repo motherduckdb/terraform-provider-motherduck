@@ -23,6 +23,9 @@ func SQL(ctx context.Context, operation func() error) error {
 func sql(ctx context.Context, delay time.Duration, operation func() error) error {
 	var err error
 	for attempt := 0; attempt < sqlMaxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		err = operation()
 		if err == nil || err == stdsql.ErrNoRows || isCatalogNotFound(err) || !isTransientMotherDuckError(err) || attempt == sqlMaxAttempts-1 {
 			return err
