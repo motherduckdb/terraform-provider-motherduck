@@ -58,15 +58,8 @@ secret_name="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${w
 
 go run "${ROOT_DIR}/internal/dev/mdexec" -sql "CREATE OR REPLACE SECRET \"${secret_name}\" IN MOTHERDUCK (TYPE S3, KEY_ID 'terraform-drift-key', SECRET 'terraform-drift-secret', REGION 'us-east-1', SCOPE 's3://terraform-provider-motherduck/secret-drift/${RUN_ID}/outside/')"
 
-set +e
-TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
-drift_plan_exit=$?
-set -e
-
-if [[ "${drift_plan_exit}" -ne 2 ]]; then
-  echo "Expected Terraform to detect out-of-band secret scope drift with exit code 2, got ${drift_plan_exit}" >&2
-  exit 1
-fi
+expect_drift_plan "Expected Terraform to detect out-of-band secret scope drift with exit code 2, got " \
+  env TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
 
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false
 

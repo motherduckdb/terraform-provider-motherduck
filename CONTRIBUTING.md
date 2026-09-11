@@ -22,6 +22,11 @@ This repository is a Terraform Plugin Framework provider. Keep changes small, sc
 - `test-fixtures`: Terraform fixtures for offline validation and live smoke tests.
 - `.github/workflows`: pull-request, live-smoke, and release automation.
 
+Resource implementations and their focused tests use `<name>_resource.go` and
+`<name>_resource_test.go`. Catalog definitions live in `internal/datasources/catalog_specs.go`,
+with scalar reads, row execution, and typed-row conversion in separate files.
+One-to-one Make test commands are listed in `SCRIPT_TEST_SCRIPTS`.
+
 Code under `internal` is deliberately not a reusable public Go module. Treat it as provider implementation detail and prefer narrow package APIs over shared cross-package abstractions.
 
 ## Development Workflow

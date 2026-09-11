@@ -100,7 +100,10 @@ func TestPluginTestingSQLObjectLifecycle(t *testing.T) {
 		}
 	})
 	checkViewRows := func(want string) resource.TestCheckFunc {
-		return func(*terraform.State) error {
+		return func(state *terraform.State) error {
+			if err := resource.TestCheckResourceAttr("data.motherduck_databases.current", "rows.0.name", databaseName)(state); err != nil {
+				return err
+			}
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
 			got, err := probe.ScalarString(ctx, fmt.Sprintf("SELECT count(*)::VARCHAR FROM %s.%s.%s", databaseName, schemaName, viewName))
@@ -116,6 +119,12 @@ func TestPluginTestingSQLObjectLifecycle(t *testing.T) {
 	config := fmt.Sprintf(`
 resource "motherduck_database" "test" {
   name = %[1]q
+}
+
+data "motherduck_databases" "current" {
+ name = motherduck_database.test.name
+ limit = 1
+ offset = 0
 }
 
 resource "motherduck_schema" "test" {
@@ -216,6 +225,60 @@ resource "motherduck_view" "test" {
 				ResourceName: "motherduck_view.test", ImportState: true,
 				ImportStateVerify: true, ImportStateVerifyIgnore: []string{"query"},
 				ImportStateCheck: checkImportedViewQuery(probe, "1"),
+			},
+			{
+				Config: config,
+				PreConfig: func() {
+					if err := probe.Exec(t.Context(), fmt.Sprintf("DROP DATABASE %s CASCADE", databaseName)); err != nil {
+						t.Fatal(err)
+					}
+				},
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("motherduck_database.test", plancheck.ResourceActionCreate),
+						plancheck.ExpectResourceAction("motherduck_schema.test", plancheck.ResourceActionCreate),
+						plancheck.ExpectResourceAction("motherduck_table.test", plancheck.ResourceActionCreate),
+						plancheck.ExpectResourceAction("motherduck_view.test", plancheck.ResourceActionCreate),
+					},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: func(state *terraform.State) error {
+					if err := resource.TestCheckResourceAttr("data.motherduck_databases.current", "rows.0.name", databaseName)(state); err != nil {
+						return err
+					}
+					// Use a new connection after database recreation to avoid
+					// testing a stale attachment to the deleted database UUID.
+					restored, err := mdsql.New(t.Context(), mdsql.Config{Token: os.Getenv("MOTHERDUCK_TOKEN")})
+					if err != nil {
+						return err
+					}
+					defer func() {
+						if err := restored.Close(); err != nil {
+							t.Errorf("close restored SQL probe: %v", err)
+						}
+					}()
+					if err := restored.AttachDatabase(t.Context(), databaseName); err != nil {
+						return err
+					}
+					before, err := restored.ScalarString(t.Context(), fmt.Sprintf("SELECT count(*)::VARCHAR FROM %s.%s.%s", databaseName, schemaName, viewName))
+					if err != nil {
+						return err
+					}
+					if before != "0" {
+						return fmt.Errorf("recreated graph contains %s rows, expected empty structure", before)
+					}
+					if err := restored.Exec(t.Context(), fmt.Sprintf("INSERT INTO %s.%s.%s VALUES (3, 'reloaded')", databaseName, schemaName, tableName)); err != nil {
+						return err
+					}
+					after, err := restored.ScalarString(t.Context(), fmt.Sprintf("SELECT label FROM %s.%s.%s", databaseName, schemaName, viewName))
+					if err != nil {
+						return err
+					}
+					if after != "reloaded" {
+						return fmt.Errorf("recreated view returned %q", after)
+					}
+					return nil
+				},
 			},
 		},
 	})

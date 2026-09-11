@@ -50,6 +50,28 @@ tenant_database="tf_writerpath_${suffix}"
 tenant_share="tf_writerpath_share_${suffix}"
 writer_token=""
 
+audit_accounts_destroyed() {
+  TEST_ACCOUNT_SUFFIX="${RUN_ID//-/_}" python3 - <<'PYTHON'
+import os
+import urllib.error
+import urllib.parse
+import urllib.request
+
+base = os.environ.get("MOTHERDUCK_API_BASE_URL", "https://api.motherduck.com").rstrip("/")
+for prefix in ("tf_writer_", "tf_wreader_"):
+    name = prefix + os.environ["TEST_ACCOUNT_SUFFIX"]
+    request = urllib.request.Request(base + "/v1/users/" + urllib.parse.quote(name, safe="") + "/instances",
+        headers={"Authorization": "Bearer " + os.environ["MOTHERDUCK_ADMIN_TOKEN"]})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raise SystemExit("Test account remains after destroy: " + name)
+    except urllib.error.HTTPError as error:
+        if error.code != 404:
+            raise SystemExit("Account cleanup check failed with HTTP " + str(error.code))
+print("Writer and reader accounts are absent after cleanup")
+PYTHON
+}
+
 cleanup() {
   local destroy_status=0
   if [[ "${KEEP_LIVE_FIXTURE}" != "1" ]]; then
@@ -70,6 +92,9 @@ cleanup() {
     if [[ -d "${bootstrap_dir}/.terraform" ]]; then
       live_terraform_destroy "${cli_config}" "${TERRAFORM_BIN}" "${bootstrap_dir}" \
         -var "run_id=${RUN_ID}" || destroy_status=$?
+    fi
+    if [[ "${destroy_status}" -eq 0 ]]; then
+      audit_accounts_destroyed || destroy_status=$?
     fi
   fi
   return "${destroy_status}"
@@ -120,6 +145,38 @@ if [[ "${plan_exit}" -ne 0 ]]; then
   fi
   exit "${plan_exit}"
 fi
+
+catalog_matches="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${tenant_dir}" output -raw share_catalog_matches)"
+if [[ "${catalog_matches}" != "true" ]]; then
+  echo "Filtered share catalog did not match the provisioned database" >&2
+  exit 1
+fi
+
+# Verify the credentials and actual data path, not just catalog existence.
+reader_token="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${tenant_dir}" output -raw reader_token)"
+reader_setup_token="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${tenant_dir}" output -raw reader_setup_token)"
+share_url="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${tenant_dir}" output -raw share_url)"
+MOTHERDUCK_TOKEN="${writer_token}" go run "${ROOT_DIR}/internal/dev/mdexec" -sql "INSERT INTO $(sql_identifier "${tenant_database}").app.facts (tenant_id, amount) VALUES ('test', 321)"
+MOTHERDUCK_TOKEN="${writer_token}" go run "${ROOT_DIR}/internal/dev/mdexec" -sql "UPDATE SHARE $(sql_identifier "${tenant_share}")"
+attach="ATTACH $(sql_literal "${share_url}") AS $(sql_identifier "${tenant_database}")"
+query="SELECT sum(amount)::VARCHAR FROM $(sql_identifier "${tenant_database}").app.facts"
+setup_rows="$(MOTHERDUCK_TOKEN="${reader_setup_token}" go run "${ROOT_DIR}/internal/dev/mdexec" -pre "${attach}" -scalar "${query}")"
+reader_rows="$(MOTHERDUCK_TOKEN="${reader_token}" go run "${ROOT_DIR}/internal/dev/mdexec" -scalar "${query}")"
+if [[ "${setup_rows}" != "321.0" || "${reader_rows}" != "321.0" ]]; then
+  echo "Expected writer data to be readable through both reader tokens" >&2
+  exit 1
+fi
+if MOTHERDUCK_TOKEN="${reader_token}" go run "${ROOT_DIR}/internal/dev/mdexec" \
+  -sql "INSERT INTO $(sql_identifier "${tenant_database}").app.facts (tenant_id, amount) VALUES ('denied', 999)" > "${result_dir}/reader-write.log" 2>&1; then
+  echo "Read-scaling token unexpectedly wrote to the shared database" >&2
+  exit 1
+fi
+writer_rows="$(MOTHERDUCK_TOKEN="${writer_token}" go run "${ROOT_DIR}/internal/dev/mdexec" -scalar "${query}")"
+if [[ "${writer_rows}" != "321.0" ]]; then
+  echo "Reader denial check changed writer data" >&2
+  exit 1
+fi
+echo "Writer data is readable through the share and reader writes are rejected"
 
 if [[ "${KEEP_LIVE_FIXTURE}" == "1" ]]; then
   trap - EXIT
