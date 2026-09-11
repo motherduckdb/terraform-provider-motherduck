@@ -13,7 +13,6 @@ func All() []func() datasource.DataSource {
 		NewLiveDucklingSizeDataSource,
 	}
 	for _, spec := range rowSpecs() {
-		spec := spec
 		sources = append(sources, func() datasource.DataSource { return &rowsDataSource{spec: spec} })
 	}
 	return sources

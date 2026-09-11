@@ -89,3 +89,37 @@ output "tenant_database" {
 output "tenant_share" {
   value = motherduck_share.tenant.name
 }
+
+# Initialize the reader workspace once, then prove reads with the read-scaling token.
+resource "motherduck_access_token" "reader_setup" {
+  username   = motherduck_service_account.reader.username
+  name       = "writer-path-setup"
+  token_type = "read_write"
+  ttl        = 3600
+}
+
+output "reader_token" {
+  value     = motherduck_access_token.reader.token
+  sensitive = true
+}
+
+output "reader_setup_token" {
+  value     = motherduck_access_token.reader_setup.token
+  sensitive = true
+}
+
+output "share_url" {
+  value     = motherduck_share.tenant.url
+  sensitive = true
+}
+
+data "motherduck_owned_shares" "tenant" {
+  name   = motherduck_share.tenant.name
+  limit  = 1
+  offset = 0
+}
+
+output "share_catalog_matches" {
+  sensitive = true
+  value     = length(data.motherduck_owned_shares.tenant.rows) == 1 && data.motherduck_owned_shares.tenant.rows[0].source_database == motherduck_database.tenant.name
+}

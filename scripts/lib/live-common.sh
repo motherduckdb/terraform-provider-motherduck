@@ -41,6 +41,18 @@ expect_noop_plan() {
   return "${status}"
 }
 
+# Expected drift is success for the assertion. A no-op or command failure is not.
+expect_drift_plan() {
+  local failure_message="$1"
+  shift
+  local status=0
+  "$@" || status=$?
+  if [[ "${status}" -ne 2 ]]; then
+    echo "${failure_message}${status}" >&2
+    return 1
+  fi
+}
+
 live_terraform_destroy() {
   local cli_config="$1"
   local terraform_bin="$2"

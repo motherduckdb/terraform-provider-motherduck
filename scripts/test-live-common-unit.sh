@@ -221,6 +221,7 @@ grep -F 'Live cleanup failed (unname snapshot snapshot in db): stub snapshot upd
   }
   live_drop_share() { return 0; }
   live_drop_database() { return 0; }
+  audit_accounts_destroyed() { return 0; }
   tenant_status=23
   status=0
   cleanup > /dev/null 2>&1 || status=$?
@@ -260,5 +261,22 @@ for plan_status in 0 1 2 37; do
     [[ "$(cat "${test_dir}/plan.stderr")" == "expected no drift" ]]
   else
     [[ ! -s "${test_dir}/plan.stderr" ]]
+  fi
+done
+
+for plan_status in 0 1 2 37; do
+  result=0
+  PLAN_STATUS="${plan_status}" bash -e -c '
+    source "$1"
+    trap '\''echo cleanup >&2'\'' EXIT
+    expect_drift_plan "Expected changes, got " bash -c '\''exit "$PLAN_STATUS"'\''
+    echo continued
+  ' _ "${ROOT_DIR}/scripts/lib/live-common.sh" > "${test_dir}/drift.stdout" 2> "${test_dir}/drift.stderr" || result=$?
+  if [[ "${plan_status}" -eq 2 ]]; then
+    [[ "${result}" -eq 0 && "$(cat "${test_dir}/drift.stdout")" == continued ]]
+    [[ "$(cat "${test_dir}/drift.stderr")" == cleanup ]]
+  else
+    [[ "${result}" -eq 1 && ! -s "${test_dir}/drift.stdout" ]]
+    [[ "$(cat "${test_dir}/drift.stderr")" == "Expected changes, got ${plan_status}"$'\ncleanup' ]]
   fi
 done

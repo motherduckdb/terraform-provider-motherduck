@@ -65,15 +65,8 @@ go run "${ROOT_DIR}/internal/dev/mdexec" -sql "DROP SHARE IF EXISTS \"${share_na
 go run "${ROOT_DIR}/internal/dev/mdexec" -database "${database_name}" -sql "DROP TABLE \"${database_name}\".\"${schema_name}\".\"${table_name}\""
 go run "${ROOT_DIR}/internal/dev/mdexec" -sql "DROP SECRET \"${secret_name}\" FROM motherduck"
 
-set +e
-TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
-drift_plan_exit=$?
-set -e
-
-if [[ "${drift_plan_exit}" -ne 2 ]]; then
-  echo "Expected Terraform to detect out-of-band SQL drift with exit code 2, got ${drift_plan_exit}" >&2
-  exit 1
-fi
+expect_drift_plan "Expected Terraform to detect out-of-band SQL drift with exit code 2, got " \
+  env TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
 
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false
 

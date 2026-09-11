@@ -8,8 +8,14 @@ GOLANGCI_LINT_VERSION := v2.13.2
 GOVULNCHECK := $(TOOLS_DIR)/govulncheck
 GOVULNCHECK_VERSION := v1.6.0
 
-.PHONY: test-live-cycles build clean-generated clean-tool-cache docs docs-check fmt fmt-check lint pre-push-check release-check release-package-local release-sign-check shellcheck static-check test-cli test-cli-versions test-contract test-examples test-import-validation test-invalid-configuration test-missing-credentials test-repository-hygiene test-scripts test-unit test-integration test-acceptance test-live-required test-live-blueprint-sql-only test-live-blueprint-writer-path test-live-canonical-values test-live-cleanup-audit test-live-complex test-live-database-drop-with-objects test-live-database-drift test-live-database-options test-live-dive test-live-dive-flight-blueprint test-live-ducklake-database test-live-flight test-live-guide test-live-object-storage-listing test-live-preview-function-diagnostics test-live-provider-config test-live-provider-single-attach test-live-quoted-identifiers test-live-quoted-identifiers-import test-live-read-only-sql-catalog test-live-rest-edge test-live-rest-helper test-live-rest-permission-diagnostics test-live-rest-token-matrix test-live-schema-cascade test-live-secret-metadata-drift test-live-secret-raw-sql test-live-share-grant-drift test-live-share-modes test-live-share-option-drift test-live-snapshot-drift test-live-sql-drift test-live-sql-edge test-live-sql-import test-live-sql-stable test-live-table-replace test-live-table-types test-live-table-unmanaged-view test-live-view-drift test-terraform-versions test-terraform-versions-blueprint test-terraform-versions-lifecycle tools tools-ci tools-docs vulncheck workflow-check $(TFPLUGINDOCS) $(ACTIONLINT) $(GOLANGCI_LINT) $(GOVULNCHECK) release-preflight-check
-.PHONY: test-live-examples test-live-examples-core test-live-examples-warehouses test-live-examples-apps test-live-examples-roles
+.PHONY: \
+  build clean-generated clean-tool-cache docs docs-check \
+  fmt fmt-check lint pre-push-check release-check \
+  release-package-local release-sign-check shellcheck static-check test-cli-versions \
+  test-contract test-scripts test-unit test-integration test-acceptance \
+  test-live-cleanup-audit test-terraform-versions-blueprint test-terraform-versions-lifecycle tools tools-ci \
+  tools-docs vulncheck workflow-check $(TFPLUGINDOCS) $(ACTIONLINT) \
+  $(GOLANGCI_LINT) $(GOVULNCHECK) release-preflight-check
 
 tools: tools-docs
 
@@ -152,170 +158,79 @@ test-acceptance:
 	@if [ -z "$${MOTHERDUCK_TOKEN:-}" ]; then echo "MOTHERDUCK_TOKEN is required for Terraform acceptance tests" >&2; exit 1; fi
 	TF_ACC=1 MD_TF_ACC=1 go test -tags=acceptance -count=1 ./internal/acceptance
 
-test-live-required:
-	./scripts/test-live-required.sh
-
-test-live-cycles:
-	./scripts/test-live-cycles.sh
-
-test-live-examples:
-	./scripts/test-live-examples.sh
-
-test-live-examples-core:
-	./scripts/test-live-examples-core.sh
-
-test-live-examples-warehouses:
-	./scripts/test-live-examples-warehouses.sh
-
-test-live-examples-apps:
-	./scripts/test-live-examples-apps.sh
-
-test-live-examples-roles:
-	./scripts/test-live-examples-roles.sh
+.PHONY: test-live-admin
+test-live-admin:
+	TF_ACC=1 MD_TF_ACC=1 go test -timeout=20m -tags=acceptance,admin_acceptance -run '^TestPluginTestingAdminGraphLifecycle$$' -count=1 ./internal/acceptance
+	./scripts/test-live-blueprint-writer-path.sh
 
 test-live-cleanup-audit:
 	./scripts/audit-live-test-cleanup.sh
 
-test-live-canonical-values:
-	./scripts/test-live-canonical-values.sh
-
-test-live-blueprint-sql-only:
-	./scripts/test-live-blueprint-sql-only.sh
-
-test-live-blueprint-writer-path:
-	./scripts/test-live-blueprint-writer-path.sh
-
 test-cli-versions:
 	./scripts/test-terraform-versions.sh --offline
-
-test-cli:
-	./scripts/test-cli.sh
-
-test-examples:
-	./scripts/test-examples.sh
-
-test-import-validation:
-	./scripts/test-import-validation.sh
-
-test-invalid-configuration:
-	./scripts/test-invalid-configuration.sh
-
-test-missing-credentials:
-	./scripts/test-missing-credentials.sh
-
-test-repository-hygiene:
-	./scripts/test-repository-hygiene.sh
-
-test-live-complex:
-	./scripts/test-live-complex.sh
-
-test-live-database-drop-with-objects:
-	./scripts/test-live-database-drop-with-objects.sh
-
-test-live-database-drift:
-	./scripts/test-live-database-drift.sh
-
-test-live-database-options:
-	./scripts/test-live-database-options.sh
-
-test-live-dive:
-	./scripts/test-live-dive.sh
-
-test-live-dive-flight-blueprint:
-	./scripts/test-live-dive-flight-blueprint.sh
-
-test-live-ducklake-database:
-	./scripts/test-live-ducklake-database.sh
-
-test-live-flight:
-	./scripts/test-live-flight.sh
-
-test-live-guide:
-	./scripts/test-live-guide.sh
-
-test-live-object-storage-listing:
-	./scripts/test-live-object-storage-listing.sh
-
-test-live-preview-function-diagnostics:
-	./scripts/test-live-preview-function-diagnostics.sh
-
-test-live-provider-config:
-	./scripts/test-live-provider-config.sh
-
-test-live-provider-single-attach:
-	./scripts/test-live-provider-single-attach.sh
-
-test-live-quoted-identifiers:
-	./scripts/test-live-quoted-identifiers.sh
-
-test-live-quoted-identifiers-import:
-	./scripts/test-live-quoted-identifiers-import.sh
-
-test-live-read-only-sql-catalog:
-	./scripts/test-live-read-only-sql-catalog.sh
-
-test-live-rest-edge:
-	./scripts/test-live-rest-edge.sh
-
-test-live-rest-helper:
-	./scripts/test-live-rest-helper.sh
-
-test-live-rest-permission-diagnostics:
-	./scripts/test-live-rest-permission-diagnostics.sh
-
-test-live-rest-token-matrix:
-	./scripts/test-live-rest-token-matrix.sh
-
-test-live-schema-cascade:
-	./scripts/test-live-schema-cascade.sh
-
-test-live-secret-metadata-drift:
-	./scripts/test-live-secret-metadata-drift.sh
-
-test-live-secret-raw-sql:
-	./scripts/test-live-secret-raw-sql.sh
-
-test-live-share-grant-drift:
-	./scripts/test-live-share-grant-drift.sh
-
-test-live-share-modes:
-	./scripts/test-live-share-modes.sh
-
-test-live-share-option-drift:
-	./scripts/test-live-share-option-drift.sh
-
-test-live-snapshot-drift:
-	./scripts/test-live-snapshot-drift.sh
-
-test-live-sql-drift:
-	./scripts/test-live-sql-drift.sh
-
-test-live-sql-edge:
-	./scripts/test-live-sql-edge.sh
-
-test-live-sql-import:
-	./scripts/test-live-sql-import.sh
-
-test-live-sql-stable:
-	./scripts/test-live-sql-stable.sh
-
-test-live-table-replace:
-	./scripts/test-live-table-replace.sh
-
-test-live-table-types:
-	./scripts/test-live-table-types.sh
-
-test-live-table-unmanaged-view:
-	./scripts/test-live-table-unmanaged-view.sh
-
-test-live-view-drift:
-	./scripts/test-live-view-drift.sh
-
-test-terraform-versions:
-	./scripts/test-terraform-versions.sh
 
 test-terraform-versions-lifecycle:
 	TF_VERSION_SQL_LIFECYCLE=1 ./scripts/test-terraform-versions.sh
 
 test-terraform-versions-blueprint:
 	TF_VERSION_BLUEPRINT_LIFECYCLE=1 ./scripts/test-terraform-versions.sh
+
+SCRIPT_TEST_SCRIPTS := \
+  scripts/test-live-required.sh \
+  scripts/test-live-cycles.sh \
+  scripts/test-live-examples.sh \
+  scripts/test-live-examples-core.sh \
+  scripts/test-live-examples-warehouses.sh \
+  scripts/test-live-examples-apps.sh \
+  scripts/test-live-examples-roles.sh \
+  scripts/test-live-canonical-values.sh \
+  scripts/test-live-blueprint-sql-only.sh \
+  scripts/test-live-blueprint-writer-path.sh \
+  scripts/test-cli.sh \
+  scripts/test-examples.sh \
+  scripts/test-import-validation.sh \
+  scripts/test-invalid-configuration.sh \
+  scripts/test-missing-credentials.sh \
+  scripts/test-repository-hygiene.sh \
+  scripts/test-live-complex.sh \
+  scripts/test-live-database-drop-with-objects.sh \
+  scripts/test-live-database-drift.sh \
+  scripts/test-live-database-options.sh \
+  scripts/test-live-dive.sh \
+  scripts/test-live-dive-flight-blueprint.sh \
+  scripts/test-live-ducklake-database.sh \
+  scripts/test-live-flight.sh \
+  scripts/test-live-guide.sh \
+  scripts/test-live-object-storage-listing.sh \
+  scripts/test-live-preview-function-diagnostics.sh \
+  scripts/test-live-provider-config.sh \
+  scripts/test-live-provider-single-attach.sh \
+  scripts/test-live-quoted-identifiers.sh \
+  scripts/test-live-quoted-identifiers-import.sh \
+  scripts/test-live-read-only-sql-catalog.sh \
+  scripts/test-live-rest-edge.sh \
+  scripts/test-live-rest-helper.sh \
+  scripts/test-live-rest-permission-diagnostics.sh \
+  scripts/test-live-rest-token-matrix.sh \
+  scripts/test-live-schema-cascade.sh \
+  scripts/test-live-secret-metadata-drift.sh \
+  scripts/test-live-secret-raw-sql.sh \
+  scripts/test-live-share-grant-drift.sh \
+  scripts/test-live-share-modes.sh \
+  scripts/test-live-share-option-drift.sh \
+  scripts/test-live-snapshot-drift.sh \
+  scripts/test-live-sql-drift.sh \
+  scripts/test-live-sql-edge.sh \
+  scripts/test-live-sql-import.sh \
+  scripts/test-live-sql-stable.sh \
+  scripts/test-live-table-replace.sh \
+  scripts/test-live-table-types.sh \
+  scripts/test-live-table-unmanaged-view.sh \
+  scripts/test-live-view-drift.sh \
+  scripts/test-terraform-versions.sh
+SCRIPT_TEST_TARGETS := $(notdir $(SCRIPT_TEST_SCRIPTS:.sh=))
+
+.PHONY: $(SCRIPT_TEST_TARGETS)
+
+$(SCRIPT_TEST_TARGETS):
+	./scripts/$@.sh

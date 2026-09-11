@@ -61,9 +61,20 @@ Static and CLI jobs have bounded runtimes. Behavior tests run with race detectio
 
 The protected `motherduck-live` GitHub environment supplies:
 
-- `MOTHERDUCK_TOKEN`: read-write MotherDuck token for SQL-backed resources and data sources.
+- `MOTHERDUCK_TOKEN`: read-write MotherDuck token for SQL-backed resources and data sources. The admin lifecycle job also uses it when no separate admin token is configured.
+- `MOTHERDUCK_ADMIN_TOKEN`: optional separate organization-admin token for the isolated admin lifecycle job.
 
-Missing `MOTHERDUCK_TOKEN` fails the job instead of producing a successful skip. The exact-`main` job uses Terraform `1.16.1` and runs `make test-live-required` for SQL, import, no-op-plan, destroy, and cleanup behavior. REST administration behavior is gated hermetically in pull requests. Hosted live jobs do not have an organization-admin token.
+Use credentials from a dedicated test organization. The token selected for the
+admin job must have organization-admin permission. Store credentials as secrets
+in the protected `motherduck-live` environment, never in repository files.
+Rotate them from the approved secret-manager entry and run the live workflow on
+`main` to verify the replacement. Environment deployment rules must remain
+restricted to `main` and release tags.
+
+Missing `MOTHERDUCK_TOKEN` fails the job instead of producing a successful skip. The exact-`main` job uses Terraform `1.16.1` and runs `make test-live-required` for SQL, import, no-op-plan, destroy, and cleanup behavior. REST administration behavior is gated hermetically in pull requests. The separate admin job receives an admin token only on `main` pushes or an
+explicit manual `run_admin_lifecycle` request on `main`. It creates disposable
+accounts, rotates tokens, repairs revoked role grants, verifies writer/reader
+isolation, and checks cleanup. Pull-request code never receives either token.
 
 The weekly matrix runs read-only checks on every supported Terraform version and OpenTofu `1.12.6`. SQL lifecycle checks run on Terraform `1.5.7`, Terraform `1.16.1`, and OpenTofu `1.12.6`. The blueprint lifecycle runs on Terraform `1.16.1`. Manual inputs can request lifecycle coverage for every selected version.
 
