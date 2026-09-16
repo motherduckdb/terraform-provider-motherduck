@@ -42,6 +42,19 @@ Imported table types use canonical server spellings. A configured equivalent
 type such as `INT` is preserved during normal refresh. Review structural column
 changes carefully because table changes use replacement.
 
+## Databases owned by another deployment
+
+Use the [`motherduck_database` data source](../data-sources/database.md) to look
+up a required database by exact name without taking ownership of its lifecycle.
+It returns metadata and fails when the database is absent from the caller's
+catalog. Use the returned name or UUID in dependent configuration. The existing
+`motherduck_databases` data source remains appropriate for inventory queries
+where an empty list is valid.
+
+This check confirms catalog visibility when Terraform reads it, not the
+presence of rows or access to every table. Keep application data checks in the
+pipeline that loads or deploys the application.
+
 ## Destruction and drift
 
 Remote deletion causes refresh to remove missing resources from state, allowing

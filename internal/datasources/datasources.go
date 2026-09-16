@@ -8,6 +8,7 @@ func All() []func() datasource.DataSource {
 		NewUserTokensDataSource,
 		NewDiveEmbedSessionDataSource,
 		NewOwnedShareDataSource,
+		NewDatabaseDataSource,
 		NewCurrentUserDataSource,
 		NewVersionDataSource,
 		NewLiveDucklingSizeDataSource,

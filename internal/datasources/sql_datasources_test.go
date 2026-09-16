@@ -61,6 +61,7 @@ func TestSQLDataSourceSchemasHaveDescriptions(t *testing.T) {
 		NewVersionDataSource(),
 		NewLiveDucklingSizeDataSource(),
 		NewOwnedShareDataSource(),
+		NewDatabaseDataSource(),
 	} {
 		var resp datasource.SchemaResponse
 		ds.Schema(t.Context(), datasource.SchemaRequest{}, &resp)

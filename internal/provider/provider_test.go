@@ -51,6 +51,7 @@ func TestProviderRegistersResourcesAndDataSources(t *testing.T) {
 		"motherduck_attached_databases",
 		"motherduck_buckets_for_secret",
 		"motherduck_current_user",
+		"motherduck_database",
 		"motherduck_database_snapshots",
 		"motherduck_databases",
 		"motherduck_dive",

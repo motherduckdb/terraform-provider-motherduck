@@ -49,6 +49,7 @@ sql:
     - motherduck_flight
     - motherduck_flight_run
   data_sources:
+    - motherduck_database
     - motherduck_databases
     - motherduck_attached_databases
     - motherduck_database_snapshots
