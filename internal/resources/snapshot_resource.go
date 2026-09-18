@@ -148,10 +148,12 @@ func (r *snapshotResource) Update(ctx context.Context, req resource.UpdateReques
 			return
 		}
 	}
+	// A successful rename must remain recoverable if catalog readback fails.
+	plan.ID = state.ID
+	plan.CreatedTS = state.CreatedTS
 	found := r.readSnapshot(ctx, &plan, &resp.Diagnostics)
 	if !found && !resp.Diagnostics.HasError() {
 		resp.Diagnostics.AddError("Unable to read MotherDuck snapshot", "Snapshot was updated but was not visible in MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS.")
-		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
