@@ -55,6 +55,7 @@ sql:
     - motherduck_database_snapshots
     - motherduck_owned_shares
     - motherduck_owned_share
+    - motherduck_share_grants
     - motherduck_shared_with_me
     - motherduck_secrets
     - motherduck_current_user
