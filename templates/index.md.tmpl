@@ -24,6 +24,7 @@ Shares let other accounts query published data on their own compute.
 | [Separate development and production](guides/environments.md) | Independent writer identities, credentials, compute settings, and Terraform state |
 | [Serve customer-facing analytics](guides/customer-facing-analytics.md) | One database and restricted share per customer, queried through tenant-specific readers |
 | [Deploy pipelines and dashboards](guides/blueprints-deployment.md) | Terraform infrastructure with Blueprints previews, staging, and production releases |
+| [Manage access control as code](guides/access-control.md) | Roles, membership, and share access reviewed in pull requests and applied from CI |
 
 ## Example usage
 

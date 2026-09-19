@@ -19,6 +19,7 @@ infrastructure you can review, reproduce, and manage in Terraform.
 | Independent dev and production environments | [Separate identities, credentials, and state](docs/guides/environments.md) |
 | Usage dashboards for SaaS customers | [Provision tenant databases and readers](docs/guides/customer-facing-analytics.md) |
 | Python pipelines and interactive dashboards | [Combine Terraform with Blueprints](docs/guides/blueprints-deployment.md) |
+| Reviewed roles, membership, and share access | [Manage access control as code](docs/guides/access-control.md) |
 
 New to MotherDuck's ownership and compute model? Start with
 [choosing a deployment architecture](docs/guides/deployment-model.md).

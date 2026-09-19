@@ -1,0 +1,147 @@
+---
+page_title: "Manage access control as code"
+subcategory: "Operations"
+description: |-
+  Review MotherDuck roles, membership, and share access in pull requests, then apply them from GitHub Actions.
+---
+
+# Manage access control as code
+
+An access change made in the MotherDuck UI is immediate and invisible. Nobody
+reviews it, nothing records why it happened, and the only way to answer "who can
+read this share" later is to look again.
+
+Moving the same change into Terraform in a Git repository makes access a
+proposal that someone approves, a commit that says who asked and who agreed, and
+a state that a scheduled job can compare against reality. This guide covers the
+workflow, the credentials it needs, and the parts of MotherDuck security that
+stay outside Terraform.
+
+## What Terraform manages
+
+| Control | Resources |
+| --- | --- |
+| Custom roles | [motherduck_role](../resources/role.md) |
+| Role membership and inheritance | [motherduck_role_grant](../resources/role_grant.md) |
+| Share audience | [motherduck_share](../resources/share.md), [motherduck_share_grant](../resources/share_grant.md) |
+| Which tables a share exposes | `include_pattern` on [motherduck_share](../resources/share.md) |
+| Non-human identities and their credentials | [motherduck_service_account](../resources/service_account.md), [motherduck_access_token](../resources/access_token.md) |
+
+Three properties of the MotherDuck model shape how the configuration is written:
+
+- Preset roles are concentric. Admin includes Builder, and Builder includes
+  Explorer. A custom role cannot select platform permissions individually, so it
+  reaches them by inheriting a preset role.
+- Data access is separate from platform permissions. A database belongs to the
+  account that created it. Other accounts reach its data through a share.
+- There is no per-table privilege equivalent to `GRANT SELECT ON TABLE`. Table
+  level security is the share's `include_pattern`, which belongs to the share
+  rather than to a grant, so two audiences that need different tables need two
+  shares.
+
+## What stays outside Terraform
+
+MotherDuck exposes no API for these, so the provider cannot manage them and a
+configuration that claims to cover all of security would be wrong:
+
+- SSO through SAML or OIDC, and SCIM provisioning.
+- Organization membership for people, including invitations and deactivation.
+- Billing, plan, and AWS PrivateLink.
+
+Configure those in the MotherDuck UI. Terraform owns the roles, grants, and
+service identities layered on top of them. If your identity provider creates
+users through SCIM, Terraform still owns which roles those users hold.
+
+## A reviewable configuration
+
+Keep access control in its own Terraform root, separate from the warehouse that
+holds the data. The two change at different rates and by different reviewers,
+and separate roots keep an access review from replanning tables.
+
+The [access control example](../../examples/access-control/README.md) turns a
+team map into roles, membership, and share reads. One team is one entry, and one
+grant is one resource, so a plan reads as a list of access changes:
+
+{{tffile "examples/access-control/main.tf"}}
+
+Import grants that already exist before the first apply. Without an import,
+Terraform plans to create a grant MotherDuck already has, and the apply either
+fails or takes ownership of something nobody reviewed.
+
+## Review in a pull request, apply on merge
+
+This workflow plans on a pull request and reports the plan as a comment, applies
+after merge behind a GitHub environment that can require a second approver, and
+reports drift on a schedule:
+
+{{codefile "yaml" "examples/access-control/github-actions/access-control.yml"}}
+
+Four details matter more than the rest:
+
+- **Two tokens, not one.** The plan job runs on every pull request, including
+  from a branch someone else pushed, so give it a token that can read the
+  catalog and nothing more. The token that can grant and revoke belongs to the
+  apply job, in a GitHub environment where it is unavailable to pull request
+  runs.
+- **Run share grants as the share owner.** Only the owner of a share can run
+  `GRANT READ ON SHARE`. An organization admin who does not own it can read its
+  grants but cannot change them. If shares are owned by different service
+  accounts, split the configuration into one root per owner rather than looking
+  for an identity that can do everything.
+- **Use a remote state backend with locking.** Two concurrent applies against
+  one organization will otherwise race. The `concurrency` group in the workflow
+  serializes GitHub Actions runs, and it does not serialize a run against an
+  engineer applying from a laptop.
+- **Keep credential creation in a different root.** A plan or state that creates
+  [access tokens](../resources/access_token.md) contains the token values.
+  Access control configuration that only grants and revokes contains names, which
+  is what makes it safe to post a plan into a pull request comment. Never upload
+  the plan file itself as a build artifact.
+
+## What a reviewer should look for
+
+A plan that looks small can widen access considerably:
+
+- A grant to the `explorer` role reaches every user in the organization, because
+  the preset roles are concentric.
+- Changing a share's `access` from `restricted` to `organization` opens it to the
+  whole organization, and `unrestricted` opens it to anyone holding the share
+  URL. Individual grants stop being what controls the audience.
+- Removing `include_pattern` from a share exposes every table in the source
+  database rather than the listed ones.
+- Destroying a `motherduck_role` revokes access for everyone who held it, which
+  is the intended outcome of an offboarding and a surprise in a rename.
+
+## Audit and drift
+
+[motherduck_share_grants](../data-sources/share_grants.md) reports the full
+audience of a share, including the whole-organization or public grant that a
+non-restricted share carries and any grant made by hand:
+
+```terraform
+data "motherduck_share_grants" "analytics" {
+  share_name = "analytics_share"
+}
+
+output "analytics_readers" {
+  value = [
+    for grant in data.motherduck_share_grants.analytics.rows :
+    "${grant.grantee_type}:${grant.grantee_name}"
+  ]
+}
+```
+
+[motherduck_role_members](../data-sources/role_members.md) answers the same
+question for a role, and [motherduck_roles_for_user](../data-sources/roles_for_user.md)
+answers it for one person, including roles reached through inheritance.
+
+The scheduled job in the workflow runs `terraform plan -detailed-exitcode`. Exit
+code 2 means MotherDuck no longer matches the reviewed configuration, which is
+the signal that someone granted or revoked access outside the process. The next
+apply restores the reviewed state.
+
+## Related
+
+- [Authentication](authentication.md) for which token each operation needs
+- [Sharing and read scaling](sharing-and-read-scaling.md) for publishing data to other accounts
+- [Separate development and production](environments.md) for isolating identities and state
