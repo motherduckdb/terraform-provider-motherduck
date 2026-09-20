@@ -2,7 +2,8 @@ package sqlbuild
 
 import (
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 )
 
@@ -44,11 +45,7 @@ func MapLiteral(values map[string]string) string {
 	if len(values) == 0 {
 		return "MAP {}::MAP(VARCHAR, VARCHAR)"
 	}
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(values))
 
 	pairs := make([]string, 0, len(keys))
 	for _, key := range keys {
@@ -75,11 +72,7 @@ func NamedArgs(args map[string]string) string {
 	if len(args) == 0 {
 		return "()"
 	}
-	keys := make([]string, 0, len(args))
-	for key := range args {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(args))
 
 	parts := make([]string, 0, len(keys))
 	for _, key := range keys {
