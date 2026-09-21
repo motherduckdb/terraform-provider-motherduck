@@ -86,6 +86,18 @@ func rowSpecs() []rowSpec {
 			}
 			return appendRowLimitOffset(query+" ORDER BY name", m), nil
 		}},
+		{name: "share_grants", description: "Lists direct user and role grants and whole-audience access on one MotherDuck share. Does not expand role membership.", requiredFunction: "md_list_share_grantees", attrs: []string{"share_name"}, requiredAttrs: []string{"share_name"}, typedRows: []typedRowAttribute{
+			{name: "share_owner", description: "Account that owns the share."},
+			{name: "grantee_name", description: "Role name, username, or the ENTIRE_ORGANIZATION or ALL_USERS keyword reported for an organization-wide or public share."},
+			{name: "grantee_type", description: "Grantee type: role, user, organization, or domain."},
+			{name: "privilege", description: "Granted share privilege."},
+			{name: "granted_at", description: "Grant creation timestamp."},
+		}, build: func(m rowsModel) (string, error) {
+			if m.ShareName.IsNull() {
+				return "", fmt.Errorf("share_name is required")
+			}
+			return "SELECT * FROM MD_LIST_SHARE_GRANTEES(" + sqlbuild.StringLiteral(m.ShareName.ValueString()) + ") ORDER BY grantee_type, grantee_name", nil
+		}},
 		{name: "secrets", description: "Reads MotherDuck-managed secret metadata without exposing secret values.", attrs: []string{"name", "limit", "offset"}, typedRows: []typedRowAttribute{
 			{name: "name", description: "Secret name."},
 			{name: "type", description: "Secret type."},

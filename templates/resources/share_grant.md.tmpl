@@ -25,4 +25,8 @@ Import new grants with `<share>/<grantee_type>/<username>`. The legacy `<share>/
 
 After import, run `terraform plan` before applying to confirm the imported grant is still present in MotherDuck's share metadata.
 
+## Audit the full audience
+
+This resource owns one grant. To review direct grants and the whole-organization or public audience created by the share's `access` mode, read [motherduck_share_grants](../data-sources/share_grants.md).
+
 {{ .SchemaMarkdown | trimspace }}

@@ -76,6 +76,7 @@ func TestProviderRegistersResourcesAndDataSources(t *testing.T) {
 		"motherduck_roles_for_role",
 		"motherduck_roles_for_user",
 		"motherduck_secrets",
+		"motherduck_share_grants",
 		"motherduck_shared_with_me",
 		"motherduck_user_tokens",
 		"motherduck_version",

@@ -21,6 +21,7 @@ func TestRowSpecsCoverPlannedSQLDataSources(t *testing.T) {
 		"database_snapshots": true,
 		"owned_shares":       true,
 		"shared_with_me":     true,
+		"share_grants":       true,
 		"secrets":            true,
 		"buckets_for_secret": true,
 		"files":              true,
@@ -139,6 +140,7 @@ func TestRowsSpecsDeclareRequiredFunctions(t *testing.T) {
 		"guide":              "md_get_guide",
 		"guide_grantees":     "md_list_guide_grantees",
 		"guide_versions":     "md_list_guide_versions",
+		"share_grants":       "md_list_share_grantees",
 	}
 	for name, fn := range want {
 		if got := findSpec(t, name).requiredFunction; got != fn {
@@ -152,6 +154,7 @@ func TestRowsSpecsDeclareRequiredAttributes(t *testing.T) {
 		"buckets_for_secret": {"secret_name"},
 		"files":              {"path"},
 		"role_members":       {"role_name"},
+		"share_grants":       {"share_name"},
 		"roles_for_user":     {"username"},
 		"roles_for_role":     {"role_name"},
 		"dive":               {"dive_id"},
@@ -179,6 +182,7 @@ func TestRowsSpecAttributesAreSupportedByConfigAndStateSwitches(t *testing.T) {
 		"name":               true,
 		"database_name":      true,
 		"secret_name":        true,
+		"share_name":         true,
 		"path":               true,
 		"dive_id":            true,
 		"flight_id":          true,
@@ -401,6 +405,23 @@ func TestRowsSpecSharedWithMeCanFilterByName(t *testing.T) {
 	}
 }
 
+func TestRowsSpecShareGrantsQueriesGranteesForOneShare(t *testing.T) {
+	spec := findSpec(t, "share_grants")
+	if _, err := spec.build(rowsModel{}); err == nil {
+		t.Fatal("expected a missing share_name error")
+	}
+	query, err := spec.build(rowsModel{ShareName: types.StringValue("tenant's share")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(query, "MD_LIST_SHARE_GRANTEES('tenant''s share')") {
+		t.Fatalf("share name was not quoted as a string literal: %s", query)
+	}
+	if !strings.Contains(query, "ORDER BY grantee_type, grantee_name") {
+		t.Fatalf("share grant rows must have a stable order: %s", query)
+	}
+}
+
 func TestRowsSpecSchemasExposeOnlyRelevantAttributes(t *testing.T) {
 	tests := map[string][]string{
 		"databases":          {"limit", "name", "offset", "rows", "rows_json"},
@@ -412,6 +433,7 @@ func TestRowsSpecSchemasExposeOnlyRelevantAttributes(t *testing.T) {
 		"flights":            {"limit", "offset", "owner_only", "rows", "rows_json"},
 		"roles":              {"rows", "rows_json"},
 		"role_members":       {"role_name", "rows", "rows_json"},
+		"share_grants":       {"share_name", "rows", "rows_json"},
 		"guides":             {"limit", "offset", "reference_column", "reference_macro", "reference_schema", "reference_table", "reference_type", "reference_url", "reference_uuid", "reference_view", "rows", "rows_json", "topic"},
 		"guide":              {"guide_id", "rows_json"},
 		"guide_grantees":     {"guide_id", "rows", "rows_json"},
@@ -512,6 +534,7 @@ func TestStableRowsDataSourcesExposeTypedRows(t *testing.T) {
 		"database_snapshots": true,
 		"owned_shares":       true,
 		"shared_with_me":     true,
+		"share_grants":       true,
 		"secrets":            true,
 		"flights":            true,
 		"flight_logs":        true,

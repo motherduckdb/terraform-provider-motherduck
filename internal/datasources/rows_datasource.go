@@ -35,6 +35,7 @@ type rowsModel struct {
 	Name             types.String `tfsdk:"name"`
 	DatabaseName     types.String `tfsdk:"database_name"`
 	SecretName       types.String `tfsdk:"secret_name"`
+	ShareName        types.String `tfsdk:"share_name"`
 	Path             types.String `tfsdk:"path"`
 	DiveID           types.String `tfsdk:"dive_id"`
 	FlightID         types.String `tfsdk:"flight_id"`
@@ -318,6 +319,8 @@ func rowAttribute(name string, required bool) schema.Attribute {
 		return rowStringAttribute(required, nil, "MotherDuck database name filter.")
 	case "secret_name":
 		return rowStringAttribute(required, nil, "MotherDuck secret name.")
+	case "share_name":
+		return rowStringAttribute(required, []validator.String{tfvalidators.StringLength("MotherDuck share name", 1, 0)}, "MotherDuck share name. Must not be blank.")
 	case "path":
 		return rowStringAttribute(required, nil, "Object-storage path to list through MotherDuck SQL.")
 	default:
@@ -349,6 +352,8 @@ func (m *rowsModel) attribute(name string) attr.Value {
 		return &m.DatabaseName
 	case "secret_name":
 		return &m.SecretName
+	case "share_name":
+		return &m.ShareName
 	case "path":
 		return &m.Path
 	case "dive_id":
