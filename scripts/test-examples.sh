@@ -147,9 +147,7 @@ HCL
     examples/access-control)
       cat > "${invalid_vars}" <<'HCL'
 teams = {
-  "BadTeam" = {
-    platform_role = ""
-  }
+  "BadTeam" = {}
 }
 HCL
       ;;
@@ -182,8 +180,29 @@ HCL
     return 0
   fi
   if [[ "${relative_dir}" == examples/access-control ]]; then
-    if [[ "${invalid_output}" != *"Team keys must start with a lowercase letter"* || "${invalid_output}" != *"platform_role must be admin, builder, or explorer"* ]]; then
+    if [[ "${invalid_output}" != *"Team keys must start with a lowercase letter"* ]]; then
       echo "Expected invalid access-control diagnostics for ${relative_dir}, got:" >&2
+      printf '%s\n' "${invalid_output}" >&2
+      exit 1
+    fi
+    # OpenTofu stops at the first failing validation rule. Check an empty
+    # platform role independently so both CLIs must exercise that rule.
+    cat > "${invalid_vars}" <<'HCL'
+teams = {
+  analysts = { platform_role = "" }
+}
+HCL
+    if invalid_output="$(
+      MOTHERDUCK_TOKEN="dummy-sql-token" MOTHERDUCK_ADMIN_TOKEN="dummy-admin-token" \
+        TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" \
+        plan -refresh=false -input=false -no-color -var-file="${invalid_vars}" 2>&1
+    )"; then
+      echo "Expected an empty platform_role to fail validation" >&2
+      exit 1
+    fi
+    rm -f "${invalid_vars}"
+    if [[ "${invalid_output}" != *"platform_role must be admin, builder, or explorer"* ]]; then
+      echo "Expected the platform_role validation diagnostic, got:" >&2
       printf '%s\n' "${invalid_output}" >&2
       exit 1
     fi
