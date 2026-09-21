@@ -55,6 +55,16 @@ write_plan_vars() {
   local work_dir="$2"
 
   case "${relative_dir}" in
+    examples/access-control)
+      cat > "${work_dir}/terraform.tfvars" <<'HCL'
+teams = {
+  analysts = {
+    members = ["svc_analytics_reader", "svc_analytics_reader"]
+    shares  = ["analytics_share", "analytics_share"]
+  }
+}
+HCL
+      ;;
     examples/blueprints/hypertenancy)
       cat > "${work_dir}/terraform.tfvars" <<'HCL'
 database_prefix = "tenant_example"
@@ -107,10 +117,10 @@ HCL
   esac
 }
 
-assert_invalid_blueprint_vars() {
+assert_invalid_example_vars() {
   local relative_dir="$1"
   local work_dir="$2"
-  local invalid_vars="${work_dir}/invalid-blueprint.tfvars"
+  local invalid_vars="${work_dir}/invalid-example.tfvars"
 
   case "${relative_dir}" in
     examples/blueprints/hypertenancy)
@@ -132,6 +142,13 @@ HCL
       cat > "${invalid_vars}" <<'HCL'
 writer_username = "1-bad-writer"
 writer_token_ttl_seconds = 299
+HCL
+      ;;
+    examples/access-control)
+      cat > "${invalid_vars}" <<'HCL'
+teams = {
+  "BadTeam" = {}
+}
 HCL
       ;;
     *)
@@ -157,6 +174,35 @@ HCL
   if [[ "${relative_dir}" == examples/blueprints/writer-bootstrap ]]; then
     if [[ "${invalid_output}" != *"writer_username must start with an ASCII letter"* || "${invalid_output}" != *"writer_token_ttl_seconds must be between 300 and 31536000 seconds"* ]]; then
       echo "Expected invalid writer-bootstrap diagnostics for ${relative_dir}, got:" >&2
+      printf '%s\n' "${invalid_output}" >&2
+      exit 1
+    fi
+    return 0
+  fi
+  if [[ "${relative_dir}" == examples/access-control ]]; then
+    if [[ "${invalid_output}" != *"Team keys must start with a lowercase letter"* ]]; then
+      echo "Expected invalid access-control diagnostics for ${relative_dir}, got:" >&2
+      printf '%s\n' "${invalid_output}" >&2
+      exit 1
+    fi
+    # OpenTofu stops at the first failing validation rule. Check an empty
+    # platform role independently so both CLIs must exercise that rule.
+    cat > "${invalid_vars}" <<'HCL'
+teams = {
+  analysts = { platform_role = "" }
+}
+HCL
+    if invalid_output="$(
+      MOTHERDUCK_TOKEN="dummy-sql-token" MOTHERDUCK_ADMIN_TOKEN="dummy-admin-token" \
+        TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" \
+        plan -refresh=false -input=false -no-color -var-file="${invalid_vars}" 2>&1
+    )"; then
+      echo "Expected an empty platform_role to fail validation" >&2
+      exit 1
+    fi
+    rm -f "${invalid_vars}"
+    if [[ "${invalid_output}" != *"platform_role must be admin, builder, or explorer"* ]]; then
+      echo "Expected the platform_role validation diagnostic, got:" >&2
       printf '%s\n' "${invalid_output}" >&2
       exit 1
     fi
@@ -237,6 +283,17 @@ HCL
     jq -e '[.resource_changes[]? | select(.mode == "managed" and .change.actions == ["create"])] | length > 0' >/dev/null
 
   case "${relative_dir}" in
+    examples/access-control)
+      # Omitted platform_role creates no inheritance grant. Repeated members and
+      # shares each produce one resource rather than duplicate map-key errors.
+      TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan" |
+        jq -e '[.resource_changes[] | select(.mode == "managed") | .address] | sort == [
+          "motherduck_role.team[\"analysts\"]",
+          "motherduck_role_grant.member[\"analysts/svc_analytics_reader\"]",
+          "motherduck_share_grant.team[\"analysts/analytics_share\"]"
+        ]' >/dev/null
+      assert_invalid_example_vars "${relative_dir}" "${work_dir}"
+      ;;
     examples/customer-facing-analytics)
       TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan" > "${work_dir}/tenant-plan.json"
       jq -e '
@@ -268,7 +325,7 @@ HCL
           exit 1
         fi
       done
-      assert_invalid_blueprint_vars "${relative_dir}" "${work_dir}"
+      assert_invalid_example_vars "${relative_dir}" "${work_dir}"
       ;;
     examples/blueprints/writer-bootstrap)
       plan_json="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan")"
@@ -276,7 +333,7 @@ HCL
         echo "Expected blueprint plan for ${relative_dir} to include writer username svc_writer_example" >&2
         exit 1
       fi
-      assert_invalid_blueprint_vars "${relative_dir}" "${work_dir}"
+      assert_invalid_example_vars "${relative_dir}" "${work_dir}"
       ;;
     examples/warehouses/bootstrap)
       TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan" |
