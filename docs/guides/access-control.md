@@ -151,8 +151,7 @@ For an executable comparison of share audiences, use the
 It reports missing and unexpected audiences against an explicit allowlist and
 can fail a plan when they differ, including when an unchanged report still
 contains drift. It does not revoke grants or expand role membership. The example
-requires a provider build containing `motherduck_share_grants`, which is not in
-v0.2.9.
+requires provider v0.2.10 or later, which includes `motherduck_share_grants`.
 
 Include an access audit when you manage roles with Terraform:
 

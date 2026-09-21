@@ -243,7 +243,7 @@ terraform {
 }
 HCL
   else
-    perl -0pi -e "s/version = \">= 0\\.(?:1\\.0|2\\.9)\"/version = \"= ${PROVIDER_VERSION}\"/" "${work_dir}"/*.tf
+    perl -0pi -e "s/version = \">= 0\\.(?:1\\.0|2\\.10)\"/version = \"= ${PROVIDER_VERSION}\"/" "${work_dir}"/*.tf
   fi
   write_plan_vars "${relative_dir}" "${work_dir}"
 

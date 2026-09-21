@@ -4,10 +4,9 @@ terraform {
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = ">= 0.2.9"
+      version = ">= 0.2.10"
     }
   }
 }
 
-# Use a source build from main until a release includes motherduck_share_grants.
 provider "motherduck" {}
