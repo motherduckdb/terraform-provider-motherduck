@@ -320,7 +320,7 @@ func rowAttribute(name string, required bool) schema.Attribute {
 	case "secret_name":
 		return rowStringAttribute(required, nil, "MotherDuck secret name.")
 	case "share_name":
-		return rowStringAttribute(required, nil, "MotherDuck share name.")
+		return rowStringAttribute(required, []validator.String{tfvalidators.StringLength("MotherDuck share name", 1, 0)}, "MotherDuck share name. Must not be blank.")
 	case "path":
 		return rowStringAttribute(required, nil, "Object-storage path to list through MotherDuck SQL.")
 	default:

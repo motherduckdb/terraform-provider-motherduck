@@ -2,13 +2,13 @@
 page_title: "motherduck_share_grants Data Source - motherduck"
 subcategory: "Access control"
 description: |-
-  Lists the users, roles, and organization-wide grants that can read one MotherDuck share.
+  Lists direct user and role grants and whole-audience access on one MotherDuck share. Does not expand role membership.
 ---
 
 # motherduck_share_grants (Data Source)
 
-Reports who can read one share, so an access review can run against the same
-configuration that created the grants. Each row is one grant:
+Reports the grant audiences on one share, so an access review can run against
+the configuration that created the grants. Each row is one grant:
 [motherduck_share_grant](../resources/share_grant.md) creates the `user` and
 `role` rows, and the share's own `access` mode produces the rest.
 
@@ -27,6 +27,11 @@ Read it with the share owner's credentials. An organization admin can also read
 grants on shares the organization owns. A caller who is neither sees a
 share-not-found error, because share lookup happens before the grant read.
 
+A role row identifies the granted role, not every user who inherits its access.
+Use [motherduck_role_members](role_members.md) to inspect direct role members
+and follow nested roles separately. The listing does not revoke unmanaged grants
+or replace a review of effective access.
+
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read
 them. See [authentication](../guides/authentication.md).
@@ -39,8 +44,12 @@ data "motherduck_share_grants" "analytics" {
 }
 ```
 
-Terraform reads data sources during plan, so the grant list refreshes on every
-plan and can back a drift alert or a reviewed audit output:
+Terraform normally reads this data source during plan. Unknown inputs or pending
+dependencies defer the read until apply. When auditing grants created in the same
+configuration, add an explicit `depends_on` for those grant resources so the
+listing runs after they change.
+
+Expose the result as an output to review audience changes:
 
 ```terraform
 output "analytics_share_readers" {
@@ -56,7 +65,7 @@ output "analytics_share_readers" {
 
 ### Required
 
-- `share_name` (String) MotherDuck share name.
+- `share_name` (String) MotherDuck share name. Must not be blank.
 
 ### Read-Only
 

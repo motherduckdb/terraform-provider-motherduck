@@ -86,7 +86,7 @@ func rowSpecs() []rowSpec {
 			}
 			return appendRowLimitOffset(query+" ORDER BY name", m), nil
 		}},
-		{name: "share_grants", description: "Lists the users, roles, and organization-wide grants that can read one MotherDuck share.", requiredFunction: "md_list_share_grantees", attrs: []string{"share_name"}, requiredAttrs: []string{"share_name"}, typedRows: []typedRowAttribute{
+		{name: "share_grants", description: "Lists direct user and role grants and whole-audience access on one MotherDuck share. Does not expand role membership.", requiredFunction: "md_list_share_grantees", attrs: []string{"share_name"}, requiredAttrs: []string{"share_name"}, typedRows: []typedRowAttribute{
 			{name: "share_owner", description: "Account that owns the share."},
 			{name: "grantee_name", description: "Role name, username, or the ENTIRE_ORGANIZATION or ALL_USERS keyword reported for an organization-wide or public share."},
 			{name: "grantee_type", description: "Grantee type: role, user, organization, or domain."},
