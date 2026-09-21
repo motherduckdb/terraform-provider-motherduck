@@ -4,7 +4,7 @@ output "role_names" {
 }
 
 output "direct_grants" {
-  description = "Every direct grant this configuration owns, in a form that is stable to diff between plans and access reviews."
+  description = "Grants managed by this configuration, sorted for comparison."
   value = sort(concat(
     [for key, grant in motherduck_role_grant.platform : "role:${grant.grantee_name} inherits ${grant.role_name}"],
     [for key, grant in motherduck_role_grant.member : "user:${grant.grantee_name} holds ${grant.role_name}"],

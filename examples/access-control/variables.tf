@@ -1,5 +1,5 @@
 variable "role_prefix" {
-  description = "Prefix for every role this configuration owns. It keeps reviewed roles distinguishable from roles created by hand."
+  description = "Prefix for role names created by this configuration."
   type        = string
   default     = "analytics"
   nullable    = false
@@ -10,11 +10,11 @@ variable "role_prefix" {
 }
 
 variable "teams" {
-  description = "Access map. Each entry becomes one role, its inherited platform role, its direct members, and the shares it can read."
+  description = "Maps each team to a role, its platform role, members, and shares."
   type = map(object({
     platform_role = optional(string)
-    members       = optional(list(string), [])
-    shares        = optional(list(string), [])
+    members       = optional(set(string), [])
+    shares        = optional(set(string), [])
   }))
   nullable = false
   default = {
@@ -35,8 +35,16 @@ variable "teams" {
   }
   validation {
     condition = alltrue([
+      for team_key in keys(var.teams) :
+      can(regex("^[a-z][a-z0-9_-]*$", team_key)) &&
+      length(team_key) <= 190
+    ])
+    error_message = "Team keys must start with a lowercase letter, contain only lowercase letters, digits, hyphens, and underscores, and contain at most 190 characters."
+  }
+  validation {
+    condition = alltrue([
       for team in values(var.teams) :
-      team.platform_role == null || contains(["admin", "builder", "explorer"], coalesce(team.platform_role, "explorer"))
+      team.platform_role == null ? true : contains(["admin", "builder", "explorer"], team.platform_role)
     ])
     error_message = "platform_role must be admin, builder, or explorer. MotherDuck custom roles inherit platform permissions and cannot select them individually."
   }

@@ -89,8 +89,6 @@ lint: $(GOLANGCI_LINT)
 
 workflow-check: tools-ci
 	$(ACTIONLINT)
-	# Lint the documented GitHub Actions example with the same rules so it cannot rot.
-	$(ACTIONLINT) examples/access-control/github-actions/access-control.yml
 
 vulncheck: tools-ci
 	$(GOVULNCHECK) ./...

@@ -1,52 +1,54 @@
-# Access control as code
+# Roles and share access
 
-Turns MotherDuck roles, role membership, and share access into reviewable
-Terraform. Each team in `teams` becomes one role, the platform role it inherits,
-its direct members, and the shares it can read. Adding a person to a team is a
-one-line pull request, and revoking access is the removal of that line.
+Each entry in `teams` creates a role, grants its platform role, adds members,
+and grants access to shares. Users and shares must already exist. Shares must
+use `access = "restricted"`.
+
+Set `teams` in a `.tfvars` file:
 
 ```hcl
 teams = {
   analysts = {
     platform_role = "explorer"
-    members       = ["svc_analytics_reader", "dana@example.com"]
+    members       = ["svc_analytics_reader"]
     shares        = ["analytics_share"]
   }
 }
 ```
 
+Supply `MOTHERDUCK_TOKEN` through your secret manager. The account needs
+permission to create roles and grant membership. Share grants must run as the
+share owner. Use a backend with locking when several people or processes manage
+the same state.
+
+Import roles and grants that already exist before applying. For example:
+
 ```shell
 terraform init
-terraform plan -out=access.tfplan
-terraform apply access.tfplan
-```
-
-The configuration grants access. It does not create the objects being granted.
-Shares listed under `shares` must already exist and must use
-`access = "restricted"`, because an organization or unrestricted share carries
-its whole audience instead of individual grants. Members must already exist as
-users or service accounts. The credentials behind `MOTHERDUCK_TOKEN` need
-permission to create roles and to grant on the named shares, and share grants
-must run as the share owner.
-
-Import grants that already exist before the first apply, otherwise Terraform
-plans to create grants that MotherDuck already has:
-
-```shell
+terraform import 'motherduck_role.team["analysts"]' analytics_analysts
+terraform import 'motherduck_role_grant.platform["analysts"]' \
+  explorer/role/analytics_analysts
 terraform import 'motherduck_role_grant.member["analysts/svc_analytics_reader"]' \
   analytics_analysts/user/svc_analytics_reader
 terraform import 'motherduck_share_grant.team["analysts/analytics_share"]' \
   analytics_share/role/analytics_analysts
 ```
 
-`terraform destroy` revokes the grants and drops the roles this configuration
-owns. It does not delete users, service accounts, shares, or databases.
+Run only the imports for objects that exist, then review and apply the plan:
 
-The `direct_grants` output lists every grant in a stable form, which is useful
-as the artifact of a periodic access review. To read the full audience of a
-share, including grants made outside Terraform, use the
-[motherduck_share_grants](../../docs/data-sources/share_grants.md) data source.
+```shell
+terraform plan -out=access.tfplan
+terraform show access.tfplan
+terraform apply access.tfplan
+```
 
-`github-actions/access-control.yml` runs this root through pull requests. See
-[manage access control as code](../../docs/guides/access-control.md) for the
-review workflow, credential handling, and what stays outside Terraform.
+The `role_names` output maps teams to role names. `direct_grants` lists grants
+managed by this configuration. To inspect grants outside its state, use
+[motherduck_share_grants](../../docs/data-sources/share_grants.md).
+
+Removing a membership revokes that grant. Other grants or role memberships can
+still provide access. `terraform destroy` revokes the grants and drops the roles
+in this state. It does not delete users, shares, or databases.
+
+See [manage roles and share access](../../docs/guides/access-control.md) for
+access boundaries and audit queries.
