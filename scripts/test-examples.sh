@@ -243,7 +243,7 @@ terraform {
 }
 HCL
   else
-    perl -0pi -e "s/version = \">= 0\\.1\\.0\"/version = \"= ${PROVIDER_VERSION}\"/" "${work_dir}"/*.tf
+    perl -0pi -e "s/version = \">= 0\\.(?:1\\.0|2\\.9)\"/version = \"= ${PROVIDER_VERSION}\"/" "${work_dir}"/*.tf
   fi
   write_plan_vars "${relative_dir}" "${work_dir}"
 
@@ -252,7 +252,7 @@ HCL
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" validate
   validated_count=$((validated_count + 1))
 
-  if [[ "${relative_dir}" == examples/data-sources/* ]]; then
+  if [[ "${relative_dir}" == examples/data-sources/* || "${relative_dir}" == examples/share-access-audit ]]; then
     echo "==> Skipping offline plan for ${relative_dir}. Terraform reads data sources during plan"
     continue
   fi

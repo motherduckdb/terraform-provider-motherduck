@@ -54,6 +54,8 @@ Compare the configuration with
 [motherduck_share_grants](../../docs/data-sources/share_grants.md) to find
 memberships, inheritance, and share grants outside Terraform's state.
 Reading the data sources alone does not detect or remove those differences.
+Use the [read-only share audit](../share-access-audit/README.md) to compare
+share audiences with an allowlist and optionally fail a plan on drift.
 
 Removing a membership revokes that grant. Other grants or role memberships can
 still provide access. `terraform destroy` revokes the grants and drops the roles

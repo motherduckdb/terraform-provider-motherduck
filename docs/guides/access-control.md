@@ -146,6 +146,14 @@ not delete the users, shares, or databases referenced by this example.
 
 ## Audit access for drift
 
+For an executable comparison of share audiences, use the
+[read-only share audit example](../../examples/share-access-audit/README.md).
+It reports missing and unexpected audiences against an explicit allowlist and
+can fail a plan when they differ, including when an unchanged report still
+contains drift. It does not revoke grants or expand role membership. The example
+requires a provider build containing `motherduck_share_grants`, which is not in
+v0.2.9.
+
 Include an access audit when you manage roles with Terraform:
 
 1. Read [motherduck_role_members](../data-sources/role_members.md) for each role
