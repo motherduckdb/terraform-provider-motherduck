@@ -182,11 +182,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 		return ErrMissingAdminToken
 	}
 
-	var payload []byte
 	var reader io.Reader
 	if body != nil {
-		var err error
-		payload, err = json.Marshal(body)
+		payload, err := json.Marshal(body)
 		if err != nil {
 			return err
 		}
@@ -207,7 +205,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	}
 
 	start := time.Now()
-	res, err := c.doWithRetry(ctx, req, payload)
+	res, err := c.doWithRetry(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -253,7 +251,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	return nil
 }
 
-func (c *Client) doWithRetry(ctx context.Context, req *http.Request, payload []byte) (*http.Response, error) {
+func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*http.Response, error) {
 	attempts := 1
 	if retryableMethod(req.Method) {
 		attempts = 4
@@ -261,10 +259,11 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request, payload []b
 	var lastErr error
 	for attempt := 0; attempt < attempts; attempt++ {
 		retryReq := req.Clone(ctx)
-		if payload != nil {
-			retryReq.Body = io.NopCloser(bytes.NewReader(payload))
-			retryReq.GetBody = func() (io.ReadCloser, error) {
-				return io.NopCloser(bytes.NewReader(payload)), nil
+		if req.GetBody != nil {
+			var err error
+			retryReq.Body, err = req.GetBody()
+			if err != nil {
+				return nil, err
 			}
 		}
 		res, err := c.httpClient.Do(retryReq)

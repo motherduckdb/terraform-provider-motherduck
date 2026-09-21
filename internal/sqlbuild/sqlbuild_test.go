@@ -2,6 +2,30 @@ package sqlbuild
 
 import "testing"
 
+func TestMapBuildersPreserveOutput(t *testing.T) {
+	tests := []struct {
+		name    string
+		values  map[string]string
+		literal string
+		args    string
+	}{
+		{"nil", nil, "MAP {}::MAP(VARCHAR, VARCHAR)", "()"},
+		{"empty", map[string]string{}, "MAP {}::MAP(VARCHAR, VARCHAR)", "()"},
+		{"case-sensitive ordering", map[string]string{"b": "NULL", "a": "true", "Z": "42"}, "MAP {'Z': '42', 'a': 'true', 'b': 'NULL'}", "(Z := 42, a := true, b := NULL)"},
+		{"escaping versus expressions", map[string]string{"config": "'duck''s'", "count": "1 + 2"}, "MAP {'config': '''duck''''s''', 'count': '1 + 2'}", "(config := 'duck''s', count := 1 + 2)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MapLiteral(tt.values); got != tt.literal {
+				t.Fatalf("MapLiteral() = %q, want %q", got, tt.literal)
+			}
+			if got := NamedArgs(tt.values); got != tt.args {
+				t.Fatalf("NamedArgs() = %q, want %q", got, tt.args)
+			}
+		})
+	}
+}
+
 func TestQuoteIdentifier(t *testing.T) {
 	got := QuoteIdentifier(` first.last"reader `)
 	want := `" first.last""reader "`
