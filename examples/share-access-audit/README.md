@@ -4,9 +4,8 @@ Compare the direct audiences of existing shares with an explicit allowlist. This
 read-only Terraform root reports missing and unexpected grants, including
 organization-wide or public access. It does not create or revoke grants.
 
-This example uses `motherduck_share_grants`, which is on `main` but absent from
-v0.2.9. Use a [local provider build](../../docs/guides/local-development.md) until
-a release includes that data source. Terraform 1.5 or later is supported.
+This example requires provider v0.2.10 or later, which includes
+`motherduck_share_grants`. Terraform 1.5 or later is supported.
 
 Copy this directory into a separate Terraform root and define every intended
 audience for each share in `terraform.tfvars`:
