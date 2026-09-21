@@ -2,14 +2,22 @@
 page_title: "Manage roles and share access"
 subcategory: "Operations"
 description: |-
-  Create MotherDuck roles, assign members, and grant access to shares with Terraform.
+  Manage role membership and share grants with Terraform, and audit access for drift.
 ---
 
 # Manage roles and share access
 
-Use Terraform to create roles, assign members, and grant access to shares.
+If you manage MotherDuck roles with Terraform, manage their memberships and
+share grants there too. Changes made through the UI or SQL can leave access in
+MotherDuck different from the configuration.
+
+Terraform checks grants in its state. A plan with no changes does not prove
+that no other grants exist. Use the role and share data sources to compare
+access in MotherDuck with the memberships and grants you intend to allow.
+
 The [example](../../examples/access-control/README.md) maps each team to a role
-and manages each membership and share grant as a resource.
+and manages each membership and share grant as a resource. Follow the audit
+steps below to check for grants outside its state.
 
 ## Before you start
 
@@ -84,7 +92,19 @@ and recreated.
 `terraform destroy` revokes the grants and drops the roles in this state. It does
 not delete the users, shares, or databases referenced by this example.
 
-## Inspect share audiences
+## Audit access for drift
+
+Include an access audit when you manage roles with Terraform:
+
+1. Read [motherduck_role_members](../data-sources/role_members.md) for each role
+   to check its user and role members.
+2. Read [motherduck_roles_for_role](../data-sources/roles_for_role.md) to check
+   role inheritance, including platform roles.
+3. Read [motherduck_share_grants](../data-sources/share_grants.md) for each share
+   to check who has a grant and whether access extends to the organization or
+   anyone with the share URL.
+4. Compare the results with the configuration. Import grants you intend to
+   manage and revoke grants that should not exist.
 
 [motherduck_share_grants](../data-sources/share_grants.md) lists grants to users
 and roles, plus audiences created by a share's `access` mode:
@@ -113,9 +133,9 @@ MotherDuck. Exit code `0` means no changes, `1` means an error, and `2` means
 Terraform proposes changes. These can include output changes as well as resource
 changes.
 
-Terraform reconciles grants it manages. It does not remove grants created
-outside its state. Review those through the data sources, then import or revoke
-them as appropriate.
+Reading these data sources does not enforce the configuration. The comparison
+is what identifies grants outside Terraform's state. Applying a plan restores
+managed grants but does not revoke grants Terraform does not own.
 
 ## Access boundaries
 
