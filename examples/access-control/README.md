@@ -1,5 +1,9 @@
 # Roles and share access
 
+If you manage roles with Terraform, manage their memberships and share grants
+there too. Changes made outside Terraform can leave access different from the
+configuration, and grants outside its state can go unnoticed by `terraform plan`.
+
 Each entry in `teams` creates a role, grants its platform role, adds members,
 and grants access to shares. Users and shares must already exist. Shares must
 use `access = "restricted"`.
@@ -43,8 +47,13 @@ terraform apply access.tfplan
 ```
 
 The `role_names` output maps teams to role names. `direct_grants` lists grants
-managed by this configuration. To inspect grants outside its state, use
-[motherduck_share_grants](../../docs/data-sources/share_grants.md).
+managed by this configuration. Neither is a list of all access in MotherDuck.
+Compare the configuration with
+[motherduck_role_members](../../docs/data-sources/role_members.md),
+[motherduck_roles_for_role](../../docs/data-sources/roles_for_role.md), and
+[motherduck_share_grants](../../docs/data-sources/share_grants.md) to find
+memberships, inheritance, and share grants outside Terraform's state.
+Reading the data sources alone does not detect or remove those differences.
 
 Removing a membership revokes that grant. Other grants or role memberships can
 still provide access. `terraform destroy` revokes the grants and drops the roles
