@@ -132,3 +132,10 @@ The repository checks these SQL models against embedded DuckDB for revised
 orders, cancellation, exact decimal totals, empty input, and repeatable refresh.
 Those checks do not prove your cross-account permissions or production sizing.
 Use each intended reader credential to verify both allowed and denied reads.
+
+## Continue with ingestion and dbt
+
+The [cookbook pipeline companion](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.2.11/examples/cookbook-pipeline/README.md)
+passes a Terraform-owned database into a pinned dlt recipe and dbt models.
+Those tools own their tables. Use a separate root or deliberately transfer
+overlapping table ownership before adopting it.

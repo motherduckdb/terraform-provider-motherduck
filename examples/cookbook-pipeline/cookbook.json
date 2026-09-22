@@ -1,0 +1,6 @@
+{
+  "repository": "motherduckdb/motherduck-cookbook",
+  "commit": "d0041604e996051cadc82290d7ef494c52095e4f",
+  "path": "flight-plans/flight-dlt-ingest/flight.py",
+  "sha256": "57e5eb8f0fedca6ea25e8c4cb487942805f8672e592de3d4713263666c575e56"
+}

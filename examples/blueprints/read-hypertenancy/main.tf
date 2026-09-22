@@ -3,6 +3,14 @@ locals {
     for tenant_id, tenant in var.tenants :
     tenant_id => replace(lower(coalesce(tenant.slug, tenant_id)), "/[^a-z0-9_]/", "_")
   }
+
+  reader_rotations = {
+    for pair in setproduct(keys(var.tenants), var.reader_token_generations) :
+    "${pair[0]}/${pair[1]}" => {
+      tenant_id  = pair[0]
+      generation = pair[1]
+    }
+  }
 }
 
 # The provider's SQL token must belong to the writer identity. MotherDuck
@@ -39,13 +47,49 @@ resource "motherduck_service_account" "reader" {
   for_each = var.tenants
 
   username = "${var.reader_prefix}_${local.tenant_slugs[each.key]}"
+
+  lifecycle {
+    precondition {
+      condition     = !var.retire_legacy_reader_token || length(var.reader_token_generations) > 0
+      error_message = "Keep at least one reader_token_generations entry when retiring the legacy reader token."
+    }
+  }
 }
 
-resource "motherduck_access_token" "reader" {
+resource "motherduck_duckling_config" "reader" {
+  for_each = var.tenants
+
+  username                      = motherduck_service_account.reader[each.key].username
+  read_write_instance_size      = "standard"
+  read_write_cooldown_seconds   = 60
+  read_scaling_instance_size    = "standard"
+  read_scaling_flock_size       = 1
+  read_scaling_cooldown_seconds = 60
+}
+
+resource "motherduck_access_token" "reader_setup" {
   for_each = var.tenants
 
   username   = motherduck_service_account.reader[each.key].username
+  name       = "initial-share-attachment"
+  token_type = "read_write"
+  ttl        = 3600
+}
+
+resource "motherduck_access_token" "reader" {
+  for_each = var.retire_legacy_reader_token ? {} : var.tenants
+
+  username   = motherduck_service_account.reader[each.key].username
   name       = "terraform-reader"
+  token_type = "read_scaling"
+  ttl        = var.reader_token_ttl_seconds
+}
+
+resource "motherduck_access_token" "reader_rotation" {
+  for_each = local.reader_rotations
+
+  username   = motherduck_service_account.reader[each.value.tenant_id].username
+  name       = "terraform-reader-${each.value.generation}"
   token_type = "read_scaling"
   ttl        = var.reader_token_ttl_seconds
 }

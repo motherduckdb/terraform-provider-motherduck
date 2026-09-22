@@ -1,0 +1,5 @@
+[project]
+name = "motherduck-cookbook-pipeline-example"
+version = "0.0.0"
+requires-python = ">=3.11,<3.14"
+dependencies = ["duckdb==1.5.5", "dlt[motherduck]==1.27.2", "httpx==0.28.1", "dbt-duckdb==1.10.1"]

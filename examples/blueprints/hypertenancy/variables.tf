@@ -46,6 +46,28 @@ variable "reader_token_ttl_seconds" {
   }
 }
 
+variable "reader_token_generations" {
+  description = "Additional read-scaling token generations to create during an overlapping rotation."
+  type        = set(string)
+  default     = []
+  nullable    = false
+
+  validation {
+    condition = alltrue([
+      for generation in var.reader_token_generations :
+      can(regex("^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$", generation))
+    ])
+    error_message = "reader_token_generations must contain non-blank letters, digits, underscores, or hyphens, with at most 64 characters."
+  }
+}
+
+variable "retire_legacy_reader_token" {
+  description = "Revoke the original terraform-reader token after a replacement generation is live."
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
 variable "tenants" {
   description = "Tenant definitions keyed by stable tenant id."
   type = map(object({

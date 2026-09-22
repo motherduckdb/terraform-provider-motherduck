@@ -1,5 +1,8 @@
 # Roles and share access
 
+Custom roles require a MotherDuck Business or Enterprise plan and permission to
+create roles and assign membership. Share grants run as the share owner.
+
 If you manage roles with Terraform, manage their memberships and share grants
 there too. Changes made outside Terraform can leave access different from the
 configuration, and grants outside its state can go unnoticed by `terraform plan`.
@@ -54,6 +57,8 @@ Compare the configuration with
 [motherduck_share_grants](../../docs/data-sources/share_grants.md) to find
 memberships, inheritance, and share grants outside Terraform's state.
 Reading the data sources alone does not detect or remove those differences.
+Use the [role audit](../role-access-audit/README.md) for an executable direct
+membership and inheritance comparison.
 Use the [read-only share audit](../share-access-audit/README.md) to compare
 share audiences with an allowlist and optionally fail a plan on drift.
 

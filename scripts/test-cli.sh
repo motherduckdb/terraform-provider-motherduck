@@ -23,3 +23,10 @@ for suite in examples import-validation invalid-configuration missing-credential
   fi
   echo "PASS ${suite}"
 done
+
+echo '==> CLI example lifecycle contracts'
+if ! "${ROOT_DIR}/scripts/example-lifecycle-e01-e07.sh" > "${result_dir}/example-lifecycle.log" 2>&1; then
+  cat "${result_dir}/example-lifecycle.log" >&2
+  exit 1
+fi
+echo 'PASS example lifecycle contracts'

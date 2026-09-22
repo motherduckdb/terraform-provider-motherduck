@@ -1,0 +1,8 @@
+name: cookbook_pipeline
+version: '1.0'
+config-version: 2
+profile: cookbook_pipeline
+model-paths: [models]
+models:
+  cookbook_pipeline:
+    +materialized: table

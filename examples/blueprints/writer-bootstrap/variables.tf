@@ -32,3 +32,25 @@ variable "writer_token_ttl_seconds" {
     error_message = "writer_token_ttl_seconds must be between 300 and 31536000 seconds."
   }
 }
+
+variable "writer_token_generations" {
+  description = "Additional read-write token generations to create during an overlapping rotation."
+  type        = set(string)
+  default     = []
+  nullable    = false
+
+  validation {
+    condition = alltrue([
+      for generation in var.writer_token_generations :
+      can(regex("^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$", generation))
+    ])
+    error_message = "writer_token_generations must contain non-blank letters, digits, underscores, or hyphens, with at most 64 characters."
+  }
+}
+
+variable "retire_legacy_writer_token" {
+  description = "Revoke the original writer token after a replacement generation is live."
+  type        = bool
+  default     = false
+  nullable    = false
+}

@@ -6,8 +6,14 @@ output "tenants" {
       share           = motherduck_share.tenant[id].name
       reader_username = motherduck_service_account.reader[id].username
       reader_relation = "reporting.app.daily_usage"
+      suspended       = contains(var.suspended_tenants, id)
     }
   }
+}
+
+output "suspended_tenants" {
+  description = "Tenant IDs whose backend routes must be disabled while data resources are retained."
+  value       = sort(tolist(var.suspended_tenants))
 }
 
 output "share_urls" {
@@ -18,12 +24,12 @@ output "share_urls" {
 
 output "reader_setup_tokens" {
   description = "One-hour tokens for account initialization and first share attachment. Never distribute to the application."
-  value       = { for id in var.tenants : id => motherduck_access_token.reader_setup[id].token }
+  value       = { for id in local.active_tenants : id => motherduck_access_token.reader_setup[id].token }
   sensitive   = true
 }
 
 output "reader_tokens" {
   description = "Thirty-day read-scaling tokens for the backend secret store. Rotate before expiration."
-  value       = { for id in var.tenants : id => motherduck_access_token.reader[id].token }
+  value       = { for id in local.active_tenants : id => motherduck_access_token.reader[id].token }
   sensitive   = true
 }

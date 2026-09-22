@@ -136,6 +136,7 @@ test-contract:
 
 test-scripts:
 	for script in scripts/*.sh scripts/lib/*.sh; do bash -n "$$script" || exit; done
+	python3 scripts/test-example-companions.py
 	python3 -c 'import ast, pathlib; [ast.parse(p.read_text(), filename=str(p)) for p in pathlib.Path("scripts").rglob("*.py")]'
 	./scripts/test-download-checksum-unit.sh
 	./scripts/test-version-matrix-unit.sh
@@ -234,3 +235,22 @@ SCRIPT_TEST_TARGETS := $(notdir $(SCRIPT_TEST_SCRIPTS:.sh=))
 
 $(SCRIPT_TEST_TARGETS):
 	./scripts/$@.sh
+
+.PHONY: test-pulumi-example test-example-backend test-live-cookbook-pipeline test-live-pulumi-example test-live-role-audit
+test-pulumi-example:
+	./scripts/test-pulumi-example.sh
+
+test-example-backend:
+	npm --prefix examples/customer-facing-analytics/backend ci --ignore-scripts
+	npm --prefix examples/customer-facing-analytics/backend run build
+	npm --prefix examples/customer-facing-analytics/backend test
+
+# Focused runtime checks need their documented CLI/runtime and injected tokens.
+test-live-cookbook-pipeline:
+	uv run --project examples/cookbook-pipeline --frozen python scripts/test-live-cookbook-pipeline.py
+
+test-live-pulumi-example:
+	./scripts/test-live-pulumi-example.sh
+
+test-live-role-audit:
+	./scripts/test-live-role-audit.sh

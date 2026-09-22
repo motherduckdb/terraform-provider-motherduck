@@ -1,0 +1,13 @@
+cookbook_pipeline:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "md:{{ env_var('DESTINATION_DATABASE') }}"
+      schema: analytics
+      threads: 2
+    prod:
+      type: duckdb
+      path: "md:{{ env_var('DESTINATION_DATABASE') }}"
+      schema: analytics
+      threads: 2

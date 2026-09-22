@@ -11,7 +11,9 @@ This module needs both provider credentials in the environment:
 
 ## Quick Start
 
-Call the module from a root module. Pin the module source to a release tag so tenant infrastructure does not change when this repository does:
+The module source is pinned to v0.2.11, which includes reader setup and
+overlapping token rotation. Keep the module ref pinned independently from
+the provider version constraint.
 
 ```hcl
 terraform {
@@ -28,7 +30,7 @@ terraform {
 provider "motherduck" {}
 
 module "hypertenancy" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/hypertenancy?ref=v0.1.1"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/hypertenancy?ref=v0.2.11"
 
   tenants = {
     acme = {
@@ -66,15 +68,49 @@ Keep `database_prefix`, `share_prefix`, and `reader_prefix` simple: they must st
 
 The identity behind `MOTHERDUCK_TOKEN` owns every tenant database and share this module creates, which makes it the only identity that can write tenant data and the only one allowed to `GRANT READ ON SHARE` to the readers. Run this module with a dedicated writer service account token (see the [writer-bootstrap blueprint](../writer-bootstrap)) rather than a personal token, so ownership does not depend on an individual's account.
 
-## Reader Tokens
+## Reader Setup And Tokens
 
-Generated reader tokens are sensitive Terraform state. Move them into your application secret manager immediately and restrict access to the backend that stores this module's state. Do not print them in CI logs.
+The `share_urls` and `reader_setup_tokens` outputs are needed once per tenant to
+attach the restricted share. Connect as each reader with its setup token and
+run:
 
-Tokens expire after `reader_token_ttl_seconds` (30 days by default) and Terraform does not rotate them automatically. Plan a rotation workflow before the TTL elapses, for example:
-
-```bash
-terraform apply -replace='module.hypertenancy.motherduck_access_token.reader["acme"]'
+```sql
+ATTACH '<tenant_share_url>' AS reporting;
+SELECT table_name
+FROM information_schema.tables
+WHERE table_catalog = 'reporting' AND table_schema = 'app';
 ```
+
+Setup tokens last one hour and remain managed by this privileged Terraform root.
+A later apply can recreate one after expiration. Never give a setup token to
+the serving application. Retiring a legacy reader token does not remove this
+independent initialization credential.
+
+The module creates the `app` schema but no tables, so the listing is empty until
+your writer pipeline creates them. Query those concrete relations with the
+reader token after publication and replica synchronization.
+
+The attachment is stored for that reader account. Move the setup tokens, share
+URLs, and reader tokens into protected secret automation immediately. Do not
+print them in CI logs.
+
+This module also manages each reader's read-scaling pool at one Standard replica
+with a 60-second cooldown. Review the plan before adopting an existing reader
+whose compute settings differ from those defaults.
+
+The legacy reader tokens expire after `reader_token_ttl_seconds` (30 days by
+default). Terraform does not rotate them automatically. Use overlapping
+generations before the TTL elapses:
+
+```hcl
+reader_token_generations       = ["2026_10"]
+retire_legacy_reader_token     = false
+```
+
+Apply once, transfer `reader_rotation_tokens["acme/2026_10"]` to the backend,
+and verify new connections. Then apply again with the same generation and
+`retire_legacy_reader_token = true` to revoke the legacy `reader_tokens`
+generation. Keep the generation until every consumer has moved.
 
 ## Removing A Tenant
 
