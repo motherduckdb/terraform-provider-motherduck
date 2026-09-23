@@ -1,5 +1,9 @@
 # Bootstrap the writer in a separate admin root before applying this one.
 # MOTHERDUCK_TOKEN must be the writer's token. MOTHERDUCK_ADMIN_TOKEN creates readers.
+locals {
+  active_tenants = setsubtract(var.tenants, var.suspended_tenants)
+}
+
 data "motherduck_current_user" "writer" {
   count = var.expected_writer_username == null ? 0 : 1
 }
@@ -13,6 +17,10 @@ resource "motherduck_database" "tenant" {
     precondition {
       condition     = var.expected_writer_username == null || one(data.motherduck_current_user.writer[*].value) == var.expected_writer_username
       error_message = "Connect as the expected writer before provisioning tenant data."
+    }
+    precondition {
+      condition     = alltrue([for tenant_id in var.suspended_tenants : contains(var.tenants, tenant_id)])
+      error_message = "Every suspended_tenants entry must also exist in tenants so suspension retains its data resources."
     }
   }
 }
@@ -51,7 +59,7 @@ resource "motherduck_duckling_config" "reader" {
 
 # Used only to initialize the reader and attach its share, then allowed to expire.
 resource "motherduck_access_token" "reader_setup" {
-  for_each   = var.tenants
+  for_each   = local.active_tenants
   username   = motherduck_service_account.reader[each.key].username
   name       = "initial-share-attachment"
   token_type = "read_write"
@@ -59,7 +67,7 @@ resource "motherduck_access_token" "reader_setup" {
 }
 
 resource "motherduck_access_token" "reader" {
-  for_each   = var.tenants
+  for_each   = local.active_tenants
   username   = motherduck_service_account.reader[each.key].username
   name       = "application-reads"
   token_type = "read_scaling"
@@ -77,7 +85,7 @@ resource "motherduck_share" "tenant" {
 }
 
 resource "motherduck_share_grant" "reader" {
-  for_each     = var.tenants
+  for_each     = local.active_tenants
   share        = motherduck_share.tenant[each.key].name
   username     = motherduck_service_account.reader[each.key].username
   grantee_type = "user"

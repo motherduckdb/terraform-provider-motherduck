@@ -5,8 +5,9 @@ each: `read_write` for ingestion/Terraform and `read_scaling` for BI. The BI
 credentials share their environment writer's readable catalog, including raw
 and transform data. They do not require cross-account sharing or attachment.
 
-Requires an authorized `MOTHERDUCK_ADMIN_TOKEN`, a configured filesystem mirror,
-and a dedicated protected state. Choose `account_prefix` (default
+Requires an authorized `MOTHERDUCK_ADMIN_TOKEN` and a dedicated protected state.
+`terraform init` installs the provider from the Terraform Registry. A filesystem
+mirror is optional for offline installation. Choose `account_prefix` (default
 `svc_example_dwh`) that does not collide with existing accounts.
 
 ```shell

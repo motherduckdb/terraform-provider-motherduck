@@ -7,6 +7,9 @@ description: |-
 
 # Manage roles and share access
 
+Custom roles require a MotherDuck Business or Enterprise plan and permission to
+create roles and assign membership. Share grants run as the share owner.
+
 If you manage MotherDuck roles with Terraform, manage their memberships and
 share grants there too. Changes made through the UI or SQL can leave access in
 MotherDuck different from the configuration.
@@ -15,7 +18,7 @@ Terraform checks grants in its state. A plan with no changes does not prove
 that no other grants exist. Use the role and share data sources to compare
 access in MotherDuck with the memberships and grants you intend to allow.
 
-The [example](../../examples/access-control/README.md) maps each team to a role
+The [example](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.2.11/examples/access-control/README.md) maps each team to a role
 and manages each membership and share grant as a resource. Follow the audit
 steps below to check for grants outside its state.
 
@@ -33,7 +36,7 @@ See [authentication](authentication.md) for credential requirements.
 
 ## Define teams and grants
 
-Copy the [example](../../examples/access-control/README.md) into a Terraform
+Copy the [example](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.2.11/examples/access-control/README.md) into a Terraform
 root. Set `teams` in a `.tfvars` file:
 
 ```hcl
@@ -147,7 +150,7 @@ not delete the users, shares, or databases referenced by this example.
 ## Audit access for drift
 
 For an executable comparison of share audiences, use the
-[read-only share audit example](../../examples/share-access-audit/README.md).
+[read-only share audit example](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.2.11/examples/share-access-audit/README.md).
 It reports missing and unexpected audiences against an explicit allowlist and
 can fail a plan when they differ, including when an unchanged report still
 contains drift. It does not revoke grants or expand role membership. The example

@@ -252,7 +252,7 @@ HCL
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" validate
   validated_count=$((validated_count + 1))
 
-  if [[ "${relative_dir}" == examples/data-sources/* || "${relative_dir}" == examples/share-access-audit ]]; then
+  if [[ "${relative_dir}" == examples/data-sources/* || "${relative_dir}" == examples/share-access-audit || "${relative_dir}" == examples/role-access-audit ]]; then
     echo "==> Skipping offline plan for ${relative_dir}. Terraform reads data sources during plan"
     continue
   fi

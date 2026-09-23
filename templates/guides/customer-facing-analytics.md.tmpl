@@ -182,3 +182,10 @@ as required, and review the tenant removal plan. For disposable teardown, detach
 shares as readers using read-write credentials, destroy this root with the writer
 and admin credentials, then destroy writer bootstrap last. Protect production
 databases and tables before adopting this example for real customer data.
+
+## Run the backend companion
+
+The [Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.2.11/examples/customer-facing-analytics/backend/README.md)
+queries these tenant databases with separate reader pools and verified server-side
+sessions. It includes tests for tampered tenant parameters and suspended access.
+Run it locally before adapting it to your authentication and deployment system.

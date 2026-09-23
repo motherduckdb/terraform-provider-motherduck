@@ -20,6 +20,17 @@ variable "tenants" {
   }
 }
 
+variable "suspended_tenants" {
+  description = "Tenant IDs to suspend without deleting their database, table, share, or reader account."
+  type        = set(string)
+  default     = []
+  nullable    = false
+  validation {
+    condition     = alltrue([for id in var.suspended_tenants : can(regex("^[a-z][a-z0-9_]{0,39}$", id))])
+    error_message = "Use lowercase suspended tenant identifiers matching the tenants input."
+  }
+}
+
 variable "expected_writer_username" {
   description = "Expected SQL owner. Set for live use. Null permits an offline example plan without a SQL read."
   type        = string

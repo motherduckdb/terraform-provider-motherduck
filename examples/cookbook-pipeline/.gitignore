@@ -1,0 +1,8 @@
+.venv/
+.runtime/
+__pycache__/
+pipeline.json
+flight-id.json
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/

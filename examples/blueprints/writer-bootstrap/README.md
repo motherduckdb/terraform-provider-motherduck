@@ -23,7 +23,7 @@ terraform {
 provider "motherduck" {}
 
 module "writer_bootstrap" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.1.1"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.2.11"
 
   writer_username = "svc_writer_prod"
 }
@@ -33,6 +33,9 @@ output "writer_token" {
   sensitive = true
 }
 ```
+
+The module source is pinned to v0.2.11, which includes overlapping token
+rotation. Keep the module ref independent from the provider version constraint.
 
 ```bash
 export MOTHERDUCK_ADMIN_TOKEN=...
@@ -47,4 +50,24 @@ Move the writer token into a secret manager immediately. The data-plane stage (s
 
 Keep this module in its own state, separate from tenant data state. It holds an organization-admin-scoped workflow and a read-write token. Both deserve tighter access than routine tenant changes.
 
-The writer token expires after `writer_token_ttl_seconds` (30 days by default) and Terraform does not rotate it automatically. Rotate with `terraform apply -replace=module.writer_bootstrap.motherduck_access_token.writer` and update the secret manager before the TTL elapses.
+The writer token expires after `writer_token_ttl_seconds` (30 days by default)
+and Terraform does not rotate it automatically. Do not use `-replace` for a
+consumer-facing rotation because it revokes the current token in the same
+apply. Create an overlapping generation instead:
+
+```hcl
+writer_token_generations = ["2026_10"]
+```
+
+Apply once, transfer `writer_rotation_tokens["2026_10"]` to the data-plane
+secret manager, and verify the reader or ingestion connections. Then apply a
+second time with the same generation and:
+
+```hcl
+retire_legacy_writer_token = true
+```
+
+The module migrates the original `motherduck_access_token.writer` state to its
+indexed legacy address and revokes it in that later apply. The `writer_token`
+output becomes null, while the rotation output remains available. Keep the
+rotation generation managed until the next overlap is complete.

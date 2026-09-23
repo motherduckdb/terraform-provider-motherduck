@@ -139,3 +139,8 @@ a [GitHub issue](https://github.com/motherduckdb/terraform-provider-motherduck/i
 - `database` (String) Optional MotherDuck database to attach during provider SQL initialization.
 - `request_timeout_seconds` (Number) Optional timeout, in seconds, for MotherDuck REST API requests. Defaults to 30 seconds.
 - `token` (String, Sensitive) MotherDuck token for SQL/data-plane operations. Defaults to `MOTHERDUCK_TOKEN`.
+
+## Choose a runnable example
+
+Use the [example chooser](guides/examples.md)
+to select a warehouse, tenant application, cookbook pipeline, access audit, or Pulumi root.

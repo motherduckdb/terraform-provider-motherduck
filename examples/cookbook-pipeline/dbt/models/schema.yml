@@ -1,0 +1,13 @@
+version: 2
+sources:
+  - name: ingestion
+    schema: raw
+    tables:
+      - name: github_repo_stats
+models:
+  - name: repository_metrics
+    columns:
+      - name: repo
+        data_tests: [not_null, unique]
+      - name: stars
+        data_tests: [not_null]

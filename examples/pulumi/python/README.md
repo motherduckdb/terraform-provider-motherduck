@@ -4,7 +4,7 @@ This is a small Pulumi program using Pulumi's Any Terraform Provider bridge with
 the MotherDuck Terraform provider. It creates one database, schema, and table.
 
 The recipe was verified with Pulumi `v3.261.0` and the MotherDuck provider
-`v0.1.1` on macOS ARM64. The bridge package is pinned to `v1.4.0` in
+`v0.2.10` on macOS ARM64. The bridge package is pinned to `v1.4.0` in
 `Pulumi.yaml`, and the Pulumi SDK is pinned to `3.261.0` in `requirements.txt`.
 The sample database name is required configuration so each stack can use a
 unique name.
@@ -15,9 +15,10 @@ Install Pulumi `v3.261.0`, then place the provider binary at
 `bin/terraform-provider-motherduck`. The binary name and path are significant:
 Pulumi requires a local provider path ending in `terraform-provider-<name>`.
 
-Download the v0.1.1 artifact for your platform from the
-[MotherDuck v0.1.1 GitHub release](https://github.com/motherduckdb/terraform-provider-motherduck/releases/tag/v0.1.1),
-verify it against the matching `provider_<platform>_<arch>.sha256` file, unzip
+Download the v0.2.10 artifact for your platform from the
+[MotherDuck v0.2.10 GitHub release](https://github.com/motherduckdb/terraform-provider-motherduck/releases/tag/v0.2.10),
+verify it against `terraform-provider-motherduck_0.2.10_SHA256SUMS` and its
+detached publisher signature (see the [signed installation guide](../../../docs/guides/github-installation.md)), unzip
 it, and rename the executable to `bin/terraform-provider-motherduck`.
 
 Initialize a local backend and install the pinned bridge and generated SDK:
@@ -70,14 +71,12 @@ owner service accounts, protect stored state and encrypt its secrets, and do not
 export raw access tokens. Pin both the Pulumi bridge and the wrapped provider.
 The bridge version and provider version are independent.
 
-The service-account and access-token resources require an organization admin
-token. Pulumi `v3.261.0` was also verified with a same-program bootstrap: an admin
-provider creates the account and token, then the token's secret `Output` configures
-an explicit writer provider for the database resources. This preserves the
-identity dependency during deployment and teardown.
+This minimal program uses an existing writer token. It does not create a service
+account or demonstrate same-program identity bootstrap. Create the identity in a
+separate protected bootstrap stack when needed and remove consuming data stacks
+before deleting that identity.
 
-Keep the bootstrap and data resources in one stack when they share ownership and
-lifecycle. Use a separate, protected bootstrap stack when identities are shared
-or managed by a platform team. Transfer the writer token through a secret manager
-and remove consuming data stacks before deleting the identity. Keep admin
-credentials confined to the operations that require them.
+From the provider repository, `make test-pulumi-example` builds the provider,
+generates the pinned bridge SDK, and runs a no-update preview with a fake token.
+It requires the pinned Pulumi CLI. The live check additionally applies, refreshes,
+checks a no-change preview and destroys a uniquely named disposable database.
