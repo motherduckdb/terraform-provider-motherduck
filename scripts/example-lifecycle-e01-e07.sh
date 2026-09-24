@@ -180,7 +180,7 @@ assert_retirement_rejected() {
     echo "Same-apply token retirement unexpectedly planned successfully in ${dir}" >&2
     exit 1
   fi
-  rg -q 'Create and verify a (writer|reader) rotation token in an earlier apply' "${dir}/rejected-plan.log"
+  grep -Eq 'Create and verify a (writer|reader) rotation token in an earlier apply' "${dir}/rejected-plan.log"
 }
 assert_retirement_rejected "${writer_retire_dir}"
 
