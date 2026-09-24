@@ -178,6 +178,10 @@ func (r *viewResource) createOrReplaceView(ctx context.Context, getter interface
 		return
 	}
 	plan.ID = types.StringValue(id)
+	diags.Append(setter.Set(ctx, &plan)...)
+	if diags.HasError() {
+		return
+	}
 	definition, found := readViewServerDefinition(ctx, client, plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString(), diags)
 	if diags.HasError() {
 		return
@@ -187,7 +191,6 @@ func (r *viewResource) createOrReplaceView(ctx context.Context, getter interface
 		return
 	}
 	storeViewServerDefinition(ctx, private, definition, diags)
-	diags.Append(setter.Set(ctx, &plan)...)
 }
 
 func readViewServerDefinition(ctx context.Context, client providerctx.SQLClient, database, schemaName, name string, diags *diag.Diagnostics) (string, bool) {
