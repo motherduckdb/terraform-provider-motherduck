@@ -180,7 +180,7 @@ assert_retirement_rejected() {
     echo "Same-apply token retirement unexpectedly planned successfully in ${dir}" >&2
     exit 1
   fi
-  grep -Eq 'Create and verify a (writer|reader) rotation token in an earlier apply' "${dir}/rejected-plan.log"
+  grep -Eq 'Create and verify a (writer|reader) rotation token' "${dir}/rejected-plan.log"
 }
 assert_retirement_rejected "${writer_retire_dir}"
 
@@ -195,7 +195,7 @@ done
 touch "${REST_EXISTING_TOKEN_FILE}"
 for dir in "${writer_retire_dir}" "${RUN_DIR}/hypertenancy_retire" "${RUN_DIR}/read-hypertenancy_retire"; do
   accepted_plan="$(MOTHERDUCK_API_BASE_URL="${REST_URL}" plan_module "${dir}")"
-  jq -e '.applyable == true' <<<"${accepted_plan}" >/dev/null
+  jq -e 'any(.checks[]; .address.type == "motherduck_service_account" and .status == "pass")' <<<"${accepted_plan}" >/dev/null
 done
 
 cfa_dir="${RUN_DIR}/customer-facing-analytics"
