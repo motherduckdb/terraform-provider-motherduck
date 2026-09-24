@@ -23,7 +23,7 @@ terraform {
 provider "motherduck" {}
 
 module "writer_bootstrap" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.2.11"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.2.13"
 
   writer_username = "svc_writer_prod"
 }
@@ -32,9 +32,14 @@ output "writer_token" {
   value     = module.writer_bootstrap.writer_token
   sensitive = true
 }
+
+output "writer_rotation_tokens" {
+  value     = module.writer_bootstrap.writer_rotation_tokens
+  sensitive = true
+}
 ```
 
-The module source is pinned to v0.2.11, which includes overlapping token
+The module source is pinned to v0.2.13, which includes overlapping token
 rotation. Keep the module ref independent from the provider version constraint.
 
 ```bash
@@ -71,3 +76,6 @@ The module migrates the original `motherduck_access_token.writer` state to its
 indexed legacy address and revokes it in that later apply. The `writer_token`
 output becomes null, while the rotation output remains available. Keep the
 rotation generation managed until the next overlap is complete.
+
+Retirement fails the plan unless MotherDuck already lists a named replacement
+generation. Terraform cannot verify that every consumer has switched tokens.

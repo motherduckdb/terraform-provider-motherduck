@@ -185,7 +185,7 @@ databases and tables before adopting this example for real customer data.
 
 ## Run the backend companion
 
-The [Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.2.11/examples/customer-facing-analytics/backend/README.md)
+The [Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.2.13/examples/customer-facing-analytics/backend/README.md)
 queries these tenant databases with separate reader pools and verified server-side
 sessions. It includes tests for tampered tenant parameters and suspended access.
 Run it locally before adapting it to your authentication and deployment system.

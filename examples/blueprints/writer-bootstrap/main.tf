@@ -1,10 +1,20 @@
+data "motherduck_user_tokens" "writer_rotation_preflight" {
+  count    = var.retire_legacy_writer_token ? 1 : 0
+  username = var.writer_username
+}
+
 resource "motherduck_service_account" "writer" {
   username = var.writer_username
 
   lifecycle {
     precondition {
-      condition     = !var.retire_legacy_writer_token || length(var.writer_token_generations) > 0
-      error_message = "Keep at least one writer_token_generations entry when retiring the legacy writer token."
+      condition = var.retire_legacy_writer_token ? anytrue([
+        for token in nonsensitive(data.motherduck_user_tokens.writer_rotation_preflight[0].tokens) :
+        token.token_type == "read_write" && contains([
+          for generation in var.writer_token_generations : "${var.writer_token_name}-${generation}"
+        ], token.name)
+      ]) : true
+      error_message = "Create and verify a writer rotation token in an earlier apply before retiring the legacy token."
     }
   }
 }

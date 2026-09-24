@@ -7,21 +7,21 @@ description: |-
 
 # Choose and run an example
 
-Provider v0.2.11 includes the workflows below. These Registry guides explain
+Provider v0.2.13 includes the workflows below. These Registry guides explain
 configuration and lifecycle behavior. The complete runnable projects, including
 Python, Node, SQL templates and dependency locks, live in the version-pinned
 GitHub directories linked here. They are examples, not separately published
 Terraform Registry modules.
 
-| Goal | Registry guide | Complete v0.2.11 example |
+| Goal | Registry guide | Complete v0.2.13 example |
 | --- | --- | --- |
-| First warehouse | [Create your first warehouse](getting-started.md) | [Simple warehouse](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.11/examples/warehouses/simple) |
-| Dev/prod warehouse | [Warehouse layouts](warehouse-examples.md) and [environments](environments.md) | [Bootstrap and layered roots](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.11/examples/warehouses) |
-| Ingestion and dbt | [Ownership and deployment](deployment-model.md) | [Pinned dlt cookbook and dbt companion](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.11/examples/cookbook-pipeline) |
-| Tenant analytics | [Customer-facing analytics](customer-facing-analytics.md) | [Terraform root and Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.11/examples/customer-facing-analytics) |
-| Reusable tenant infrastructure | [Authentication and ownership](authentication.md) | [Writer bootstrap](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.11/examples/blueprints/writer-bootstrap) and [read hypertenancy](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.11/examples/blueprints/read-hypertenancy) |
-| Team roles and grants | [Manage and audit access](access-control.md) | [Access control](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.11/examples/access-control), [share audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.11/examples/share-access-audit), and [role audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.11/examples/role-access-audit) |
-| Pulumi Python | [Signed provider installation](github-installation.md) | [Pinned Python bridge example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.11/examples/pulumi/python) |
+| First warehouse | [Create your first warehouse](getting-started.md) | [Simple warehouse](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/warehouses/simple) |
+| Dev/prod warehouse | [Warehouse layouts](warehouse-examples.md) and [environments](environments.md) | [Bootstrap and layered roots](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/warehouses) |
+| Ingestion and dbt | [Ownership and deployment](deployment-model.md) | [Pinned dlt cookbook and dbt companion](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/cookbook-pipeline) |
+| Tenant analytics | [Customer-facing analytics](customer-facing-analytics.md) | [Terraform root and Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/customer-facing-analytics) |
+| Reusable tenant infrastructure | [Authentication and ownership](authentication.md) | [Writer bootstrap](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/blueprints/writer-bootstrap) and [read hypertenancy](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/blueprints/read-hypertenancy) |
+| Team roles and grants | [Manage and audit access](access-control.md) | [Access control](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/access-control), [share audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/share-access-audit), and [role audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/role-access-audit) |
+| Pulumi Python | [Signed provider installation](github-installation.md) | [Pinned Python bridge example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/pulumi/python) |
 
 ## Install and select credentials
 
@@ -32,7 +32,7 @@ Git source pinned independently from the provider version:
 
 ```hcl
 module "writer_bootstrap" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.2.11"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.2.13"
 
   writer_username = "svc_analytics_writer"
 }
@@ -67,6 +67,9 @@ The writer module includes a moved block for the original token state address.
 Reader modules expose equivalent `reader_token_generations` and
 `retire_legacy_reader_token` inputs. Terraform does not schedule rotation, and
 `-replace` is not an overlapping consumer cutover.
+
+Retirement fails the plan unless MotherDuck already lists a named replacement
+generation. Verify consumer cutover yourself before the retirement apply.
 
 ## Suspend without purging
 

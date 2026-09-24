@@ -13,6 +13,11 @@ locals {
   }
 }
 
+data "motherduck_user_tokens" "reader_rotation_preflight" {
+  for_each = var.retire_legacy_reader_token ? var.tenants : {}
+  username = "${var.reader_prefix}_${local.tenant_slugs[each.key]}"
+}
+
 resource "motherduck_database" "tenant" {
   for_each = var.tenants
 
@@ -34,8 +39,13 @@ resource "motherduck_service_account" "reader" {
 
   lifecycle {
     precondition {
-      condition     = !var.retire_legacy_reader_token || length(var.reader_token_generations) > 0
-      error_message = "Keep at least one reader_token_generations entry when retiring the legacy reader token."
+      condition = var.retire_legacy_reader_token ? anytrue([
+        for token in nonsensitive(data.motherduck_user_tokens.reader_rotation_preflight[each.key].tokens) :
+        token.token_type == "read_scaling" && contains([
+          for generation in var.reader_token_generations : "terraform-reader-${generation}"
+        ], token.name)
+      ]) : true
+      error_message = "Create and verify a reader rotation token in an earlier apply before retiring the legacy token."
     }
   }
 }
