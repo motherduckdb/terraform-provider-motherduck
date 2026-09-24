@@ -23,7 +23,8 @@ type failedCreationReadback struct {
 	writes []string
 }
 
-func (c *failedCreationReadback) Available() bool { return true }
+func (c *failedCreationReadback) Available() bool                              { return true }
+func (c *failedCreationReadback) AttachDatabase(context.Context, string) error { return nil }
 func (c *failedCreationReadback) Exec(_ context.Context, query string, _ ...any) error {
 	c.writes = append(c.writes, query)
 	return nil
@@ -42,7 +43,7 @@ func (c *failedCreationReadback) ScalarString(context.Context, string, ...any) (
 }
 
 func TestCreateReadbackFailureKeepsCleanupState(t *testing.T) {
-	for _, kind := range []string{"role", "grant", "database"} {
+	for _, kind := range []string{"role", "grant", "database", "view"} {
 		for _, mode := range []string{"empty", "error"} {
 			t.Run(kind+"/"+mode, func(t *testing.T) {
 				ctx := t.Context()
@@ -79,6 +80,13 @@ func TestCreateReadbackFailureKeepsCleanupState(t *testing.T) {
 						})},
 					}
 					cleanup = `DROP DATABASE IF EXISTS "tf_readback"`
+				case "view":
+					r = &viewResource{baseResource: base}
+					model = &viewModel{
+						Database: types.StringValue("tf_db"), Schema: types.StringValue("main"),
+						Name: types.StringValue("tf_readback"), Query: types.StringValue("SELECT 1"), ID: types.StringUnknown(),
+					}
+					cleanup = `DROP VIEW IF EXISTS "tf_db"."main"."tf_readback"`
 				}
 				var schemaResp resource.SchemaResponse
 				r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
