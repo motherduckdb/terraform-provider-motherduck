@@ -17,6 +17,10 @@ Keep dev and prod in separate directories/states using their respective writer
 credentials and unique database names. Changing `--target prod` does not switch
 identity or select a different Terraform state.
 
+Changing `database_name` replaces the Terraform-managed database. That destroys
+the database and any dlt or dbt tables inside it. Use a new database name for a
+separate environment or review a data migration before changing this value.
+
 ```shell
 terraform init
 terraform plan -var=database_name=myteam_dev_pipeline -out=pipeline.tfplan

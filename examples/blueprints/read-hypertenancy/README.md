@@ -27,7 +27,7 @@ terraform -chdir=bootstrap apply       # creates svc_writer_prod and its token
 ```
 
 Stage two uses a separate root and state. The module source is pinned to
-v0.2.11, which includes reader setup and overlapping token rotation.
+v0.2.13, which includes reader setup and overlapping token rotation.
 
 ```hcl
 terraform {
@@ -44,7 +44,7 @@ terraform {
 provider "motherduck" {}
 
 module "read_hypertenancy" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.2.11"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.2.13"
 
   expected_writer_username = "svc_writer_prod"
 
@@ -63,6 +63,26 @@ module "read_hypertenancy" {
 output "tenants" {
   description = "Per-tenant databases, shares, and reader usernames."
   value       = module.read_hypertenancy.tenants
+}
+
+output "share_urls" {
+  value     = module.read_hypertenancy.share_urls
+  sensitive = true
+}
+
+output "reader_setup_tokens" {
+  value     = module.read_hypertenancy.reader_setup_tokens
+  sensitive = true
+}
+
+output "reader_tokens" {
+  value     = module.read_hypertenancy.reader_tokens
+  sensitive = true
+}
+
+output "reader_rotation_tokens" {
+  value     = module.read_hypertenancy.reader_rotation_tokens
+  sensitive = true
 }
 ```
 
@@ -126,7 +146,8 @@ retire_legacy_reader_token     = false
 Apply once, transfer `reader_rotation_tokens["acme/2026_10"]` to the backend,
 and verify new connections. Then apply again with the same generation and
 `retire_legacy_reader_token = true` to revoke the legacy `reader_tokens`
-generation. Keep the generation until every consumer has moved.
+generation. Keep the generation until every consumer has moved. Retirement
+fails the plan unless MotherDuck already lists a named replacement generation.
 
 ## Removing A Tenant
 

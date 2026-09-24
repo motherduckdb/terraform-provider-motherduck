@@ -9,7 +9,7 @@ terraform {
 }
 provider "motherduck" {}
 variable "database_name" {
-  description = "Unique database owned by the injected writer account."
+  description = "Unique database owned by the injected writer account. Changing it replaces the database and deletes its data."
   type        = string
   nullable    = false
   default     = "example_cookbook_pipeline"
