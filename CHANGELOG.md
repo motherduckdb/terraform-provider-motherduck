@@ -6,7 +6,7 @@ This index lists the headline change for every release.
 
 ## v0.3.0
 
-Register Iceberg REST catalogs as databases, manage the MotherDuck features released through 2026-09-25, and install on glibc 2.34 and macOS 13. Includes stricter plan-time validation and a few behavior changes. See the [v0.3.0 release notes](release-notes/v0.3.0.md).
+Register Iceberg REST catalogs as databases, manage the MotherDuck features released through 2026-09-25, and install on glibc 2.34 and macOS 13. Includes stricter plan-time validation and a few behavior changes, so `~> 0.2.x` constraints do not select it. See the [upgrade steps and v0.3.0 release notes](release-notes/v0.3.0.md).
 
 ## v0.2.13
 
