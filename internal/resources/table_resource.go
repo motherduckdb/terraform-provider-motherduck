@@ -167,7 +167,16 @@ func (r *tableResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("columns"))
 		return
 	}
-	if !tableColumnMapsEquivalent(ctx, client, plan.Columns, state.Columns, &resp.Diagnostics) && !resp.Diagnostics.HasError() {
+	var compareDiags diag.Diagnostics
+	equivalent := tableColumnMapsEquivalent(ctx, client, plan.Columns, state.Columns, &compareDiags)
+	if compareDiags.HasError() {
+		// A type the session cannot resolve, such as a user-defined type in
+		// another database, keeps the previous replace-on-change behavior.
+		resp.Diagnostics.AddAttributeWarning(path.Root("columns"), "Unable to compare MotherDuck table column types",
+			"The provider could not normalize the planned column types, so the change replaces the table. "+compareDiags.Errors()[0].Detail())
+		equivalent = false
+	}
+	if !equivalent {
 		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("columns"))
 	}
 }
@@ -215,7 +224,7 @@ func tableColumnMapsEquivalent(ctx context.Context, client scalarStringer, left,
 		if !ok {
 			return false
 		}
-		if strings.EqualFold(strings.TrimSpace(leftColumns[name]), strings.TrimSpace(rightType)) {
+		if sameColumnTypeSpelling(leftColumns[name], rightType) {
 			continue
 		}
 		leftCanonical, err := canonicalColumnType(ctx, client, leftColumns[name])
@@ -228,11 +237,25 @@ func tableColumnMapsEquivalent(ctx context.Context, client scalarStringer, left,
 			diags.AddAttributeError(path.Root("columns").AtMapKey(name), "Unable to normalize MotherDuck table column type", err.Error())
 			return false
 		}
-		if !strings.EqualFold(leftCanonical, rightCanonical) {
+		if !sameColumnTypeSpelling(leftCanonical, rightCanonical) {
 			return false
 		}
 	}
 	return true
+}
+
+// sameColumnTypeSpelling compares two type spellings. Type keywords are case
+// insensitive, but quoted parts such as ENUM values and struct field names are
+// case sensitive, so any spelling with a quote must match exactly.
+func sameColumnTypeSpelling(left, right string) bool {
+	left, right = strings.TrimSpace(left), strings.TrimSpace(right)
+	if left == right {
+		return true
+	}
+	if strings.ContainsAny(left+right, `'"`) {
+		return false
+	}
+	return strings.EqualFold(left, right)
 }
 
 func (r *tableResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

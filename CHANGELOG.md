@@ -11,6 +11,7 @@ This index lists the headline change for every release.
 - Secrets with uppercase names are found after creation, and destroying a missing secret succeeds.
 - Creating a view fails instead of overwriting an existing view with the same name.
 - Guide creation is no longer retried, which prevented duplicate Guides after timeouts.
+- Guide `references` treat an empty `schema`, `table`, or `column` string the same as an omitted value.
 - Catalog row JSON renders DECIMAL values as numbers, INTERVAL values as DuckDB text, and nested UUID values as strings.
 - Data source listings return rows in a documented, deterministic order. `files`, `buckets_for_secret`, and `flight_logs` accept `limit` and `offset`.
 - Provider configuration rejects unknown `api_base_url`, `database`, `attach_mode`, and `custom_user_agent` values, and accepts plain HTTP `api_base_url` values only for loopback hosts.

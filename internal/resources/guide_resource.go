@@ -284,8 +284,12 @@ func (r *guideResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if roleAccess && !r.setGuideAccess(ctx, client, plan.ID, plan.Access, plan.RoleNames, &resp.Diagnostics) {
 		return
 	}
-	if !r.readGuide(ctx, &plan, &resp.Diagnostics) && !resp.Diagnostics.HasError() {
-		resp.Diagnostics.AddError("Unable to read MotherDuck Guide", "Guide was created but could not be read through MD_GET_GUIDE.")
+	if !r.readGuide(ctx, &plan, &resp.Diagnostics) {
+		// Return before saving the plan so unknown computed values never reach
+		// state. Create keeps the saved ID and Update keeps the prior state.
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Unable to read MotherDuck Guide", "Guide was created but could not be read through MD_GET_GUIDE.")
+		}
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -298,8 +302,10 @@ func (r *guideResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !r.readGuide(ctx, &state, &resp.Diagnostics) && !resp.Diagnostics.HasError() {
-		resp.State.RemoveResource(ctx)
+	if !r.readGuide(ctx, &state, &resp.Diagnostics) {
+		if !resp.Diagnostics.HasError() {
+			resp.State.RemoveResource(ctx)
+		}
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -375,8 +381,12 @@ func (r *guideResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	if !r.readGuide(ctx, &plan, &resp.Diagnostics) && !resp.Diagnostics.HasError() {
-		resp.Diagnostics.AddError("Unable to read MotherDuck Guide", "Guide was updated but could not be read through MD_GET_GUIDE.")
+	if !r.readGuide(ctx, &plan, &resp.Diagnostics) {
+		// Return before saving the plan so unknown computed values never reach
+		// state. Create keeps the saved ID and Update keeps the prior state.
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Unable to read MotherDuck Guide", "Guide was updated but could not be read through MD_GET_GUIDE.")
+		}
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)

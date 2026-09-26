@@ -311,7 +311,9 @@ func (r *flightRunResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 const (
 	flightRunListPageSize = 50
-	flightRunListMaxPages = 200
+	// Twenty pages cover the latest 1,000 runs and bound refresh cost when a
+	// purged run is absent while its Flight still exists.
+	flightRunListMaxPages = 20
 )
 
 type flightRunListRow struct {

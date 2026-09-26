@@ -112,13 +112,13 @@ func rowSpecs() []rowSpec {
 			}
 			return appendRowLimitOffset(query+" ORDER BY name", m), nil
 		}},
-		{name: "buckets_for_secret", description: "Lists object-storage buckets accessible through a MotherDuck secret. Rows are sorted by bucket name. Set `limit` and `offset` to page through large listings.", requiredFunction: "md_list_buckets_for_secret", attrs: []string{"secret_name", "limit", "offset"}, requiredAttrs: []string{"secret_name"}, postProcess: sortRowsByKeys(rowSortKey{field: "bucket_name"}, rowSortKey{field: "name"}, rowSortKey{field: "bucket"}), build: func(m rowsModel) (string, error) {
+		{name: "buckets_for_secret", description: "Lists object-storage buckets accessible through a MotherDuck secret. Rows are sorted by bucket name. Set `limit` and `offset` to page through large listings. Paging orders the listing by all of its columns, so pages are stable, and rows within each page are then sorted.", requiredFunction: "md_list_buckets_for_secret", attrs: []string{"secret_name", "limit", "offset"}, requiredAttrs: []string{"secret_name"}, postProcess: sortRowsByKeys(rowSortKey{field: "bucket_name"}, rowSortKey{field: "name"}, rowSortKey{field: "bucket"}), build: func(m rowsModel) (string, error) {
 			if m.SecretName.IsNull() {
 				return "", fmt.Errorf("secret_name is required")
 			}
 			return appendOrderedRowLimitOffset("SELECT * FROM md_list_buckets_for_secret("+sqlbuild.StringLiteral(m.SecretName.ValueString())+")", "ALL", m), nil
 		}},
-		{name: "files", description: "Lists files for an object-storage path through MotherDuck SQL. Rows are sorted by path. Set `limit` and `offset` to page through large listings.", requiredFunction: "md_list_files", attrs: []string{"path", "limit", "offset"}, requiredAttrs: []string{"path"}, postProcess: sortRowsByKeys(rowSortKey{field: "path"}, rowSortKey{field: "name"}, rowSortKey{field: "key"}), build: func(m rowsModel) (string, error) {
+		{name: "files", description: "Lists files for an object-storage path through MotherDuck SQL. Rows are sorted by path. Set `limit` and `offset` to page through large listings. Paging orders the listing by all of its columns, so pages are stable, and rows within each page are then sorted.", requiredFunction: "md_list_files", attrs: []string{"path", "limit", "offset"}, requiredAttrs: []string{"path"}, postProcess: sortRowsByKeys(rowSortKey{field: "path"}, rowSortKey{field: "name"}, rowSortKey{field: "key"}), build: func(m rowsModel) (string, error) {
 			if m.Path.IsNull() {
 				return "", fmt.Errorf("path is required")
 			}

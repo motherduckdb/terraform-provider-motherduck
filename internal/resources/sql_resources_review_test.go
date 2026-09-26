@@ -237,3 +237,43 @@ func TestShareIncludePatternRejectsUnquotedCommas(t *testing.T) {
 		}
 	}
 }
+
+// typeofStringer canonicalizes a few DuckDB type spellings like typeof().
+type typeofStringer map[string]string
+
+func (s typeofStringer) ScalarString(_ context.Context, query string, _ ...any) (string, error) {
+	spelling := strings.TrimSuffix(strings.TrimPrefix(query, "SELECT typeof(CAST(NULL AS "), "))")
+	if canonical, ok := s[spelling]; ok {
+		return canonical, nil
+	}
+	return "", fmt.Errorf("Catalog Error: Type with name %s does not exist", spelling)
+}
+
+func TestTableColumnMapsEquivalentOnlyIgnoresAliasesAndKeywordCase(t *testing.T) {
+	ctx := context.Background()
+	client := typeofStringer{
+		"INT": "INTEGER", "INTEGER": "INTEGER", "BIGINT": "BIGINT",
+		"ENUM('a', 'b')": "ENUM('a', 'b')", "ENUM('A', 'B')": "ENUM('A', 'B')",
+	}
+	columns := func(columnType string) types.Map {
+		return types.MapValueMust(types.StringType, map[string]attr.Value{"id": types.StringValue(columnType)})
+	}
+	for _, tc := range []struct {
+		left, right string
+		want        bool
+	}{
+		{"INT", "INTEGER", true},
+		{"integer", "INTEGER", true},
+		{"INT", "BIGINT", false},
+		{"ENUM('a', 'b')", "ENUM('A', 'B')", false},
+	} {
+		var diags diag.Diagnostics
+		if got := tableColumnMapsEquivalent(ctx, client, columns(tc.left), columns(tc.right), &diags); got != tc.want || diags.HasError() {
+			t.Errorf("%s vs %s = %v (diags %v), want %v", tc.left, tc.right, got, diags, tc.want)
+		}
+	}
+	var diags diag.Diagnostics
+	if tableColumnMapsEquivalent(ctx, client, columns("mood"), columns("MOOD2"), &diags) || !diags.HasError() {
+		t.Error("an unresolvable type must not be treated as equivalent")
+	}
+}
