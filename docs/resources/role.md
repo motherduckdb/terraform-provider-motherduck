@@ -10,8 +10,8 @@ description: |-
 Creates and owns a custom MotherDuck role. Creating and dropping custom roles
 requires the SQL identity in `MOTHERDUCK_TOKEN` (or provider `token`) to have
 permission to manage custom role definitions. Configuring only `admin_token`
-does not authorize SQL role creation. Custom roles are available on Business
-and Enterprise plans.
+does not authorize SQL role creation. Custom roles are available on the
+Business plan and during an active free trial.
 
 | Role you want to use | Terraform configuration |
 | --- | --- |

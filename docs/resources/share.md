@@ -23,7 +23,9 @@ Consumers attach using the share's URL. An already connected consumer can run
 `REFRESH DATABASES` to read the published update. Automatic publication also has
 replication delay. See [updating shares](https://motherduck.com/docs/key-tasks/sharing-data/updating-shares/).
 
-Name, source database, access mode, visibility, and update mode are replacement-only. `include_pattern` updates in place with `ALTER SHARE`. It is a preview option that requires filtered shares.
+Name, source database, access mode, visibility, and update mode are replacement-only. `include_pattern` updates in place with `ALTER SHARE`.
+
+`include_pattern` creates a filtered share that exposes only the matching schemas and tables. Filtered shares are available on the Business plan and during an active free trial. Only standard MotherDuck databases can be filtered. DuckLake and Iceberg consumers read data files directly, so MotherDuck rejects include patterns on shares of those databases.
 
 Access, visibility, and update mode are optional and computed. If omitted, Terraform discovers and records live values during refresh and import. Explicit values are enforced. Drift on them plans replacement. Removing an explicit value adopts the live value instead of resetting it, and
 omitted options never force replacement when another attribute changes.
@@ -98,7 +100,7 @@ terraform import motherduck_share.analytics 'analytics_share'
 ### Optional
 
 - `access` (String) Share access mode: `organization`, `restricted`, or `unrestricted`.
-- `include_pattern` (List of String) Optional preview catalog include patterns. Null shares the entire database. An empty list shares no objects. Changes are applied in place. The MotherDuck client must have filtered shares enabled.
+- `include_pattern` (List of String) Optional catalog include patterns that limit the share to matching schemas and tables. Null shares the entire database. An empty list shares no objects. Changes are applied in place. Filtered shares require a Business plan or an active free trial, and only standard MotherDuck databases can be filtered. DuckLake and Iceberg databases reject include patterns.
 - `update_mode` (String) Share update mode: `manual` or `automatic`.
 - `visibility` (String) Share visibility mode: `discoverable` or `hidden`.
 
