@@ -75,6 +75,7 @@ func TestCreateReadbackFailureKeepsCleanupState(t *testing.T) {
 					model = &databaseModel{
 						Name: types.StringValue("tf_readback"), ID: types.StringUnknown(), UUID: types.StringUnknown(), CreatedTS: types.StringUnknown(),
 						Transient: types.BoolUnknown(), SnapshotRetentionDays: types.Int64Unknown(), DatabaseType: types.StringUnknown(),
+						Iceberg: types.ObjectNull(databaseIcebergAttributeTypes()),
 						Timeouts: timeouts.Value{Object: types.ObjectNull(map[string]attr.Type{
 							"create": types.StringType, "read": types.StringType, "update": types.StringType, "delete": types.StringType,
 						})},

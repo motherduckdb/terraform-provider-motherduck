@@ -513,11 +513,11 @@ func (sqlIdentifierValidator) ValidateString(ctx context.Context, req validator.
 type databaseTypeValidator struct{}
 
 func (databaseTypeValidator) Description(context.Context) string {
-	return "must be default or ducklake"
+	return "must be default, ducklake, or iceberg"
 }
 
 func (databaseTypeValidator) MarkdownDescription(context.Context) string {
-	return "must be `default` or `ducklake`"
+	return "must be `default`, `ducklake`, or `iceberg`"
 }
 
 func (databaseTypeValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
@@ -535,14 +535,14 @@ func (databaseTypeValidator) ValidateString(ctx context.Context, req validator.S
 		return
 	}
 	if value != canonical {
-		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck database type", "Database type must use lowercase canonical value `default` or `ducklake`.")
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck database type", "Database type must use lowercase canonical value `default`, `ducklake`, or `iceberg`.")
 		return
 	}
 	switch canonical {
-	case "default", "ducklake":
+	case "default", "ducklake", "iceberg":
 		return
 	default:
-		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck database type", "Database type must be `default` or `ducklake`.")
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck database type", "Database type must be `default`, `ducklake`, or `iceberg`.")
 	}
 }
 
