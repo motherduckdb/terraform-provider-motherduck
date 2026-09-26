@@ -72,7 +72,7 @@ func TestFlightWaitBoundsStatusQuery(t *testing.T) {
 		TimeoutSeconds: types.Int64Value(2), PollIntervalSeconds: types.Int64Value(1),
 	}
 	var diags diag.Diagnostics
-	r.waitForFlightRun(context.Background(), &model, &diags)
+	r.waitForFlightRun(context.Background(), &model, flightRunLookup{listing: true}, &diags)
 	if !client.queried || !diags.HasError() {
 		t.Fatal("expected failed status query")
 	}
@@ -666,7 +666,7 @@ func TestFlightWaitReportsConfiguredTimeout(t *testing.T) {
 		RunNumber: types.Int64Value(42),
 	}
 	var diags diag.Diagnostics
-	res.waitForFlightRun(t.Context(), &model, &diags)
+	res.waitForFlightRun(t.Context(), &model, flightRunLookup{listing: true}, &diags)
 	if len(diags) != 1 || diags[0].Summary() != "Timed out waiting for MotherDuck Flight run" {
 		t.Fatalf("expected configured timeout diagnostic, got %v", diags)
 	}
@@ -684,7 +684,7 @@ func TestFlightWaitPreservesCallerCancellation(t *testing.T) {
 		TimeoutSeconds: types.Int64Value(60), PollIntervalSeconds: types.Int64Value(10),
 	}
 	var diags diag.Diagnostics
-	res.waitForFlightRun(ctx, &model, &diags)
+	res.waitForFlightRun(ctx, &model, flightRunLookup{listing: true}, &diags)
 	if len(diags) != 1 || diags[0].Summary() != "Interrupted while waiting for MotherDuck Flight run" {
 		t.Fatalf("expected caller cancellation diagnostic, got %v", diags)
 	}

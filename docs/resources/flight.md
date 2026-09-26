@@ -30,6 +30,32 @@ succeeded. Configure `schedule_cron` for recurring execution, or trigger a run
 through the application deployment workflow. The Flight-run Terraform resource
 is deprecated.
 
+## Plan limits
+
+MotherDuck applies Flight limits by plan and rejects a create or update that
+exceeds them:
+
+| Plan | Default `max_runtime_sec` | Maximum `max_runtime_sec` | Schedules |
+| --- | --- | --- | --- |
+| Business | 28,800 (8 hours) | No cap. `0` removes the limit. | Yes |
+| Free trial | 28,800 (8 hours) | 28,800 | Yes |
+| Lite | 3,600 (1 hour) | 3,600 | Yes |
+| Free | 3,600 (1 hour) | 3,600 | No |
+
+On a plan with a cap, `max_runtime_sec = 0` is rejected. The provider cannot
+see the organization's plan, so these limits fail at apply time, not at plan
+time.
+
+MotherDuck can disable a schedule on its own, for example after the
+organization moves to a plan without scheduled runs. `schedule_status` then
+reads `DISABLED` while `schedule_cron` keeps its value. Terraform reports the
+status but does not manage it.
+
+The provider validates at plan time that `source_code` is 1 to 204,800 bytes,
+that `requirements_txt` is at most 20,480 bytes, and that `config` does not use
+a reserved name: `MOTHERDUCK_TOKEN`, `MOTHERDUCK_FLIGHTS_RUN`,
+`MOTHERDUCK_FLIGHT_ID`, or `MOTHERDUCK_FLIGHT_RUN_ID`.
+
 ## Lifecycle and import
 
 Import by Flight UUID to preserve identity. Terraform reads the current
@@ -69,22 +95,24 @@ resource "motherduck_flight" "heartbeat" {
 ### Required
 
 - `name` (String) Flight name.
-- `source_code` (String) Flight source code sent to MotherDuck.
+- `source_code` (String) Flight source code sent to MotherDuck. Must not be empty and must be at most 204,800 bytes (200 KiB) of UTF-8.
 
 ### Optional
 
 - `access_token_name` (String) Optional MotherDuck access token name for the Flight. When omitted, MotherDuck uses its default Flight token behavior and Terraform keeps this field unset.
 - `config` (Map of String) Optional string configuration passed to the Flight. Keys become Flight runtime environment variables and must be valid Flight config names.
 - `flight_secret_names` (List of String) Optional MotherDuck secret names available to the Flight.
-- `max_runtime_sec` (Number) Maximum Flight runtime in seconds. `0` disables the runtime limit. When omitted at creation, MotherDuck supplies its current default. Removing a configured value keeps the last applied limit, so set the value explicitly to change it.
-- `requirements_txt` (String) Optional Python requirements text for the Flight runtime.
-- `schedule_cron` (String) Optional cron schedule for the Flight.
+- `max_runtime_sec` (Number) Maximum Flight runtime in seconds. MotherDuck enforces a per-plan cap: 3,600 seconds (1 hour) on the Lite and Free plans, 28,800 seconds (8 hours) during a free trial, and no cap on the Business plan. On a capped plan, a value above the cap or `0` is rejected. On the Business plan, `0` removes the runtime limit. When omitted at creation, MotherDuck applies the plan default: 8 hours on the Business plan and during a free trial, and 1 hour on the Lite and Free plans. Removing a configured value keeps the last applied limit, so set the value explicitly to change it.
+- `requirements_txt` (String) Optional Python requirements text for the Flight runtime. Must be at most 20,480 bytes (20 KiB) of UTF-8.
+- `schedule_cron` (String) Optional cron schedule for the Flight. MotherDuck rejects schedules on plans without scheduled runs, such as the Free plan. See `schedule_status` for whether MotherDuck is currently running the schedule.
 
 ### Read-Only
 
 - `created_at` (String) Flight creation timestamp reported by MotherDuck.
 - `current_version` (Number) Current Flight version number reported by MotherDuck.
 - `id` (String) Flight ID assigned by MotherDuck.
+- `owner_name` (String) Name of the Flight owner reported by MotherDuck.
+- `schedule_status` (String) Schedule status reported by MotherDuck, such as `ACTIVE` or `DISABLED`, or null when the Flight has no schedule. MotherDuck can disable a schedule on its own, for example when the organization moves to a plan without scheduled runs. Terraform reports this status but does not manage it.
 - `status` (String) Current Flight status reported by MotherDuck.
 - `updated_at` (String) Flight update timestamp reported by MotherDuck.
 

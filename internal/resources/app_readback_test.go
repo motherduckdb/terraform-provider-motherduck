@@ -255,7 +255,7 @@ func flightReadbackClient(schedule any) *scriptedAppSQL {
 		case strings.Contains(query, "MD_GET_FLIGHT_VERSION"):
 			return scannedRow{values: []any{"print(1)", nil, nil, nil, nil, int64(900)}}
 		case strings.Contains(query, "MD_GET_FLIGHT("):
-			return scannedRow{values: []any{"flight", schedule, "ACTIVE", int64(1), "c", "u"}}
+			return scannedRow{values: []any{"flight", schedule, nil, "ACTIVE", int64(1), "c", "u", "owner"}}
 		default:
 			return scannedRow{err: fmt.Errorf("unexpected query %q", query)}
 		}
