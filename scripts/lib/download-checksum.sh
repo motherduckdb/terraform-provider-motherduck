@@ -45,7 +45,10 @@ verify_archive_checksum() {
 # Publisher keys for CLI downloads. The fingerprints were checked against the
 # publishers' own documentation: HashiCorp's binary verification guide on
 # developer.hashicorp.com, and OpenTofu's installer at get.opentofu.org.
+# Scripts that source this file pass them to download_verified_archive.
+# shellcheck disable=SC2034
 HASHICORP_RELEASE_KEY_FINGERPRINT="C874011F0AB405110D02105534365D9472D7468F"
+# shellcheck disable=SC2034
 OPENTOFU_RELEASE_KEY_FINGERPRINT="E3E6E43D84CB852EADB0051D0C0AF313E5FD9F80"
 
 # cli_signature_verification_enabled succeeds when checksum manifests must be
