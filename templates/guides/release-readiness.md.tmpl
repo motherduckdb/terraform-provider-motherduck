@@ -13,7 +13,11 @@ the Terraform Registry. Users normally install with `terraform init`. The
 
 ## Validate the candidate
 
-1. Prepare version-specific release notes with public change and verification links.
+1. Prepare version-specific release notes in `release-notes/<tag>.md` with public
+   change links. Describe what changed for users, and add an "Upgrading"
+   section when the release changes behavior or needs a new version constraint.
+   Release notes have no "Verification" section. Record test evidence in the
+   release pull request.
 2. Run `make pre-push-check`, `make release-check`, and `make release-sign-check`.
 3. Merge a reviewed PR after all required checks pass.
 4. Verify CI and live SQL tests on the exact merged commit.

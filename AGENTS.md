@@ -45,4 +45,5 @@ make release-check
 - Releases are tag-driven through `.github/workflows/release.yml`.
 - Use a PR for release-prep changes, wait for green CI, merge to `main`, then tag the intended merge commit.
 - Use semantic version tags such as `v0.1.0`.
+- Write `release-notes/<tag>.md` for users. Cover highlights, features, fixes, compatibility, and maintenance. When a release changes behavior or needs a constraint change, add an "Upgrading" section with the steps. Do not add a "Verification" section. Put test evidence in the release PR instead.
 - After pushing a release tag, verify the GitHub Actions release workflow and the created GitHub release artifacts.
