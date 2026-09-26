@@ -23,7 +23,9 @@ Consumers attach using the share's URL. An already connected consumer can run
 `REFRESH DATABASES` to read the published update. Automatic publication also has
 replication delay. See [updating shares](https://motherduck.com/docs/key-tasks/sharing-data/updating-shares/).
 
-Name, source database, access mode, visibility, and update mode are replacement-only. `include_pattern` updates in place with `ALTER SHARE`. It is a preview option that requires filtered shares.
+Name, source database, access mode, visibility, and update mode are replacement-only. `include_pattern` updates in place with `ALTER SHARE`.
+
+`include_pattern` creates a filtered share that exposes only the matching schemas and tables. Filtered shares are available on the Business plan and during an active free trial. Only standard MotherDuck databases can be filtered. DuckLake and Iceberg consumers read data files directly, so MotherDuck rejects include patterns on shares of those databases.
 
 Access, visibility, and update mode are optional and computed. If omitted, Terraform discovers and records live values during refresh and import. Explicit values are enforced. Drift on them plans replacement. Removing an explicit value adopts the live value instead of resetting it, and
 omitted options never force replacement when another attribute changes.

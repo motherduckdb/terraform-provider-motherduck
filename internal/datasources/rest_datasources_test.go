@@ -189,12 +189,18 @@ func TestUserTokensDataSourceReadSetsTypedTokens(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(mdrest.ListTokensResponse{
 			Tokens: []mdrest.Token{{
-				Token:     "raw-secret-that-must-not-reach-state",
-				ID:        "tok_1",
-				Name:      "ci",
-				CreatedTS: "2026-01-01T00:00:00Z",
-				ReadOnly:  true,
-				TokenType: "read_scaling",
+				Token:       "raw-secret-that-must-not-reach-state",
+				ID:          "tok_1",
+				Name:        "ci",
+				Description: "CI loader",
+				CreatedTS:   "2026-01-01T00:00:00Z",
+				ReadOnly:    true,
+				TokenType:   "read_scaling",
+			}, {
+				ID:        "tok_2",
+				Name:      "legacy",
+				CreatedTS: "2026-01-02T00:00:00Z",
+				TokenType: "read_write",
 			}},
 		})
 	}))
@@ -217,12 +223,13 @@ func TestUserTokensDataSourceReadSetsTypedTokens(t *testing.T) {
 		t.Fatalf("schema diagnostics: %v", schemaResp.Diagnostics)
 	}
 	tokenObjectType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-		"id":         tftypes.String,
-		"name":       tftypes.String,
-		"expire_at":  tftypes.String,
-		"created_ts": tftypes.String,
-		"read_only":  tftypes.Bool,
-		"token_type": tftypes.String,
+		"id":          tftypes.String,
+		"name":        tftypes.String,
+		"description": tftypes.String,
+		"expire_at":   tftypes.String,
+		"created_ts":  tftypes.String,
+		"read_only":   tftypes.Bool,
+		"token_type":  tftypes.String,
 	}}
 	tokensType := tftypes.List{ElementType: tokenObjectType}
 	configType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
@@ -246,10 +253,22 @@ func TestUserTokensDataSourceReadSetsTypedTokens(t *testing.T) {
 	if readResp.Diagnostics.HasError() {
 		t.Fatalf("state diagnostics: %v", readResp.Diagnostics)
 	}
-	if state.Tokens.IsNull() || len(state.Tokens.Elements()) != 1 {
-		t.Fatalf("tokens = %#v, want one typed token", state.Tokens)
+	if state.Tokens.IsNull() || len(state.Tokens.Elements()) != 2 {
+		t.Fatalf("tokens = %#v, want two typed tokens", state.Tokens)
 	}
-	if got, want := state.TokensJSON.ValueString(), `[{"id":"tok_1","name":"ci","created_ts":"2026-01-01T00:00:00Z","read_only":true,"token_type":"read_scaling"}]`; got != want {
+	descriptions := make([]string, 0, 2)
+	for _, element := range state.Tokens.Elements() {
+		description := element.(types.Object).Attributes()["description"].(types.String)
+		if description.IsNull() {
+			descriptions = append(descriptions, "<null>")
+			continue
+		}
+		descriptions = append(descriptions, description.ValueString())
+	}
+	if got, want := strings.Join(descriptions, ","), "CI loader,<null>"; got != want {
+		t.Fatalf("descriptions = %q, want %q", got, want)
+	}
+	if got, want := state.TokensJSON.ValueString(), `[{"id":"tok_1","name":"ci","description":"CI loader","created_ts":"2026-01-01T00:00:00Z","read_only":true,"token_type":"read_scaling"},{"id":"tok_2","name":"legacy","created_ts":"2026-01-02T00:00:00Z","read_only":false,"token_type":"read_write"}]`; got != want {
 		t.Fatalf("tokens_json = %q, want %q", got, want)
 	}
 	if strings.Contains(state.TokensJSON.ValueString(), "raw-secret") {
@@ -265,5 +284,13 @@ func TestDiveEmbedSessionDataSourceIsDeprecated(t *testing.T) {
 	}
 	if resp.Schema.DeprecationMessage == "" {
 		t.Fatal("dive embed session data source should point users to the ephemeral resource")
+	}
+	if hint, ok := resp.Schema.Attributes["session_hint"].(schema.StringAttribute); !ok || hint.DeprecationMessage == "" {
+		t.Fatalf("session_hint = %#v, want a deprecated attribute", resp.Schema.Attributes["session_hint"])
+	}
+	for _, name := range []string{"session_name", "version", "required_resources", "initial_state"} {
+		if _, ok := resp.Schema.Attributes[name]; !ok {
+			t.Errorf("data source schema is missing %s", name)
+		}
 	}
 }

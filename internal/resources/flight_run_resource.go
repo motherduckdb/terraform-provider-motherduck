@@ -4,11 +4,13 @@ import (
 	"context"
 	stdsql "database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -122,8 +124,10 @@ func (r *flightRunResource) Create(ctx context.Context, req resource.CreateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	var lookup flightRunLookup
 	if waitForFlightRun(plan.WaitForStatus) {
-		if !r.sqlFunctionAvailable(ctx, client, &resp.Diagnostics, "md_list_flight_runs", "motherduck_flight_run") {
+		var ok bool
+		if lookup, ok = r.flightRunLookup(ctx, client, &resp.Diagnostics); !ok {
 			return
 		}
 	}
@@ -150,7 +154,7 @@ func (r *flightRunResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 	if waitForFlightRun(plan.WaitForStatus) {
-		r.waitForFlightRun(ctx, &plan, &resp.Diagnostics)
+		r.waitForFlightRun(ctx, &plan, lookup, &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -162,7 +166,7 @@ func waitForFlightRun(value types.String) bool {
 	return !value.IsNull() && !value.IsUnknown() && strings.TrimSpace(value.ValueString()) != ""
 }
 
-func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightRunModel, diags *diag.Diagnostics) {
+func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightRunModel, lookup flightRunLookup, diags *diag.Diagnostics) {
 	wantStatus := normalizeFlightRunStatus(model.WaitForStatus.ValueString())
 	pollInterval := time.Duration(int64ValueOrDefault(model.PollIntervalSeconds, 10)) * time.Second
 	timeout := time.Duration(int64ValueOrDefault(model.TimeoutSeconds, 600)) * time.Second
@@ -204,7 +208,7 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 			diags.AddError("Interrupted while waiting for MotherDuck Flight run", err.Error())
 			return
 		}
-		if found := r.readFlightRunStatus(ctx, model, diags); !found && !diags.HasError() {
+		if found := r.readFlightRunStatus(ctx, model, lookup, diags); !found && !diags.HasError() {
 			continue
 		}
 		if diags.HasError() {
@@ -213,7 +217,40 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 	}
 }
 
-func (r *flightRunResource) readFlightRunStatus(ctx context.Context, model *flightRunModel, diags *diag.Diagnostics) bool {
+// flightRunLookup records which MotherDuck functions can read a Flight run.
+type flightRunLookup struct {
+	// direct is true when MD_GET_FLIGHT_RUN reads one run by number.
+	direct bool
+	// listing is true when MD_LIST_FLIGHT_RUNS lists runs newest first.
+	listing bool
+}
+
+// flightRunLookup probes the run read functions. It prefers MD_GET_FLIGHT_RUN
+// and keeps MD_LIST_FLIGHT_RUNS as the fallback for sessions without it.
+func (r *flightRunResource) flightRunLookup(ctx context.Context, client sqlfunc.Exister, diags *diag.Diagnostics) (flightRunLookup, bool) {
+	direct, err := sqlFunctionExists(ctx, client, "md_get_flight_run")
+	if err != nil {
+		diags.AddError("Unable to inspect MotherDuck SQL functions", err.Error())
+		return flightRunLookup{}, false
+	}
+	listing, err := sqlFunctionExists(ctx, client, "md_list_flight_runs")
+	if err != nil {
+		diags.AddError("Unable to inspect MotherDuck SQL functions", err.Error())
+		return flightRunLookup{}, false
+	}
+	if !direct && !listing {
+		diags.AddError(
+			"MotherDuck SQL function unavailable",
+			"Neither md_get_flight_run nor md_list_flight_runs is exposed by the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_flight_run resource.",
+		)
+		return flightRunLookup{}, false
+	}
+	return flightRunLookup{direct: direct, listing: listing}, true
+}
+
+const flightRunColumns = "run_id::VARCHAR, status, run_number, flight_version, created_at::VARCHAR"
+
+func (r *flightRunResource) readFlightRunStatus(ctx context.Context, model *flightRunModel, lookup flightRunLookup, diags *diag.Diagnostics) bool {
 	client := r.sql(ctx, diags)
 	if client == nil {
 		return false
@@ -221,14 +258,21 @@ func (r *flightRunResource) readFlightRunStatus(ctx context.Context, model *flig
 	var runID, status, created string
 	var runNumber, version int64
 	query := fmt.Sprintf(
-		"SELECT run_id::VARCHAR, status, run_number, flight_version, created_at::VARCHAR FROM MD_LIST_FLIGHT_RUNS(flight_id := %s::UUID) WHERE run_number = %d",
+		"SELECT "+flightRunColumns+" FROM MD_LIST_FLIGHT_RUNS(flight_id := %s::UUID) WHERE run_number = %d",
 		sqlbuild.StringLiteral(model.FlightID.ValueString()),
 		model.RunNumber.ValueInt64(),
 	)
+	if lookup.direct {
+		query = fmt.Sprintf(
+			"SELECT "+flightRunColumns+" FROM MD_GET_FLIGHT_RUN(flight_id := %s::UUID, run_number := %d)",
+			sqlbuild.StringLiteral(model.FlightID.ValueString()),
+			model.RunNumber.ValueInt64(),
+		)
+	}
 	err := retry.SQL(ctx, func() error {
 		return client.QueryRow(ctx, query).Scan(&runID, &status, &runNumber, &version, &created)
 	})
-	if err == stdsql.ErrNoRows || isNotFound(err) {
+	if err == stdsql.ErrNoRows || isNotFound(err) || (lookup.direct && flightRunMissing(err)) {
 		return false
 	}
 	if err != nil {
@@ -241,6 +285,21 @@ func (r *flightRunResource) readFlightRunStatus(ctx context.Context, model *flig
 	model.FlightVersion = types.Int64Value(version)
 	model.CreatedAt = types.StringValue(created)
 	return true
+}
+
+// flightRunMissing reports whether MD_GET_FLIGHT_RUN failed because the run
+// or its Flight does not exist. MotherDuck reports that as an error rather
+// than an empty result, and the error is not always a catalog error.
+func flightRunMissing(err error) bool {
+	if err == nil {
+		return false
+	}
+	var duckErr *duckdb.Error
+	if !errors.As(err, &duckErr) {
+		return false
+	}
+	msg := strings.ToLower(duckErr.Error())
+	return strings.Contains(msg, "does not exist") || strings.Contains(msg, "not found")
 }
 
 func flightRunFailed(status string) bool {
@@ -275,11 +334,12 @@ func (r *flightRunResource) Read(ctx context.Context, req resource.ReadRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !r.sqlFunctionAvailable(ctx, client, &resp.Diagnostics, "md_list_flight_runs", "motherduck_flight_run") {
+	lookup, ok := r.flightRunLookup(ctx, client, &resp.Diagnostics)
+	if !ok {
 		return
 	}
-	found := r.readFlightRunStatus(ctx, &state, &resp.Diagnostics)
-	if !found && !resp.Diagnostics.HasError() {
+	found := r.readFlightRunStatus(ctx, &state, lookup, &resp.Diagnostics)
+	if !found && !resp.Diagnostics.HasError() && lookup.listing {
 		// MD_LIST_FLIGHT_RUNS returns one page of the newest runs by default.
 		// A scheduled Flight can push an older run out of that page, so walk
 		// the listing before treating the run as gone.
@@ -298,7 +358,7 @@ func (r *flightRunResource) Read(ctx context.Context, req resource.ReadRequest, 
 		if !known || exists {
 			resp.Diagnostics.AddWarning(
 				"MotherDuck Flight run not listed",
-				fmt.Sprintf("Flight run %d was not returned by MD_LIST_FLIGHT_RUNS for Flight %s. Terraform kept the last known run state instead of starting a new run.", state.RunNumber.ValueInt64(), state.FlightID.ValueString()),
+				fmt.Sprintf("Flight run %d was not found for Flight %s. Terraform kept the last known run state instead of starting a new run.", state.RunNumber.ValueInt64(), state.FlightID.ValueString()),
 			)
 			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 			return

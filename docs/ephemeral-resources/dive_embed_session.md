@@ -16,7 +16,12 @@ Creates a short-lived MotherDuck Dive embed session without writing the session 
 ephemeral "motherduck_dive_embed_session" "reader" {
   dive_id      = "11111111-1111-4111-8111-111111111111"
   username     = "analytics_reader"
-  session_hint = "dashboard"
+  session_name = "dashboard"
+
+  # Seed the Dive's useDiveState values for this viewer.
+  initial_state = jsonencode({
+    region = "emea"
+  })
 }
 ```
 
@@ -30,8 +35,23 @@ ephemeral "motherduck_dive_embed_session" "reader" {
 
 ### Optional
 
-- `session_hint` (String) Optional hint used to reuse the same read-scaling session across embed requests. Must be non-blank when set.
+- `initial_state` (String) Optional JSON object that seeds the embedded Dive's UI state. Each key is read by the matching `useDiveState` call in the Dive. Build it with `jsonencode()`. The JSON encoding must be at most 64 KiB.
+- `required_resources` (Attributes List) Optional override for the databases and shares the Dive renders against. When set, it replaces the Dive's declared required resources for this session. An empty list declares no resources, so the Dive attaches the whole workspace of the session user. The JSON encoding of the list must be at most 8192 bytes. (see [below for nested schema](#nestedatt--required_resources))
+- `session_hint` (String, Deprecated) Deprecated alias for `session_name`. Must be non-blank when set.
+- `session_name` (String) Optional name used to reuse the same read-scaling session across embed requests. Must be non-blank when set. Conflicts with `session_hint`.
+- `version` (Number) Optional Dive version to embed. Must be a positive integer. Omit it to embed the current version.
 
 ### Read-Only
 
 - `session` (String, Sensitive) Short-lived embed session credential returned by MotherDuck. Terraform keeps this value ephemeral and does not persist it in state.
+
+<a id="nestedatt--required_resources"></a>
+### Nested Schema for `required_resources`
+
+Required:
+
+- `url` (String, Sensitive) MotherDuck share URL the Dive renders against. This value is sensitive and can be sourced from `motherduck_share.url`. Must be non-blank.
+
+Optional:
+
+- `alias` (String) Optional alias exposed to the Dive content for this resource.

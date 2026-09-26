@@ -75,6 +75,7 @@ func TestCreateReadbackFailureKeepsCleanupState(t *testing.T) {
 					model = &databaseModel{
 						Name: types.StringValue("tf_readback"), ID: types.StringUnknown(), UUID: types.StringUnknown(), CreatedTS: types.StringUnknown(),
 						Transient: types.BoolUnknown(), SnapshotRetentionDays: types.Int64Unknown(), DatabaseType: types.StringUnknown(),
+						Iceberg: types.ObjectNull(databaseIcebergAttributeTypes()),
 						Timeouts: timeouts.Value{Object: types.ObjectNull(map[string]attr.Type{
 							"create": types.StringType, "read": types.StringType, "update": types.StringType, "delete": types.StringType,
 						})},
@@ -99,7 +100,7 @@ func TestCreateReadbackFailureKeepsCleanupState(t *testing.T) {
 					r = &secretResource{baseResource: base}
 					model = &secretModel{
 						Name: types.StringValue("tf_readback"), Type: types.StringValue("s3"), ID: types.StringUnknown(),
-						SecretProvider: types.StringUnknown(), Params: types.MapNull(types.StringType), Storage: types.StringUnknown(),
+						SecretProvider: types.StringUnknown(), Params: types.MapNull(types.StringType), FlightParams: types.MapNull(types.StringType), Storage: types.StringUnknown(),
 						Scope: types.StringUnknown(), SecretSQL: types.StringNull(),
 					}
 					cleanup = `DROP SECRET IF EXISTS "tf_readback" FROM motherduck`

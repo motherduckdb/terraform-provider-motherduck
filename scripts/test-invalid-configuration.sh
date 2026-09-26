@@ -58,6 +58,10 @@ validate_fixture invalid-configuration \
   'Invalid MotherDuck REST username' \
   'Invalid MotherDuck UUID' \
   'Invalid MotherDuck Dive embed session hint' \
+  'Conflicting MotherDuck Dive embed session arguments' \
+  'Invalid MotherDuck Dive embed session version' \
+  'Invalid MotherDuck Dive embed initial state' \
+  'Invalid MotherDuck Dive embed required resource URL' \
   'must not include leading or trailing whitespace' \
   'Invalid MotherDuck Flight run wait status' \
   'Invalid MotherDuck Flight run poll interval' \
@@ -81,6 +85,9 @@ validate_fixture invalid-configuration \
   'Invalid MotherDuck share grant username' \
   'Invalid MotherDuck service account username' \
   'Invalid MotherDuck access token name' \
+  'Reserved MotherDuck access token name' \
+  'Invalid MotherDuck access token description' \
+  'Username must be between 3 and 255 characters' \
   'Invalid MotherDuck access token TTL' \
   'Invalid MotherDuck access token type' \
   'Invalid MotherDuck Duckling instance size' \

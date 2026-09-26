@@ -384,7 +384,46 @@ func restUsernameValidators() []validator.String {
 }
 
 func accessTokenNameValidators() []validator.String {
-	return []validator.String{tfvalidators.StringLength("MotherDuck access token name", 1, 255)}
+	return []validator.String{
+		tfvalidators.StringLength("MotherDuck access token name", 1, 255),
+		reservedAccessTokenNameValidator{},
+	}
+}
+
+func accessTokenDescriptionValidators() []validator.String {
+	return []validator.String{
+		tfvalidators.StringLength("MotherDuck access token description", 1, 1000),
+		// MotherDuck measures the limit in UTF-16 code units, where a
+		// character outside the Basic Multilingual Plane counts twice.
+		tfvalidators.StringMaxUTF16Units("MotherDuck access token description", 1000),
+	}
+}
+
+// reservedAccessTokenNames are labels MotherDuck keeps for tokens it mints
+// itself. The API rejects them with an exact, case-sensitive match.
+var reservedAccessTokenNames = []string{"MotherDuck Extension", "MotherDuck Flights"}
+
+type reservedAccessTokenNameValidator struct{}
+
+func (reservedAccessTokenNameValidator) Description(context.Context) string {
+	return "must not be a name reserved by MotherDuck"
+}
+
+func (v reservedAccessTokenNameValidator) MarkdownDescription(ctx context.Context) string {
+	return "must not be `MotherDuck Extension` or `MotherDuck Flights`"
+}
+
+func (reservedAccessTokenNameValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if slices.Contains(reservedAccessTokenNames, req.ConfigValue.ValueString()) {
+		resp.Diagnostics.AddAttributeError(
+			req.Path,
+			"Reserved MotherDuck access token name",
+			fmt.Sprintf("Token name %q is reserved for tokens MotherDuck creates itself. Choose a different name.", req.ConfigValue.ValueString()),
+		)
+	}
 }
 
 func accessTokenTypeValidators() []validator.String {
@@ -479,11 +518,11 @@ func (sqlIdentifierValidator) ValidateString(ctx context.Context, req validator.
 type databaseTypeValidator struct{}
 
 func (databaseTypeValidator) Description(context.Context) string {
-	return "must be default or ducklake"
+	return "must be default, ducklake, or iceberg"
 }
 
 func (databaseTypeValidator) MarkdownDescription(context.Context) string {
-	return "must be `default` or `ducklake`"
+	return "must be `default`, `ducklake`, or `iceberg`"
 }
 
 func (databaseTypeValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
@@ -501,14 +540,14 @@ func (databaseTypeValidator) ValidateString(ctx context.Context, req validator.S
 		return
 	}
 	if value != canonical {
-		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck database type", "Database type must use lowercase canonical value `default` or `ducklake`.")
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck database type", "Database type must use lowercase canonical value `default`, `ducklake`, or `iceberg`.")
 		return
 	}
 	switch canonical {
-	case "default", "ducklake":
+	case "default", "ducklake", "iceberg":
 		return
 	default:
-		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck database type", "Database type must be `default` or `ducklake`.")
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck database type", "Database type must be `default`, `ducklake`, or `iceberg`.")
 	}
 }
 
@@ -561,11 +600,11 @@ func (v stringEnumValidator) ValidateString(ctx context.Context, req validator.S
 type serviceAccountUsernameValidator struct{}
 
 func (serviceAccountUsernameValidator) Description(context.Context) string {
-	return "must start with an ASCII letter and contain only ASCII letters, digits, and underscores"
+	return "must be 3-255 characters, start with an ASCII letter, and contain only ASCII letters, digits, and underscores"
 }
 
 func (serviceAccountUsernameValidator) MarkdownDescription(context.Context) string {
-	return "must start with an ASCII letter and contain only ASCII letters, digits, and underscores"
+	return "must be 3-255 characters, start with an ASCII letter, and contain only ASCII letters, digits, and underscores"
 }
 
 func (serviceAccountUsernameValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
@@ -580,8 +619,8 @@ func (serviceAccountUsernameValidator) ValidateString(ctx context.Context, req v
 }
 
 func validateServiceAccountUsernameValue(value string) (string, bool) {
-	if value != strings.TrimSpace(value) || value == "" || len([]rune(value)) > 255 {
-		return "Username must be between 1 and 255 characters, start with an ASCII letter, and contain only ASCII letters, digits, and underscores.", false
+	if length := len([]rune(value)); value != strings.TrimSpace(value) || length < 3 || length > 255 {
+		return "Username must be between 3 and 255 characters, start with an ASCII letter, and contain only ASCII letters, digits, and underscores.", false
 	}
 	for i, r := range value {
 		if i == 0 {

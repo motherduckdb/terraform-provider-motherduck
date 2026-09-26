@@ -7,7 +7,7 @@ description: |-
 
 # Manage roles and share access
 
-Custom roles require a MotherDuck Business or Enterprise plan and permission to
+Custom roles require a MotherDuck Business plan or an active free trial, and permission to
 create roles and assign membership. Share grants run as the share owner.
 
 If you manage MotherDuck roles with Terraform, manage their memberships and
@@ -157,8 +157,9 @@ managed grants but does not revoke grants Terraform does not own.
 - `access = "organization"` grants access across the organization.
   `access = "unrestricted"` grants access to anyone with the share URL.
 - A share's `include_pattern` selects the tables it exposes. Audiences that need
-  different tables need different shares. `include_pattern` is a preview option
-  that requires filtered shares.
+  different tables need different shares. Filtered shares need a Business plan
+  or an active free trial and work only on standard MotherDuck databases, not
+  DuckLake or Iceberg databases.
 - This provider does not manage SSO, provisioning through an identity provider,
   membership of people in an organization, billing, or PrivateLink.
 

@@ -2,12 +2,12 @@
 page_title: "motherduck_flights Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Lists MotherDuck Flights available to the current account. Callers with organization-wide Flight visibility can restrict results to their own Flights. Rows in the returned page are sorted by Flight ID.
+  Lists MotherDuck Flights available to the current account. Callers with organization-wide Flight visibility can restrict results to their own Flights. MotherDuck returns 50 Flights when limit is omitted, so set limit and offset to read more. Rows in the returned page are sorted by Flight ID.
 ---
 
 # motherduck_flights (Data Source)
 
-Lists MotherDuck Flights available to the current account. Callers with organization-wide Flight visibility can restrict results to their own Flights. Rows in the returned page are sorted by Flight ID.
+Lists MotherDuck Flights available to the current account. Callers with organization-wide Flight visibility can restrict results to their own Flights. MotherDuck returns 50 Flights when `limit` is omitted, so set `limit` and `offset` to read more. Rows in the returned page are sorted by Flight ID.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read

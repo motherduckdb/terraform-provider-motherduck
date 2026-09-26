@@ -165,6 +165,11 @@ test-live-admin:
 	TF_ACC=1 MD_TF_ACC=1 go test -timeout=20m -tags=acceptance,admin_acceptance -run '^TestPluginTestingAdminGraphLifecycle$$' -count=1 ./internal/acceptance
 	./scripts/test-live-blueprint-writer-path.sh
 
+.PHONY: test-live-iceberg
+test-live-iceberg:
+	@if [ -z "$${MOTHERDUCK_ICEBERG_SECRET:-}" ] || [ -z "$${MOTHERDUCK_ICEBERG_DEFAULT_SCHEMA:-}" ]; then echo "MOTHERDUCK_ICEBERG_SECRET and MOTHERDUCK_ICEBERG_DEFAULT_SCHEMA are required for the Iceberg acceptance test" >&2; exit 1; fi
+	TF_ACC=1 MD_TF_ACC=1 go test -timeout=20m -tags=acceptance,iceberg_acceptance -run '^TestPluginTestingIcebergDatabaseLifecycle$$' -count=1 ./internal/acceptance
+
 test-live-cleanup-audit:
 	./scripts/audit-live-test-cleanup.sh
 

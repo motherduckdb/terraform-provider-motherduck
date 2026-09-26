@@ -31,6 +31,18 @@ data "motherduck_dive_embed_session" "bad_config" {
   session_hint = " "
 }
 
+data "motherduck_dive_embed_session" "bad_embed_arguments" {
+  dive_id       = "123e4567-e89b-42d3-a456-426614174000"
+  username      = "svc_reader"
+  session_name  = "current"
+  session_hint  = "legacy"
+  version       = 0
+  initial_state = "[]"
+  required_resources = [{
+    url = " "
+  }]
+}
+
 data "motherduck_dive" "bad_whitespace_dive_id" {
   dive_id = " 123e4567-e89b-42d3-a456-426614174000"
 }
@@ -188,6 +200,16 @@ resource "motherduck_access_token" "bad_config" {
   name       = ""
   token_type = "read_only"
   ttl        = 299
+}
+
+resource "motherduck_service_account" "short_username" {
+  username = "ab"
+}
+
+resource "motherduck_access_token" "reserved_name" {
+  username    = "svc_reader"
+  name        = "MotherDuck Flights"
+  description = ""
 }
 
 resource "motherduck_access_token" "bad_token_type_case" {

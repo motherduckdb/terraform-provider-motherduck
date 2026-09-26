@@ -25,10 +25,13 @@ The example's unrestricted share is suitable only for data intended to be
 accessible to anyone with its URL. For private or tenant data, design restricted
 sharing and embedding access explicitly.
 
-Import by Dive UUID. The current read API does not expose mounted
-`required_resources` or `api_version`, so Terraform cannot reconstruct those
-fields during import or fully detect external mount changes. Keep the intended
-mount configuration in source control.
+Import by Dive UUID. Refresh and import read `api_version` and the mounted
+`required_resources` of the current Dive version from `MD_GET_DIVE`, so a mount
+added, removed, or retargeted outside Terraform plans an update. MotherDuck
+stores a share URL under the share's name. A configured share URL with the same
+token keeps its configured spelling in state. After import, a configured URL
+spelled differently from the stored one plans a single update. Omit
+`api_version` to let MotherDuck choose it when content changes.
 
 Set `description = ""` to clear an existing description. Removing that field is
 not the same operation. Setting `endorsed` status requires the appropriate
@@ -83,9 +86,9 @@ resource "motherduck_dive" "revenue" {
 
 ### Optional
 
-- `api_version` (Number) Optional Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default. The public MD_GET_DIVE output does not report this value, so import cannot recover it. Keep it configured and expect one corrective update after import.
+- `api_version` (Number) Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default. Refresh and import read the current version's API version from `MD_GET_DIVE`.
 - `description` (String) Optional Dive description. Set this to an empty string to clear the visible description. Removing an existing configured value is rejected because the public SQL update surface does not expose a null-clear operation.
-- `required_resources` (Attributes List, Sensitive) Optional share resources to mount into the Dive. This is config-owned because the current public `MD_GET_DIVE` output does not expose mounted resources during refresh or import. (see [below for nested schema](#nestedatt--required_resources))
+- `required_resources` (Attributes List, Sensitive) Optional shares or databases to mount into the Dive. Refresh and import read the current version's mounted resources from `MD_GET_DIVE`, so a mount changed outside Terraform plans an update. MotherDuck stores a share URL under the share's name. A configured URL that names the same share token keeps its spelling in state. (see [below for nested schema](#nestedatt--required_resources))
 - `status` (String) Dive governance status. New Dives default to `draft`. Owners can set `draft`, `ready`, or `archived`, while `endorsed` requires organization-admin permission.
 
 ### Read-Only

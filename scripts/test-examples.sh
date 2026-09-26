@@ -114,6 +114,11 @@ aws_access_key_id     = "dummy-access-key"
 aws_secret_access_key = "dummy-secret-key"
 HCL
       ;;
+    examples/resources/motherduck_secret/flights)
+      cat > "${work_dir}/terraform.tfvars" <<'HCL'
+partner_api_key = "dummy-partner-key"
+HCL
+      ;;
   esac
 }
 

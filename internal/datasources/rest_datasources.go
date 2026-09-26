@@ -83,7 +83,7 @@ func (d *userTokensDataSource) Metadata(ctx context.Context, req datasource.Meta
 
 func (d *userTokensDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Lists access token metadata for a MotherDuck user or service account, sorted by token ID.",
+		MarkdownDescription: "Lists metadata for the unexpired access tokens of a MotherDuck user or service account, sorted by token ID. MotherDuck omits expired and revoked tokens from the listing.",
 		Attributes: map[string]schema.Attribute{
 			"username": schema.StringAttribute{
 				Required:            true,
@@ -108,6 +108,10 @@ func (d *userTokensDataSource) Schema(ctx context.Context, req datasource.Schema
 						"name": schema.StringAttribute{
 							Computed:            true,
 							MarkdownDescription: "Access token label.",
+						},
+						"description": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Free-form notes on the token's purpose, when set.",
 						},
 						"expire_at": schema.StringAttribute{
 							Computed:            true,
@@ -175,23 +179,25 @@ func tokenMetadataOnly(tokens []mdrest.Token) []mdrest.Token {
 
 func userTokensListValue(tokens []mdrest.Token, diags *diag.Diagnostics) types.List {
 	attrTypes := map[string]attr.Type{
-		"id":         types.StringType,
-		"name":       types.StringType,
-		"expire_at":  types.StringType,
-		"created_ts": types.StringType,
-		"read_only":  types.BoolType,
-		"token_type": types.StringType,
+		"id":          types.StringType,
+		"name":        types.StringType,
+		"description": types.StringType,
+		"expire_at":   types.StringType,
+		"created_ts":  types.StringType,
+		"read_only":   types.BoolType,
+		"token_type":  types.StringType,
 	}
 	objectType := types.ObjectType{AttrTypes: attrTypes}
 	values := make([]attr.Value, 0, len(tokens))
 	for _, token := range tokens {
 		objectValue, objectDiags := types.ObjectValue(attrTypes, map[string]attr.Value{
-			"id":         types.StringValue(token.ID),
-			"name":       optionalRESTString(token.Name),
-			"expire_at":  optionalRESTString(token.ExpireAt),
-			"created_ts": types.StringValue(token.CreatedTS),
-			"read_only":  types.BoolValue(token.ReadOnly),
-			"token_type": types.StringValue(token.TokenType),
+			"id":          types.StringValue(token.ID),
+			"name":        optionalRESTString(token.Name),
+			"description": optionalRESTString(token.Description),
+			"expire_at":   optionalRESTString(token.ExpireAt),
+			"created_ts":  types.StringValue(token.CreatedTS),
+			"read_only":   types.BoolValue(token.ReadOnly),
+			"token_type":  types.StringValue(token.TokenType),
 		})
 		diags.Append(objectDiags...)
 		values = append(values, objectValue)
@@ -234,10 +240,45 @@ func (d *diveEmbedSessionDataSource) Schema(ctx context.Context, req datasource.
 				MarkdownDescription: "Service account username. Must be non-blank and 1-255 characters.",
 				Validators:          diveembed.UsernameValidators(),
 			},
+			"session_name": schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "Optional name used to reuse the same read-scaling session across embed requests. Must be non-blank when set. Conflicts with `session_hint`.",
+				Validators:          diveembed.SessionNameValidators(),
+			},
 			"session_hint": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional hint used to reuse the same read-scaling session across embed requests. Must be non-blank when set.",
+				DeprecationMessage:  diveembed.SessionHintDeprecationMessage,
+				MarkdownDescription: "Deprecated alias for `session_name`. Must be non-blank when set.",
 				Validators:          diveembed.SessionHintValidators(),
+			},
+			"version": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Optional Dive version to embed. Must be a positive integer. Omit it to embed the current version.",
+				Validators:          diveembed.VersionValidators(),
+			},
+			"required_resources": schema.ListNestedAttribute{
+				Optional:            true,
+				MarkdownDescription: "Optional override for the databases and shares the Dive renders against. When set, it replaces the Dive's declared required resources for this session. An empty list declares no resources, so the Dive attaches the whole workspace of the session user. The JSON encoding of the list must be at most 8192 bytes.",
+				Validators:          diveembed.RequiredResourcesValidators(),
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"url": schema.StringAttribute{
+							Required:            true,
+							Sensitive:           true,
+							MarkdownDescription: "MotherDuck share URL the Dive renders against. This value is sensitive and can be sourced from `motherduck_share.url`. Must be non-blank.",
+							Validators:          diveembed.RequiredResourceURLValidators(),
+						},
+						"alias": schema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Optional alias exposed to the Dive content for this resource.",
+						},
+					},
+				},
+			},
+			"initial_state": schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "Optional JSON object that seeds the embedded Dive's UI state. Each key is read by the matching `useDiveState` call in the Dive. Build it with `jsonencode()`. The JSON encoding must be at most 64 KiB.",
+				Validators:          diveembed.InitialStateValidators(),
 			},
 			"session": schema.StringAttribute{
 				Computed:            true,
