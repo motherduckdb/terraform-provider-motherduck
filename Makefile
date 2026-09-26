@@ -4,9 +4,9 @@ TFPLUGINDOCS_VERSION := v0.25.0
 ACTIONLINT := $(TOOLS_DIR)/actionlint
 ACTIONLINT_VERSION := v1.7.12
 GOLANGCI_LINT := $(TOOLS_DIR)/golangci-lint
-GOLANGCI_LINT_VERSION := v2.13.2
+GOLANGCI_LINT_VERSION := v2.14.0
 GOVULNCHECK := $(TOOLS_DIR)/govulncheck
-GOVULNCHECK_VERSION := v1.6.0
+GOVULNCHECK_VERSION := v1.8.0
 
 .PHONY: \
   build clean-generated clean-tool-cache docs docs-check \
