@@ -101,7 +101,9 @@ done
 check_bi_access() {
   local token="$1" writer_token="$2" read_relation="$3" write_relation="$4" log_prefix="$5"
   local read_status=1 read_output write_status=0
-  for _ in 1 2 3 4 5 6; do
+  # A new share can take a few minutes to reach the reader account, so allow
+  # up to three minutes before failing.
+  for _ in $(seq 1 18); do
     set +e
     read_output="$(MOTHERDUCK_TOKEN="${token}" go run "${ROOT_DIR}/internal/dev/mdexec" -scalar \
       "SELECT count(*)::VARCHAR FROM ${read_relation}" 2>"${result_dir}/${log_prefix}-read.err")"
