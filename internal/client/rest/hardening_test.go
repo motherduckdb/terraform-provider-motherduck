@@ -24,7 +24,7 @@ func TestValidateBaseURL(t *testing.T) {
 		"missing scheme":   {value: "api.motherduck.com", wantErr: "absolute HTTP or HTTPS URL"},
 		"missing host":     {value: "https:///api", wantErr: "absolute HTTP or HTTPS URL"},
 		"bad scheme":       {value: "ftp://api.motherduck.com", wantErr: "http or https scheme"},
-		"credentials":      {value: "https://user:pass@api.motherduck.com", wantErr: "username or password credentials"},
+		"credentials":      {value: "https://user:pass@api.motherduck.com", wantErr: "username or password credentials"}, // #nosec G101 -- fake credentials that the validator must reject.
 		"query":            {value: "https://h/?x=1", wantErr: "query string or fragment"},
 		"empty query":      {value: "https://h/?", wantErr: "query string or fragment"},
 		"fragment":         {value: "https://h/#v1", wantErr: "query string or fragment"},

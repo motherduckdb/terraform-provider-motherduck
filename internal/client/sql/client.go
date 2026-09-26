@@ -534,12 +534,12 @@ func formatInterval(v duckdb.Interval) string {
 	}
 	if v.Micros != 0 {
 		sign := ""
-		micros := uint64(v.Micros)
+		micros := uint64(v.Micros) // #nosec G115 -- only used when v.Micros is positive.
 		if v.Micros < 0 {
 			sign = "-"
 			// Negating in int64 wraps for the minimum value, and the
 			// unsigned conversion of that result is still the exact magnitude.
-			micros = uint64(-v.Micros)
+			micros = uint64(-v.Micros) // #nosec G115 -- see the comment above.
 		}
 		const microsPerSecond = uint64(time.Second / time.Microsecond)
 		hours := micros / (3600 * microsPerSecond)

@@ -351,7 +351,7 @@ func TestConfigurePrefersConfigOverEnvironment(t *testing.T) {
 func TestConfigureValidatesEnvironmentBaseURL(t *testing.T) {
 	t.Setenv("MOTHERDUCK_TOKEN", "md_test_token")
 	t.Setenv("MOTHERDUCK_ADMIN_TOKEN", "")
-	for name, value := range map[string]string{
+	for name, value := range map[string]string{ // #nosec G101 -- fake credentials that the validator must reject.
 		"query":       "https://h/?x=1",
 		"http remote": "http://api.motherduck.com",
 		"credentials": "https://user:pass@api.motherduck.com",

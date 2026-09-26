@@ -351,7 +351,7 @@ func jitter(delay time.Duration) time.Duration {
 		return delay
 	}
 	half := delay / 2
-	return half + rand.N(delay-half+1)
+	return half + rand.N(delay-half+1) // #nosec G404 -- retry jitter needs no cryptographic randomness.
 }
 
 func retryAfterDelay(value string) time.Duration {
