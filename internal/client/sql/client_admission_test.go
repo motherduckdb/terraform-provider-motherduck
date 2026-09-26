@@ -3,6 +3,7 @@ package sql
 import (
 	"context"
 	stdsql "database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -106,6 +107,53 @@ func TestWithDatabaseUseDiscardsConnectionWhenRestoreFails(t *testing.T) {
 	}
 }
 
+func TestWithDatabaseUseDiscardsConnectionAfterPanic(t *testing.T) {
+	client := newEmbeddedClient(t)
+	if err := client.Exec(t.Context(), "ATTACH ':memory:' AS other"); err != nil {
+		t.Fatal(err)
+	}
+	func() {
+		defer func() { _ = recover() }()
+		_ = client.WithDatabaseUse(t.Context(), "other", func(func(string, ...any) error) error {
+			panic("callback failed")
+		})
+	}()
+	current, err := client.ScalarString(t.Context(), "SELECT current_database()")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current == "other" {
+		t.Fatal("pooled connection kept the temporary USE target after a panic")
+	}
+}
+
+func TestReplacementConnectionSelectsBootDefaultDatabase(t *testing.T) {
+	duckdbConnector, err := duckdb.NewConnector("", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initializer := &oneTimeInitializer{queries: []string{"ATTACH ':memory:' AS warehouse", "USE warehouse"}}
+	db := stdsql.OpenDB(&contextConnector{Connector: duckdbConnector, initialize: initializer.run})
+	t.Cleanup(func() { _ = db.Close() })
+	db.SetMaxOpenConns(1)
+	client := &Client{db: db}
+	for attempt := 0; attempt < 2; attempt++ {
+		current, err := client.ScalarString(t.Context(), "SELECT current_database()")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if current != "warehouse" {
+			t.Fatalf("attempt %d current_database() = %q, want warehouse", attempt, current)
+		}
+		conn, err := db.Conn(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+		_ = conn.Close()
+	}
+}
+
 func TestBootQueriesUseTrimmedToken(t *testing.T) {
 	queries := bootQueries("token-value", Config{Database: "analytics"})
 	if got, want := queries[2], "SET motherduck_token = 'token-value'"; got != want {
@@ -171,11 +219,14 @@ func TestQueryRowsJSONNormalizesNestedValues(t *testing.T) {
 	}
 }
 
-func TestQueryRowsJSONRejectsDuplicateFoldedColumns(t *testing.T) {
+func TestQueryRowsJSONKeepsLastDuplicateFoldedColumn(t *testing.T) {
 	client := newEmbeddedClient(t)
-	_, err := client.QueryRowsJSON(t.Context(), `SELECT 1 AS "X", 2 AS "x"`)
-	if err == nil || !strings.Contains(err.Error(), `duplicate column name "x"`) {
-		t.Fatalf("error = %v, want duplicate column error", err)
+	got, err := client.QueryRowsJSON(t.Context(), `SELECT 1 AS "X", 2 AS "x"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != `[{"x":2}]` {
+		t.Fatalf("rows = %s, want the later duplicate column to win", got)
 	}
 }
 

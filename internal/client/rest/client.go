@@ -323,14 +323,12 @@ func retryableMethod(method string) bool {
 }
 
 // retryableStatus reports whether a response status should be retried for a
-// method. A 429 means the server rejected the request before processing it,
-// so every method is retried. Gateway and availability errors can follow a
-// processed request, so only idempotent methods retry them.
+// method. POST is never retried because MotherDuck does not document that a
+// 429 or gateway error means the create was not processed, and a replayed
+// create could mint a duplicate token or service account.
 func retryableStatus(method string, statusCode int) bool {
 	switch statusCode {
-	case http.StatusTooManyRequests:
-		return true
-	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 		return retryableMethod(method)
 	default:
 		return false

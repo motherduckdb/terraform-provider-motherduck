@@ -6,7 +6,15 @@ This index lists the headline change for every release.
 
 ## Unreleased
 
-- See open pull requests.
+- Changing a share's `include_pattern` updates it in place. Omitted share options no longer force replacement.
+- Respelling an imported table column type with an alias, such as `INT` for `INTEGER`, no longer replaces the table.
+- Secrets with uppercase names are found after creation, and destroying a missing secret succeeds.
+- Creating a view fails instead of overwriting an existing view with the same name.
+- Guide creation is no longer retried, which prevented duplicate Guides after timeouts.
+- Catalog row JSON renders DECIMAL values as numbers, INTERVAL values as DuckDB text, and nested UUID values as strings.
+- Data source listings return rows in a documented, deterministic order. `files`, `buckets_for_secret`, and `flight_logs` accept `limit` and `offset`.
+- Provider configuration rejects unknown `api_base_url`, `database`, `attach_mode`, and `custom_user_agent` values, and accepts plain HTTP `api_base_url` values only for loopback hosts.
+- Release packages run on Linux with glibc 2.34 or newer and on macOS 13 or newer.
 
 ## v0.2.13
 

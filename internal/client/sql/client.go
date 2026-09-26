@@ -75,24 +75,38 @@ type contextConnector struct {
 // MotherDuck token setting is database initialization state and cannot be set
 // again on a pooled reconnect after an md: database has been attached. A
 // failed initialization remains retryable with the next connection context.
+//
+// Session state such as the current database is per connection. The first
+// connection records its default database after boot, and every later pooled
+// connection selects it again so a replacement connection behaves the same.
 type oneTimeInitializer struct {
-	mu          sync.Mutex
-	initialized bool
-	next        int
-	queries     []string
-	token       string
+	mu              sync.Mutex
+	initialized     bool
+	next            int
+	queries         []string
+	token           string
+	defaultDatabase string
 }
 
 func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContext) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	if i.initialized {
-		return nil
-	}
 	initCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
+	if i.initialized {
+		if i.defaultDatabase == "" {
+			return nil
+		}
+		if _, err := execer.ExecContext(initCtx, "USE "+sqlbuild.QuoteIdentifier(i.defaultDatabase), nil); err != nil {
+			return fmt.Errorf("select default database on new connection: %s", redactToken(err.Error(), i.token))
+		}
+		return nil
+	}
 	for i.next < len(i.queries) {
 		query := i.queries[i.next]
+		if err := checkQuery(query); err != nil {
+			return err
+		}
 		tflog.Debug(initCtx, "running MotherDuck SQL boot query", map[string]any{"query": redactToken(query, i.token)})
 		if _, err := execer.ExecContext(initCtx, query, nil); err != nil {
 			// A canceled ATTACH can complete remotely before reporting an
@@ -109,8 +123,35 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 		}
 		i.next++
 	}
+	if queryer, ok := execer.(driver.QueryerContext); ok {
+		database, err := currentDatabase(initCtx, queryer)
+		if err != nil {
+			return fmt.Errorf("read default database after boot: %s", redactToken(err.Error(), i.token))
+		}
+		i.defaultDatabase = database
+	}
 	i.initialized = true
 	return nil
+}
+
+func currentDatabase(ctx context.Context, queryer driver.QueryerContext) (string, error) {
+	rows, err := queryer.QueryContext(ctx, "SELECT current_database()", nil)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = rows.Close() }()
+	values := make([]driver.Value, len(rows.Columns()))
+	if err := rows.Next(values); err != nil {
+		return "", err
+	}
+	if len(values) != 1 {
+		return "", fmt.Errorf("expected one column, got %d", len(values))
+	}
+	database, ok := values[0].(string)
+	if !ok {
+		return "", fmt.Errorf("unexpected current_database() value %T", values[0])
+	}
+	return database, nil
 }
 
 // Connect supplies each pool connection's current operation context to the
@@ -294,8 +335,12 @@ func (c *Client) WithDatabaseUse(ctx context.Context, database string, fn func(e
 		return fmt.Errorf("read current database: %w", err)
 	}
 	if err := execOn(ctx, conn, "USE "+sqlbuild.QuoteIdentifier(database)); err != nil {
+		discard = true
 		return err
 	}
+	// Discard the connection unless the previous database is restored, which
+	// also covers a panic inside fn.
+	discard = true
 	runErr := fn(func(query string, args ...any) error {
 		return execOn(ctx, conn, query, args...)
 	})
@@ -304,12 +349,15 @@ func (c *Client) WithDatabaseUse(ctx context.Context, database string, fn func(e
 	defer cancel()
 	restoreErr := execOn(restoreCtx, conn, "USE "+sqlbuild.QuoteIdentifier(previous))
 	if restoreErr != nil {
-		discard = true
 		return errors.Join(runErr, fmt.Errorf("restore previous database %q: %w", previous, restoreErr))
 	}
+	discard = false
 	return runErr
 }
 
+// QueryRow holds the client's single admission slot until Scan is called on
+// the returned row, so callers must always call Scan. Inside a WithDatabaseUse
+// callback, use the exec function it provides instead of calling the client.
 func (c *Client) QueryRow(ctx context.Context, query string, args ...any) RowScanner {
 	if !c.Available() {
 		return &Row{err: ErrMissingToken}
@@ -359,13 +407,10 @@ func (c *Client) QueryRowsJSON(ctx context.Context, query string, args ...any) (
 	values := make([]any, len(cols))
 	targets := make([]any, len(cols))
 	valueTypes := make([]*columnType, len(cols))
-	seen := make(map[string]struct{}, len(cols))
 	for i := range cols {
+		// Column names are case folded. When two columns fold to the same
+		// name, the later column wins, matching earlier provider releases.
 		cols[i] = strings.ToLower(cols[i])
-		if _, duplicate := seen[cols[i]]; duplicate {
-			return "", fmt.Errorf("query returned duplicate column name %q after case folding", cols[i])
-		}
-		seen[cols[i]] = struct{}{}
 		targets[i] = &values[i]
 		valueTypes[i] = parseColumnType(columnTypes[i].DatabaseTypeName())
 	}

@@ -103,16 +103,12 @@ func TestWithTimeoutDoesNotDependOnOptionOrderOrMutateCaller(t *testing.T) {
 	}
 }
 
-func TestPOSTRetriesOnlyTooManyRequests(t *testing.T) {
+func TestPOSTIsNotRetriedOnTooManyRequests(t *testing.T) {
 	var attempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if attempts.Add(1) == 1 {
-			w.Header().Set("Retry-After", "0")
-			w.WriteHeader(http.StatusTooManyRequests)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"username":"svc"}`))
+		attempts.Add(1)
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusTooManyRequests)
 	}))
 	defer server.Close()
 	client, err := New(server.URL, "admin-token")
@@ -121,29 +117,26 @@ func TestPOSTRetriesOnlyTooManyRequests(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	account, err := client.CreateServiceAccount(ctx, "svc")
-	if err != nil {
-		t.Fatal(err)
+	if _, err := client.CreateServiceAccount(ctx, "svc"); err == nil {
+		t.Fatal("expected the 429 to be returned")
 	}
-	if account.Username != "svc" {
-		t.Fatalf("username = %q", account.Username)
-	}
-	if got := attempts.Load(); got != 2 {
-		t.Fatalf("attempts = %d, want 2", got)
+	if got := attempts.Load(); got != 1 {
+		t.Fatalf("attempts = %d, want a single non-replayed create", got)
 	}
 }
 
 func TestRetryableStatusByMethod(t *testing.T) {
-	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodPost} {
-		if !retryableStatus(method, http.StatusTooManyRequests) {
-			t.Errorf("%s 429 should retry", method)
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+		for _, status := range []int{http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+			if !retryableStatus(method, status) {
+				t.Errorf("%s %d should retry", method, status)
+			}
 		}
 	}
-	if retryableStatus(http.MethodPost, http.StatusServiceUnavailable) {
-		t.Error("POST 503 must not retry")
-	}
-	if !retryableStatus(http.MethodGet, http.StatusServiceUnavailable) {
-		t.Error("GET 503 should retry")
+	for _, status := range []int{http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+		if retryableStatus(http.MethodPost, status) {
+			t.Errorf("POST %d must not retry", status)
+		}
 	}
 }
 

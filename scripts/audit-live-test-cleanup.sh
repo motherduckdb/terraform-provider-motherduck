@@ -109,6 +109,10 @@ sweep_named_snapshots() {
   rows="$(list_lines "SELECT coalesce(string_agg(database_name || '\t' || snapshot_id::VARCHAR || '\t' || snapshot_name, '\n' ORDER BY database_name, snapshot_name), '') FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE snapshot_name LIKE 'tf\\_%' ESCAPE '\\'")"
   while IFS=$'\t' read -r database_name snapshot_id snapshot_name; do
     [[ -z "${database_name}" || -z "${snapshot_id}" || -z "${snapshot_name}" ]] && continue
+    if [[ "${database_name}" != tf_* ]]; then
+      echo "Skipping snapshot ${snapshot_name} in non-test database ${database_name}" >&2
+      continue
+    fi
     # ALTER SNAPSHOT addresses the snapshot by id, so pass the prefixed
     # snapshot name as the guard's target instead of a comment.
     go run "${ROOT_DIR}/internal/dev/mdexec" \
