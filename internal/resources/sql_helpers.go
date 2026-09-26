@@ -25,6 +25,7 @@ var (
 	_ resource.Resource                   = &tableResource{}
 	_ resource.ResourceWithConfigure      = &tableResource{}
 	_ resource.ResourceWithImportState    = &tableResource{}
+	_ resource.ResourceWithModifyPlan     = &tableResource{}
 	_ resource.ResourceWithValidateConfig = &tableResource{}
 	_ resource.Resource                   = &viewResource{}
 	_ resource.ResourceWithConfigure      = &viewResource{}
@@ -46,6 +47,16 @@ var (
 	_ resource.ResourceWithConfigure      = &snapshotResource{}
 	_ resource.ResourceWithImportState    = &snapshotResource{}
 )
+
+// stateGetter and stateSetter match tfsdk.Plan and tfsdk.State so helpers
+// shared by Create and Update can read a plan and write a state.
+type stateGetter interface {
+	Get(context.Context, any) diag.Diagnostics
+}
+
+type stateSetter interface {
+	Set(context.Context, any) diag.Diagnostics
+}
 
 func relationExists(ctx context.Context, r interface {
 	sql(context.Context, *diag.Diagnostics) providerctx.SQLClient

@@ -43,7 +43,7 @@ func (c *failedCreationReadback) ScalarString(context.Context, string, ...any) (
 }
 
 func TestCreateReadbackFailureKeepsCleanupState(t *testing.T) {
-	for _, kind := range []string{"role", "grant", "database", "view"} {
+	for _, kind := range []string{"role", "grant", "database", "view", "share", "secret"} {
 		for _, mode := range []string{"empty", "error"} {
 			t.Run(kind+"/"+mode, func(t *testing.T) {
 				ctx := t.Context()
@@ -87,6 +87,22 @@ func TestCreateReadbackFailureKeepsCleanupState(t *testing.T) {
 						Name: types.StringValue("tf_readback"), Query: types.StringValue("SELECT 1"), ID: types.StringUnknown(),
 					}
 					cleanup = `DROP VIEW IF EXISTS "tf_db"."main"."tf_readback"`
+				case "share":
+					r = &shareResource{baseResource: base}
+					model = &shareModel{
+						Name: types.StringValue("tf_readback"), SourceDatabase: types.StringValue("tf_db"), ID: types.StringUnknown(),
+						Access: types.StringUnknown(), Visibility: types.StringUnknown(), UpdateMode: types.StringUnknown(),
+						IncludePattern: types.ListNull(types.StringType), URL: types.StringUnknown(), CreatedTS: types.StringUnknown(),
+					}
+					cleanup = `DROP SHARE IF EXISTS "tf_readback"`
+				case "secret":
+					r = &secretResource{baseResource: base}
+					model = &secretModel{
+						Name: types.StringValue("tf_readback"), Type: types.StringValue("s3"), ID: types.StringUnknown(),
+						SecretProvider: types.StringUnknown(), Params: types.MapNull(types.StringType), Storage: types.StringUnknown(),
+						Scope: types.StringUnknown(), SecretSQL: types.StringNull(),
+					}
+					cleanup = `DROP SECRET IF EXISTS "tf_readback" FROM motherduck`
 				}
 				var schemaResp resource.SchemaResponse
 				r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)

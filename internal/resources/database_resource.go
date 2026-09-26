@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	stdsql "database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -86,10 +87,12 @@ func (r *databaseResource) Schema(ctx context.Context, req resource.SchemaReques
 			},
 			"uuid": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Database UUID reported by MotherDuck.",
 			},
 			"created_ts": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Database creation timestamp reported by MotherDuck.",
 			},
 			"timeouts": resourceTimeoutsAttribute(ctx, resourceTimeouts.Opts{
@@ -291,7 +294,7 @@ func (r *databaseResource) readDatabase(ctx context.Context, model *databaseMode
 	err := retry.SQL(ctx, func() error {
 		return client.QueryRow(ctx, `SELECT uuid::VARCHAR, created_ts::VARCHAR, transient, historical_snapshot_retention::VARCHAR, type FROM MD_INFORMATION_SCHEMA.DATABASES WHERE name = ?`, model.Name.ValueString()).Scan(&uuid, &createdTS, &transient, &retention, &dbType)
 	})
-	if err == stdsql.ErrNoRows {
+	if errors.Is(err, stdsql.ErrNoRows) {
 		return false
 	}
 	if err != nil {

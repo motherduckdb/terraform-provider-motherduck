@@ -40,6 +40,7 @@ func (r *tableResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Table resource ID in `<database>.<schema>.<table>` form.",
 			},
 			"database": schema.StringAttribute{
@@ -63,8 +64,7 @@ func (r *tableResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"columns": schema.MapAttribute{
 				Required:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Map of column name to DuckDB SQL type. Type aliases are compared semantically during refresh to avoid replacement churn.",
-				PlanModifiers:       mapRequiresReplace(),
+				MarkdownDescription: "Map of column name to DuckDB SQL type. Column changes replace the table. Type aliases such as `INT` and `INTEGER` are compared semantically, so a change that only respells a type updates state in place without replacing the table.",
 			},
 		},
 	}
@@ -142,8 +142,97 @@ func (r *tableResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// ModifyPlan replaces the table when its columns change, unless the planned
+// columns only respell the current types with DuckDB aliases. The attribute
+// cannot use a static RequiresReplace modifier because type equivalence needs
+// the SQL client. For example, importing a table stores canonical `INTEGER`
+// types, and a configuration that says `INT` must not drop the table.
+func (r *tableResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	var plan, state tableModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() || plan.Columns.Equal(state.Columns) {
+		return
+	}
+	if plan.Columns.IsUnknown() || state.Columns.IsNull() || state.Columns.IsUnknown() {
+		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("columns"))
+		return
+	}
+	var clientDiags diag.Diagnostics
+	client := r.sql(ctx, &clientDiags)
+	if client == nil {
+		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("columns"))
+		return
+	}
+	if !tableColumnMapsEquivalent(ctx, client, plan.Columns, state.Columns, &resp.Diagnostics) && !resp.Diagnostics.HasError() {
+		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("columns"))
+	}
+}
+
+// Update only runs when ModifyPlan found the planned columns equivalent to the
+// current ones, so it records the configured spelling without running DDL.
 func (r *tableResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Table updates are not supported", "Change columns by replacing the table resource.")
+	client := r.sql(ctx, &resp.Diagnostics)
+	if client == nil {
+		return
+	}
+	var plan, state tableModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !tableColumnMapsEquivalent(ctx, client, plan.Columns, state.Columns, &resp.Diagnostics) {
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Table updates are not supported", "Change columns by replacing the table resource.")
+		}
+		return
+	}
+	plan.ID = state.ID
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// tableColumnMapsEquivalent reports whether two column maps have the same
+// column names and canonical DuckDB types.
+func tableColumnMapsEquivalent(ctx context.Context, client scalarStringer, left, right types.Map, diags *diag.Diagnostics) bool {
+	leftColumns := map[string]string{}
+	rightColumns := map[string]string{}
+	diags.Append(left.ElementsAs(ctx, &leftColumns, false)...)
+	diags.Append(right.ElementsAs(ctx, &rightColumns, false)...)
+	if diags.HasError() || len(leftColumns) != len(rightColumns) {
+		return false
+	}
+	names := make([]string, 0, len(leftColumns))
+	for name := range leftColumns {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		rightType, ok := rightColumns[name]
+		if !ok {
+			return false
+		}
+		if strings.EqualFold(strings.TrimSpace(leftColumns[name]), strings.TrimSpace(rightType)) {
+			continue
+		}
+		leftCanonical, err := canonicalColumnType(ctx, client, leftColumns[name])
+		if err != nil {
+			diags.AddAttributeError(path.Root("columns").AtMapKey(name), "Unable to normalize MotherDuck table column type", err.Error())
+			return false
+		}
+		rightCanonical, err := canonicalColumnType(ctx, client, rightType)
+		if err != nil {
+			diags.AddAttributeError(path.Root("columns").AtMapKey(name), "Unable to normalize MotherDuck table column type", err.Error())
+			return false
+		}
+		if !strings.EqualFold(leftCanonical, rightCanonical) {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *tableResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

@@ -62,7 +62,7 @@ func optionalConfigOwnedStringFromLive(current types.String, live stdsql.NullStr
 
 func optionalStringListFromJSON(ctx context.Context, current types.List, raw stdsql.NullString, field string, diags *diag.Diagnostics) types.List {
 	values := []string{}
-	if !decodeNullableJSON(raw, &values, "Unable to parse MotherDuck Flight "+field, diags) {
+	if !decodeNullableJSON(raw, &values, "Unable to parse MotherDuck "+field, diags) {
 		return current
 	}
 	if len(values) == 0 && current.IsNull() {
@@ -78,7 +78,7 @@ func optionalStringListFromJSON(ctx context.Context, current types.List, raw std
 
 func optionalStringMapFromJSON(ctx context.Context, current types.Map, raw stdsql.NullString, field string, diags *diag.Diagnostics) types.Map {
 	values := map[string]string{}
-	if !decodeNullableJSON(raw, &values, "Unable to parse MotherDuck Flight "+field, diags) {
+	if !decodeNullableJSON(raw, &values, "Unable to parse MotherDuck "+field, diags) {
 		return current
 	}
 	if len(values) == 0 && current.IsNull() {

@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	stdsql "database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -62,21 +63,21 @@ func (r *shareResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Share access mode: `organization`, `restricted`, or `unrestricted`.",
-				PlanModifiers:       stringRequiresReplace(),
+				PlanModifiers:       stringOptionalComputedRequiresReplaceIfConfigured(),
 				Validators:          shareAccessValidators(),
 			},
 			"visibility": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Share visibility mode: `discoverable` or `hidden`.",
-				PlanModifiers:       stringRequiresReplace(),
+				PlanModifiers:       stringOptionalComputedRequiresReplaceIfConfigured(),
 				Validators:          shareVisibilityValidators(),
 			},
 			"update_mode": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Share update mode: `manual` or `automatic`.",
-				PlanModifiers:       stringRequiresReplace(),
+				PlanModifiers:       stringOptionalComputedRequiresReplaceIfConfigured(),
 				Validators:          shareUpdateModeValidators(),
 			},
 			"include_pattern": schema.ListAttribute{
@@ -87,10 +88,12 @@ func (r *shareResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"url": schema.StringAttribute{
 				Computed:            true,
 				Sensitive:           true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Share URL reported by MotherDuck. This is sensitive because unrestricted share URLs can grant access.",
 			},
 			"created_ts": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Share creation timestamp reported by MotherDuck.",
 			},
 		},
@@ -115,6 +118,10 @@ func validateShareIncludePattern(includePattern types.List, diags *diag.Diagnost
 		}
 		if pattern.IsNull() {
 			diags.AddAttributeError(path.Root("include_pattern"), "Invalid MotherDuck share include pattern", "Include-pattern entries must not be null.")
+			return
+		}
+		if hasUnquotedComma(pattern.ValueString()) {
+			diags.AddAttributeError(path.Root("include_pattern"), "Invalid MotherDuck share include pattern", "Include-pattern entries must not contain commas outside double-quoted identifiers because MotherDuck receives the entries as one comma-separated list. Use separate list entries instead.")
 			return
 		}
 		totalLength += len(pattern.ValueString())
@@ -247,7 +254,7 @@ func (r *shareResource) readShare(ctx context.Context, model *shareModel, diags 
 		return false
 	}
 	share, err := sqlcatalog.ReadOwnedShare(ctx, client, model.Name.ValueString())
-	if err == stdsql.ErrNoRows {
+	if errors.Is(err, stdsql.ErrNoRows) {
 		return false
 	}
 	if err != nil {
@@ -273,15 +280,43 @@ func applyOwnedShare(ctx context.Context, model *shareModel, share sqlcatalog.Ow
 	model.CreatedTS = nullString(share.CreatedTS)
 }
 
+// prepareShareCreateState replaces unknown computed values with nulls so a
+// failed catalog readback after CREATE SHARE still saves a fully known state.
+// Terraform then taints the share instead of reporting an invalid result.
 func prepareShareCreateState(model *shareModel) {
 	model.ID = types.StringValue(model.Name.ValueString())
+	model.Access = knownString(model.Access)
+	model.Visibility = knownString(model.Visibility)
+	model.UpdateMode = knownString(model.UpdateMode)
 	model.URL = knownString(model.URL)
 	model.CreatedTS = knownString(model.CreatedTS)
+}
+
+// hasUnquotedComma reports whether value contains a comma outside a
+// double-quoted identifier. Quoted identifiers may contain commas, and a
+// doubled quote inside them is an escaped quote.
+func hasUnquotedComma(value string) bool {
+	quoted := false
+	for _, ch := range value {
+		switch {
+		case ch == '"':
+			quoted = !quoted
+		case ch == ',' && !quoted:
+			return true
+		}
+	}
+	return false
 }
 
 func shareIncludePattern(ctx context.Context, value types.List, diags *diag.Diagnostics) (string, bool) {
 	var patterns []string
 	diags.Append(value.ElementsAs(ctx, &patterns, false)...)
+	if diags.HasError() {
+		return "", false
+	}
+	// Re-check on the resolved plan because values unknown at plan time skipped
+	// ValidateConfig.
+	validateShareIncludePattern(value, diags)
 	if diags.HasError() {
 		return "", false
 	}

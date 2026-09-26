@@ -15,13 +15,23 @@ import (
 
 func TestPrepareShareCreateState(t *testing.T) {
 	model := &shareModel{
-		Name:      types.StringValue("share_name"),
-		ID:        types.StringUnknown(),
-		URL:       types.StringUnknown(),
-		CreatedTS: types.StringUnknown(),
+		Name:       types.StringValue("share_name"),
+		ID:         types.StringUnknown(),
+		Access:     types.StringUnknown(),
+		Visibility: types.StringUnknown(),
+		UpdateMode: types.StringValue("manual"),
+		URL:        types.StringUnknown(),
+		CreatedTS:  types.StringUnknown(),
 	}
 
 	prepareShareCreateState(model)
+
+	if !model.Access.IsNull() || !model.Visibility.IsNull() {
+		t.Fatalf("unknown share options should be known null before catalog read, got %#v %#v", model.Access, model.Visibility)
+	}
+	if got := model.UpdateMode.ValueString(); got != "manual" {
+		t.Fatalf("configured update_mode = %q, want manual", got)
+	}
 
 	if got, want := model.ID.ValueString(), "share_name"; got != want {
 		t.Fatalf("share id = %q, want %q", got, want)

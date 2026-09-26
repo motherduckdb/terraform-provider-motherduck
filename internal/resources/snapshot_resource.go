@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	stdsql "database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
 )
@@ -39,6 +41,7 @@ func (r *snapshotResource) Schema(ctx context.Context, req resource.SchemaReques
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "MotherDuck snapshot ID.",
 			},
 			"database": schema.StringAttribute{
@@ -54,6 +57,7 @@ func (r *snapshotResource) Schema(ctx context.Context, req resource.SchemaReques
 			},
 			"created_ts": schema.StringAttribute{
 				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
 				MarkdownDescription: "Snapshot creation timestamp reported by MotherDuck.",
 			},
 			"timeouts": resourceTimeoutsAttribute(ctx, resourceTimeouts.Opts{
@@ -202,11 +206,55 @@ func (r *snapshotResource) ImportState(ctx context.Context, req resource.ImportS
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), parts[1])...)
 }
 
+// readSnapshot refreshes the snapshot by its ID when state has one, so an
+// out-of-band rename is reported as an in-place rename back to the configured
+// name. It falls back to the name for creation, import, and snapshots whose ID
+// is no longer listed. A snapshot whose name was cleared is treated as removed
+// because deleting the resource clears the name.
 func (r *snapshotResource) readSnapshot(ctx context.Context, model *snapshotModel, diags *diag.Diagnostics) bool {
 	client := r.sql(ctx, diags)
 	if client == nil {
 		return false
 	}
+	if !model.ID.IsNull() && !model.ID.IsUnknown() && model.ID.ValueString() != "" {
+		found, ok := r.readSnapshotByID(ctx, client, model, diags)
+		if found || !ok {
+			return found
+		}
+	}
+	return r.readSnapshotByName(ctx, client, model, diags)
+}
+
+// readSnapshotByID returns found and ok. ok is false when a diagnostic was
+// added or the named snapshot was cleared, which callers must not override
+// with a name lookup.
+func (r *snapshotResource) readSnapshotByID(ctx context.Context, client providerctx.SQLClient, model *snapshotModel, diags *diag.Diagnostics) (bool, bool) {
+	var name, created stdsql.NullString
+	err := retry.SQL(ctx, func() error {
+		if err := client.AttachDatabase(ctx, model.Database.ValueString()); err != nil {
+			return err
+		}
+		return client.QueryRow(ctx, `SELECT snapshot_name, created_ts::VARCHAR FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE database_name = ? AND snapshot_id::VARCHAR = ?`, model.Database.ValueString(), model.ID.ValueString()).Scan(&name, &created)
+	})
+	if err != nil && isNotFoundFor(err, model.Database.ValueString(), model.ID.ValueString()) {
+		return false, true
+	}
+	if errors.Is(err, stdsql.ErrNoRows) {
+		return false, true
+	}
+	if err != nil {
+		diags.AddError("Unable to read MotherDuck snapshot", err.Error())
+		return false, false
+	}
+	if !name.Valid || name.String == "" {
+		return false, false
+	}
+	model.Name = types.StringValue(name.String)
+	model.CreatedTS = nullString(created)
+	return true, true
+}
+
+func (r *snapshotResource) readSnapshotByName(ctx context.Context, client providerctx.SQLClient, model *snapshotModel, diags *diag.Diagnostics) bool {
 	var id, created stdsql.NullString
 	var matches int
 	err := retry.SQL(ctx, func() error {
@@ -218,7 +266,7 @@ func (r *snapshotResource) readSnapshot(ctx context.Context, model *snapshotMode
 	if err != nil && isNotFoundFor(err, model.Database.ValueString(), model.Name.ValueString()) {
 		return false
 	}
-	if err == stdsql.ErrNoRows {
+	if errors.Is(err, stdsql.ErrNoRows) {
 		return false
 	}
 	if err != nil {
