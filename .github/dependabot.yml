@@ -46,6 +46,13 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 2
+    ignore:
+      # requirements.txt pins every transitive dependency, and Dependabot
+      # bumps each pin on its own. Pulumi still requires protobuf<7, so a
+      # protobuf 7 pin makes the file unsatisfiable. Regenerate the pins with
+      # uv as the file header describes when Pulumi allows protobuf 7.
+      - dependency-name: "protobuf"
+        update-types: ["version-update:semver-major"]
     groups:
       pulumi-python:
         patterns:

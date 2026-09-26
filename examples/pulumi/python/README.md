@@ -3,15 +3,15 @@
 This is a small Pulumi program using Pulumi's Any Terraform Provider bridge with
 the MotherDuck Terraform provider. It creates one database, schema, and table.
 
-The recipe was verified with Pulumi `v3.261.0` and the MotherDuck provider
+The recipe was verified with Pulumi `v3.265.0` and the MotherDuck provider
 `v0.2.10` on macOS ARM64. The bridge package is pinned to `v1.4.0` in
-`Pulumi.yaml`, and the Pulumi SDK is pinned to `3.261.0` in `requirements.txt`.
+`Pulumi.yaml`, and the Pulumi SDK is pinned to `3.265.0` in `requirements.txt`.
 The sample database name is required configuration so each stack can use a
 unique name.
 
 ## Setup
 
-Install Pulumi `v3.261.0`, then place the provider binary at
+Install Pulumi `v3.265.0`, then place the provider binary at
 `bin/terraform-provider-motherduck`. The binary name and path are significant:
 Pulumi requires a local provider path ending in `terraform-provider-<name>`.
 
