@@ -15,6 +15,7 @@ This index lists the headline change for every release.
 - Catalog row JSON renders DECIMAL values as numbers, INTERVAL values as DuckDB text, and nested UUID values as strings.
 - Data source listings return rows in a documented, deterministic order. `files`, `buckets_for_secret`, and `flight_logs` accept `limit` and `offset`.
 - Provider configuration rejects unknown `api_base_url`, `database`, `attach_mode`, and `custom_user_agent` values, and accepts plain HTTP `api_base_url` values only for loopback hosts.
+- Duckling config cooldowns record the live value, so import and refresh no longer plan an update. An unset cooldown keeps its current value while the instance size stays the same, and removing a configured cooldown no longer resets it.
 - Release packages run on Linux with glibc 2.34 or newer and on macOS 13 or newer.
 
 ## v0.2.13
