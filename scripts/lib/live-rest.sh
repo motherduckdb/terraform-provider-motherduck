@@ -18,6 +18,13 @@ rest_preflight_username() {
   printf '%s%s_%s' "${prefix}" "${suffix}" "${pid}"
 }
 
+# rest_admin_curl runs curl with the admin bearer token supplied on stdin, so
+# the token never appears in the process arguments that other local users and
+# process listings can read.
+rest_admin_curl() {
+  curl -sS -H @- "$@" <<<"Authorization: Bearer ${MOTHERDUCK_ADMIN_TOKEN}"
+}
+
 preflight_rest_admin() {
   if ! command -v curl >/dev/null 2>&1; then
     echo "curl is required for REST admin preflight" >&2
@@ -34,18 +41,16 @@ preflight_rest_admin() {
   mkdir -p "${result_dir}"
 
   local status
-  status="$(curl -sS -o "${body_file}" -w "%{http_code}" \
+  status="$(rest_admin_curl -o "${body_file}" -w "%{http_code}" \
     -X POST "${base_url}/v1/users" \
-    -H "Authorization: Bearer ${MOTHERDUCK_ADMIN_TOKEN}" \
     -H "Content-Type: application/json" \
     -H "Accept: application/json" \
     --data "{\"username\":\"${username}\"}")"
 
   if [[ "${status}" =~ ^2[0-9][0-9]$ ]]; then
     local delete_status
-    delete_status="$(curl -sS -o /dev/null -w "%{http_code}" \
+    delete_status="$(rest_admin_curl -o /dev/null -w "%{http_code}" \
       -X DELETE "${base_url}/v1/users/${username}" \
-      -H "Authorization: Bearer ${MOTHERDUCK_ADMIN_TOKEN}" \
       -H "Accept: application/json")"
     if [[ ! "${delete_status}" =~ ^2[0-9][0-9]$ && "${delete_status}" != "404" ]]; then
       echo "REST admin preflight created ${username}, but cleanup returned HTTP ${delete_status}" >&2
