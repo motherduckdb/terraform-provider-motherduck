@@ -40,13 +40,27 @@ func TestValidateAllowedPrefix(t *testing.T) {
 		"literal match rejected": {
 			execQuery: `CREATE SECRET "prod" IN MOTHERDUCK (TYPE S3, KEY_ID 'tf_key')`, prefix: "tf_", wantErr: `target "prod"`,
 		},
-		"prefix inside name rejected":     {execQuery: `DROP DATABASE "my_tf_db"`, prefix: "tf_", wantErr: `target "my_tf_db"`},
-		"second statement checked":        {execQuery: `DROP DATABASE "tf_a"; DROP DATABASE "prod"`, prefix: "tf_", wantErr: `target "prod"`},
-		"semicolon inside quotes is safe": {execQuery: `DROP DATABASE "tf_a;b"`, prefix: "tf_"},
-		"unsupported mutation rejected":   {execQuery: `INSERT INTO "tf_db".main.t VALUES (1)`, prefix: "tf_", wantErr: "unsupported INSERT"},
-		"unsupported drop kind rejected":  {execQuery: `DROP FUNCTION tf_fn`, prefix: "tf_", wantErr: "unsupported DROP shape"},
-		"missing name rejected":           {execQuery: `DROP DATABASE IF EXISTS`, prefix: "tf_", wantErr: "missing object name"},
-		"literal as name rejected":        {execQuery: `DROP DATABASE 'tf_db'`, prefix: "tf_", wantErr: "string literal"},
+		"escape string hides drop": {
+			execQuery: `SELECT E'\''; DROP DATABASE prod; --'`, prefix: "tf_", wantErr: "escape string literals",
+		},
+		"lower case escape string rejected": {
+			execQuery: `SELECT e'x'`, prefix: "tf_", wantErr: "escape string literals",
+		},
+		"dollar quote hides drop": {
+			execQuery: `SELECT $$'$$; DROP DATABASE prod; SELECT '1'`, prefix: "tf_", wantErr: "dollar-quoted strings",
+		},
+		"tagged dollar quote rejected": {
+			execQuery: `SELECT $tag$x$tag$`, prefix: "tf_", wantErr: "dollar-quoted strings",
+		},
+		"identifier ending in e before literal allowed": {execQuery: `SELECT DATE'2026-01-01', 'e'`, prefix: "tf_"},
+		"positional parameter allowed":                  {execQuery: `SELECT $1`, prefix: "tf_"},
+		"prefix inside name rejected":                   {execQuery: `DROP DATABASE "my_tf_db"`, prefix: "tf_", wantErr: `target "my_tf_db"`},
+		"second statement checked":                      {execQuery: `DROP DATABASE "tf_a"; DROP DATABASE "prod"`, prefix: "tf_", wantErr: `target "prod"`},
+		"semicolon inside quotes is safe":               {execQuery: `DROP DATABASE "tf_a;b"`, prefix: "tf_"},
+		"unsupported mutation rejected":                 {execQuery: `INSERT INTO "tf_db".main.t VALUES (1)`, prefix: "tf_", wantErr: "unsupported INSERT"},
+		"unsupported drop kind rejected":                {execQuery: `DROP FUNCTION tf_fn`, prefix: "tf_", wantErr: "unsupported DROP shape"},
+		"missing name rejected":                         {execQuery: `DROP DATABASE IF EXISTS`, prefix: "tf_", wantErr: "missing object name"},
+		"literal as name rejected":                      {execQuery: `DROP DATABASE 'tf_db'`, prefix: "tf_", wantErr: "string literal"},
 		"alter snapshot needs target": {
 			execQuery: `ALTER SNAPSHOT 'abc' SET snapshot_name = ''`, prefix: "tf_", wantErr: "pass -allow-target",
 		},
@@ -107,6 +121,35 @@ func TestValidateAllowedPrefix(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), "rejected") || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("error %q should mention rejection and %q", err.Error(), tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateAllowedDatabase(t *testing.T) {
+	tests := map[string]struct {
+		prefix, database, wantErr string
+	}{
+		"no prefix":       {database: "prod"},
+		"no database":     {prefix: "tf_"},
+		"prefixed":        {prefix: "tf_", database: "tf_run"},
+		"missing prefix":  {prefix: "tf_", database: "prod", wantErr: `"prod" does not start with "tf_"`},
+		"prefix in name":  {prefix: "tf_", database: "my_tf_db", wantErr: "does not start with"},
+		"trimmed prefix":  {prefix: " tf_ ", database: "tf_run"},
+		"case sensitive":  {prefix: "tf_", database: "TF_run", wantErr: "does not start with"},
+		"attach creation": {prefix: "tf_", database: "analytics", wantErr: "database rejected under allow-prefix"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := validateAllowedDatabase(tc.prefix, tc.database)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("error = %v, want %q", err, tc.wantErr)
 			}
 		})
 	}

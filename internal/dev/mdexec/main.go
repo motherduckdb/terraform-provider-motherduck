@@ -35,6 +35,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "exactly one of -sql or -scalar is required")
 		os.Exit(2)
 	}
+	if err := validateAllowedDatabase(*allowPrefix, *database); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
 	if err := validateAllowedPrefix(*allowPrefix, *allowTarget, append([]string{*execQuery, *preQuery}, scalarQueryList...)...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
@@ -90,6 +94,20 @@ func main() {
 		}
 		fmt.Println(value)
 	}
+}
+
+// validateAllowedDatabase applies the -allow-prefix guard to -database.
+// Attaching "md:<name>" can create a MotherDuck database, so the attach
+// target must carry the prefix like any other mutation target.
+func validateAllowedDatabase(prefix, database string) error {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" || database == "" {
+		return nil
+	}
+	if !strings.HasPrefix(database, prefix) {
+		return fmt.Errorf("database rejected under allow-prefix: %q does not start with %q", database, prefix)
+	}
+	return nil
 }
 
 // validateAllowedPrefix enforces the -allow-prefix guard. When prefix is set,
@@ -307,6 +325,15 @@ func splitStatements(query string) ([]string, error) {
 	for i := 0; i < len(runes); i++ {
 		r := runes[i]
 		switch {
+		case r == '\'' && i > 0 && (runes[i-1] == 'e' || runes[i-1] == 'E') && (i < 2 || !isIdentifierRune(runes[i-2])):
+			// DuckDB E'...' strings accept backslash escapes, so \' does not
+			// end the literal. The scanner below only understands doubled
+			// quotes, so it fails closed instead of guessing the boundary.
+			return nil, fmt.Errorf("escape string literals (E'...') are not supported")
+		case r == '$' && startsDollarQuote(runes, i):
+			// $$...$$ and $tag$...$tag$ are string literals in DuckDB and can
+			// hide semicolons and quotes from this scanner.
+			return nil, fmt.Errorf("dollar-quoted strings are not supported")
 		case r == '\'' || r == '"':
 			end := skipQuoted(runes, i, r)
 			current.WriteString(string(runes[i:end]))
@@ -349,6 +376,20 @@ func splitStatements(query string) ([]string, error) {
 		}
 	}
 	return clean, nil
+}
+
+// startsDollarQuote reports whether a dollar-quote opener such as $$ or $tag$
+// starts at index i. A positional parameter such as $1 is not an opener.
+func startsDollarQuote(runes []rune, i int) bool {
+	j := i + 1
+	for j < len(runes) && isIdentifierRune(runes[j]) {
+		j++
+	}
+	return j < len(runes) && runes[j] == '$'
+}
+
+func isIdentifierRune(r rune) bool {
+	return r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
 }
 
 // skipQuoted returns the index just past the closing quote starting at start,
