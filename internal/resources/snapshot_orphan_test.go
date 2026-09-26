@@ -3,7 +3,6 @@ package resources
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"strings"
 	"testing"
 
@@ -23,14 +22,9 @@ type snapshotOrphanBackend struct {
 	providerctx.SQLClient
 	attachErr error
 	execErr   error
-	rows      []sqlRowResult
+	rows      []scannedRow
 	execs     []string
 	used      []string
-}
-
-type sqlRowResult struct {
-	values []any
-	err    error
 }
 
 func (c *snapshotOrphanBackend) Available() bool { return true }
@@ -47,31 +41,11 @@ func (c *snapshotOrphanBackend) QueryRow(context.Context, string, ...any) mdsql.
 	}
 	row := c.rows[0]
 	c.rows = c.rows[1:]
-	if row.err != nil {
-		return errRowScanner{err: row.err}
-	}
-	return valuesRowScanner{values: row.values}
+	return row
 }
 func (c *snapshotOrphanBackend) WithDatabaseUse(ctx context.Context, database string, fn func(func(string, ...any) error) error) error {
 	c.used = append(c.used, database)
 	return fn(func(query string, args ...any) error { return c.Exec(ctx, query, args...) })
-}
-
-type valuesRowScanner struct{ values []any }
-
-func (s valuesRowScanner) Scan(dest ...any) error {
-	for i, d := range dest {
-		switch target := d.(type) {
-		case *sql.NullString:
-			value, _ := s.values[i].(string)
-			*target = sql.NullString{String: value, Valid: s.values[i] != nil}
-		case *int:
-			*target, _ = s.values[i].(int)
-		default:
-			return errors.New("unsupported scan target")
-		}
-	}
-	return nil
 }
 
 func snapshotTestState(t *testing.T, r *snapshotResource) tfsdk.State {
@@ -167,7 +141,7 @@ func TestSnapshotReadWarnsWhenSnapshotIsNoLongerListed(t *testing.T) {
 }
 
 func TestSnapshotReadDoesNotWarnWhenNameWasCleared(t *testing.T) {
-	client := &snapshotOrphanBackend{rows: []sqlRowResult{{values: []any{"", "2026-09-18"}}}}
+	client := &snapshotOrphanBackend{rows: []scannedRow{{values: []any{"", "2026-09-18"}}}}
 	r := &snapshotResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
 	state := snapshotTestState(t, r)
 	response := resource.ReadResponse{State: state}
