@@ -13,14 +13,16 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
 )
 
 // ducklingContractREST stores one user's Duckling configuration. Like the
 // live service it fills in a default cooldown for a non-Pulse instance whose
-// write omits one, which is the value Terraform must not adopt unplanned.
+// write omits one.
 type ducklingContractREST struct {
 	mu     sync.Mutex
 	config *mdrest.DucklingConfig
@@ -128,7 +130,7 @@ func TestContractDucklingConfigLifecycle(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("motherduck_duckling_config.test", "id", "contract_svc"),
-					resource.TestCheckNoResourceAttr("motherduck_duckling_config.test", "read_write_cooldown_seconds"),
+					resource.TestCheckResourceAttr("motherduck_duckling_config.test", "read_write_cooldown_seconds", "300"),
 					resource.TestCheckResourceAttr("motherduck_duckling_config.test", "read_scaling_cooldown_seconds", "600"),
 					resource.TestCheckResourceAttr("motherduck_duckling_config.test", "read_scaling_flock_size", "2"),
 				),
@@ -138,23 +140,6 @@ func TestContractDucklingConfigLifecycle(t *testing.T) {
 				ImportState:       true,
 				ImportStateId:     "contract_svc",
 				ImportStateVerify: true,
-				// Cooldowns are config-owned and import cannot tell a configured
-				// value from a service default. ImportStateCheck verifies that
-				// import leaves them unset while recovering every other field.
-				ImportStateVerifyIgnore: []string{"read_scaling_cooldown_seconds"},
-				ImportStateCheck: func(states []*terraform.InstanceState) error {
-					if len(states) != 1 {
-						return fmt.Errorf("imported states = %d, want 1", len(states))
-					}
-					attrs := states[0].Attributes
-					if attrs["read_scaling_instance_size"] != "standard" || attrs["read_scaling_flock_size"] != "2" {
-						return fmt.Errorf("import did not recover the live configuration: %v", attrs)
-					}
-					if _, ok := attrs["read_scaling_cooldown_seconds"]; ok && attrs["read_scaling_cooldown_seconds"] != "" {
-						return errors.New("import must not adopt a cooldown value")
-					}
-					return nil
-				},
 			},
 			{
 				Config: resized,
@@ -176,22 +161,46 @@ func TestContractDucklingConfigLifecycle(t *testing.T) {
 				Check: resource.TestCheckResourceAttr("motherduck_duckling_config.test", "read_scaling_cooldown_seconds", "600"),
 			},
 			{
+				// Removing a configured cooldown hands it back to MotherDuck
+				// without a write: the live value stays and the plan is empty.
 				Config: withoutCooldown,
 				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_duckling_config.test", plancheck.ResourceActionUpdate)},
+					PreApply:             []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckNoResourceAttr("motherduck_duckling_config.test", "read_scaling_cooldown_seconds"),
-					func(*terraform.State) error {
-						rest.mu.Lock()
-						defer rest.mu.Unlock()
-						if got := rest.config.ReadScaling.CooldownSeconds; got == nil || *got != ducklingContractDefaultCooldown {
-							return fmt.Errorf("live read-scaling cooldown = %v, want the service default after removal", got)
-						}
-						return nil
+				Check: resource.TestCheckResourceAttr("motherduck_duckling_config.test", "read_scaling_cooldown_seconds", "600"),
+			},
+			{
+				// Unmanaged drift is recorded, not reverted.
+				Config: withoutCooldown,
+				PreConfig: func() {
+					rest.setReadScalingCooldown(900)
+				},
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.TestCheckResourceAttr("motherduck_duckling_config.test", "read_scaling_cooldown_seconds", "900"),
+			},
+			{
+				// A new instance size lets MotherDuck apply its default for it.
+				Config: strings.Replace(withoutCooldown, `read_scaling_instance_size = "standard"`, `read_scaling_instance_size = "jumbo"`, 1),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("motherduck_duckling_config.test", plancheck.ResourceActionUpdate),
+						plancheck.ExpectUnknownValue("motherduck_duckling_config.test", tfjsonpath.New("read_scaling_cooldown_seconds")),
+						plancheck.ExpectKnownValue("motherduck_duckling_config.test", tfjsonpath.New("read_write_cooldown_seconds"), knownvalue.Int64Exact(300)),
 					},
-				),
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.TestCheckResourceAttr("motherduck_duckling_config.test", "read_scaling_cooldown_seconds", "300"),
+			},
+			{
+				// Switching to Pulse clears the cooldown.
+				Config: strings.Replace(withoutCooldown, `read_scaling_instance_size = "standard"`, `read_scaling_instance_size = "pulse"`, 1),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.TestCheckNoResourceAttr("motherduck_duckling_config.test", "read_scaling_cooldown_seconds"),
 			},
 		},
 	})

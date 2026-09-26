@@ -134,15 +134,6 @@ func clearableStringFromLive(current types.String, live stdsql.NullString) types
 	return types.StringNull()
 }
 
-// configOwnedInt64FromLive keeps an optional integer null while it is not
-// configured, so a server-side default never appears as an unplanned value.
-func configOwnedInt64FromLive(current types.Int64, live *int64) types.Int64 {
-	if current.IsNull() || live == nil {
-		return types.Int64Null()
-	}
-	return types.Int64Value(*live)
-}
-
 func showRows(ctx context.Context, client interface {
 	QueryRowsJSON(context.Context, string, ...any) (string, error)
 }, query string) ([]map[string]any, error) {

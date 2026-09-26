@@ -33,11 +33,11 @@ func TestNormalizedTokenType(t *testing.T) {
 	}
 }
 
-func TestSetDucklingModelFromRESTKeepsUnconfiguredCooldownsNull(t *testing.T) {
+func TestSetDucklingModelFromRESTRecordsLiveCooldowns(t *testing.T) {
 	serverDefault := int64(300)
 	cfg := &mdrest.DucklingConfig{
 		ReadWrite:   mdrest.DucklingReadWriteConfig{InstanceSize: "standard", CooldownSeconds: &serverDefault},
-		ReadScaling: mdrest.DucklingReadScalingConfig{InstanceSize: "standard", FlockSize: 2, CooldownSeconds: &serverDefault},
+		ReadScaling: mdrest.DucklingReadScalingConfig{InstanceSize: "pulse", FlockSize: 2},
 	}
 	model := ducklingConfigModel{
 		Username:                   types.StringValue("svc"),
@@ -45,11 +45,29 @@ func TestSetDucklingModelFromRESTKeepsUnconfiguredCooldownsNull(t *testing.T) {
 		ReadScalingCooldownSeconds: types.Int64Value(600),
 	}
 	setDucklingModelFromREST(&model, cfg)
-	if !model.ReadWriteCooldownSeconds.IsNull() {
-		t.Fatalf("read_write_cooldown_seconds = %s, want null while unconfigured", model.ReadWriteCooldownSeconds)
+	if model.ReadWriteCooldownSeconds.ValueInt64() != 300 {
+		t.Fatalf("read_write_cooldown_seconds = %s, want the live value 300", model.ReadWriteCooldownSeconds)
 	}
-	if model.ReadScalingCooldownSeconds.ValueInt64() != 300 {
-		t.Fatalf("read_scaling_cooldown_seconds = %s, want the live value 300 for a configured cooldown", model.ReadScalingCooldownSeconds)
+	if !model.ReadScalingCooldownSeconds.IsNull() {
+		t.Fatalf("read_scaling_cooldown_seconds = %s, want null when MotherDuck reports none", model.ReadScalingCooldownSeconds)
+	}
+}
+
+func TestPlannedCooldownOrLive(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		planned types.Int64
+		live    types.Int64
+		want    types.Int64
+	}{
+		{"response omits planned value", types.Int64Value(600), types.Int64Null(), types.Int64Value(600)},
+		{"response reports value", types.Int64Value(600), types.Int64Value(600), types.Int64Value(600)},
+		{"unknown plan takes live default", types.Int64Unknown(), types.Int64Value(300), types.Int64Value(300)},
+		{"unknown plan and no live value", types.Int64Unknown(), types.Int64Null(), types.Int64Null()},
+	} {
+		if got := plannedCooldownOrLive(tc.planned, tc.live); !got.Equal(tc.want) {
+			t.Fatalf("%s: got %s, want %s", tc.name, got, tc.want)
+		}
 	}
 }
 
