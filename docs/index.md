@@ -121,7 +121,9 @@ See [state and imports](guides/state-and-lifecycle.md),
 ## Compatibility and support
 
 Terraform 1.5 or later is supported. Ephemeral resources require Terraform 1.10
-or later. Release packages are available for Linux and macOS on amd64 and arm64.
+or later. Release packages support Linux with glibc 2.34 or newer (for example RHEL 9,
+Amazon Linux 2023, Debian 12, and Ubuntu 22.04) and macOS 13 or newer, on amd64
+and arm64.
 Windows is not a supported release target.
 
 Service features still depend on your MotherDuck account, permissions, and

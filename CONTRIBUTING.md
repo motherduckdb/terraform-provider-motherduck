@@ -53,8 +53,8 @@ make release-check
 
 When updating Go modules, test the DuckDB/MotherDuck path before keeping a `duckdb-go` or `duckdb-go-bindings` bump. Newer embedded DuckDB builds can be published before MotherDuck supports that DuckDB version, so a clean `go test` is not enough. Run at least `MOTHERDUCK_TOKEN=... make test-terraform-versions` or a focused live SQL smoke. For that reason Dependabot is configured in `.github/dependabot.yml` to ignore `github.com/duckdb/duckdb-go/*` and `github.com/duckdb/duckdb-go-bindings*`. Bump those modules manually in a dedicated PR and record the live smoke you ran in the PR description.
 
-ShellCheck is a required local dependency, matching CI. Install it with
-`brew install shellcheck` on macOS or your system package manager. The CLI gate
+ShellCheck and `gpg` are required local dependencies, matching CI. `make test-scripts` and the CLI matrix use `gpg` to verify Terraform and OpenTofu downloads. Install them with
+`brew install shellcheck gnupg` on macOS or your system package manager. The CLI gate
 builds the provider once and runs isolated fixtures. See [testing](docs/guides/testing.md)
 for narrower commands, logs, and the distinction between validation and live coverage.
 
@@ -115,10 +115,10 @@ Use focused live smoke tests for changed surfaces instead of running every live 
 MOTHERDUCK_TOKEN=... make test-live-sql-stable
 ```
 
-The Terraform compatibility matrix defaults to Terraform `1.5.7`, `1.8.5`, `1.12.2`, `1.15.8`, `1.15.9`, and `1.16.1`. Override locally with `TF_VERSIONS`, for example:
+The Terraform compatibility matrix defaults to Terraform `1.5.7`, `1.8.5`, `1.12.2`, `1.15.8`, `1.15.9`, `1.16.1`, and `1.16.4`. Override locally with `TF_VERSIONS`, for example:
 
 ```bash
-TF_VERSIONS="1.8.5 1.16.1" MOTHERDUCK_TOKEN=... make test-terraform-versions
+TF_VERSIONS="1.8.5 1.16.4" MOTHERDUCK_TOKEN=... make test-terraform-versions
 ```
 
 Live smoke logs and temporary provider mirrors are written under ignored `test-results/` and `tools/`. Treat live logs as account metadata and do not paste raw output into public issues.

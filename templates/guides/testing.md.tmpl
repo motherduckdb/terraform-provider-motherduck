@@ -206,7 +206,7 @@ Run the offline matrix without credentials before changing CLI setup or fixtures
 
 ```bash
 make test-cli-versions
-TF_VERSIONS="1.5.7 1.16.1" TOFU_VERSIONS="1.12.6" make test-cli-versions
+TF_VERSIONS="1.5.7 1.16.4" TOFU_VERSIONS="1.12.6" make test-cli-versions
 ```
 
 It checksum-verifies CLI downloads and runs the same `test-cli` suites on each
@@ -219,10 +219,10 @@ The live compatibility matrix additionally reads MotherDuck catalogs:
 MOTHERDUCK_TOKEN=... make test-terraform-versions
 ```
 
-The default matrix runs Terraform `1.5.7`, `1.8.5`, `1.12.2`, `1.15.8`, `1.15.9`, and `1.16.1`, plus OpenTofu `1.12.6`. Override either matrix locally with spaces or commas:
+The default matrix runs Terraform `1.5.7`, `1.8.5`, `1.12.2`, `1.15.8`, `1.15.9`, `1.16.1`, and `1.16.4`, plus OpenTofu `1.12.6`. Override either matrix locally with spaces or commas:
 
 ```bash
-TF_VERSIONS="1.8.5 1.16.1" MOTHERDUCK_TOKEN=... make test-terraform-versions
+TF_VERSIONS="1.8.5 1.16.4" MOTHERDUCK_TOKEN=... make test-terraform-versions
 TOFU_VERSIONS="1.12.6" MOTHERDUCK_TOKEN=... make test-terraform-versions
 ```
 

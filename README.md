@@ -99,7 +99,8 @@ Table column changes replace tables. Protect important data before adopting
 these examples. Token and secret values can be stored in state even when marked
 sensitive, so use an encrypted backend with restricted access and locking.
 
-Terraform 1.5+ is supported, with Linux and macOS packages for amd64 and arm64.
+Terraform 1.5+ is supported, with packages for Linux (glibc 2.34 or newer) and
+macOS 13 or newer on amd64 and arm64.
 Ephemeral resources require Terraform 1.10+. See the
 [tested Terraform and OpenTofu matrix](docs/guides/ci-and-release.md).
 
