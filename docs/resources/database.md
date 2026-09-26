@@ -15,6 +15,8 @@ compute must be isolated.
 
 - Native storage is the default. Select `database_type = "ducklake"` only for a
   deliberate DuckLake deployment. `data_path` and `encrypted` are DuckLake-only.
+- Select `database_type = "iceberg"` to register an existing Iceberg REST
+  catalog as a MotherDuck database. See [Iceberg catalogs](#iceberg-catalogs).
 - Use `transient = true` for a transient database, not a database type named
   `transient`.
 - Snapshot retention updates in place. Name and create-only storage options
@@ -29,6 +31,52 @@ Import uses the database name. Public catalogs do not reconstruct DuckLake
 `data_path` or `encrypted`. Omit those create-only fields after import unless
 replacement is intentional.
 
+## Iceberg catalogs
+
+`database_type = "iceberg"` does not create an Iceberg catalog. It registers an
+existing Iceberg REST catalog, such as Amazon S3 Tables, AWS Glue, Apache
+Polaris, Cloudflare R2 Data Catalog, or Databricks Unity Catalog, as a
+MotherDuck database. Reads and writes run on MotherDuck compute.
+
+- Put the catalog credentials in a MotherDuck secret, for example a
+  `motherduck_secret` with `type = "iceberg"` or `type = "s3"`, and pass its
+  name as `iceberg.secret`. The `iceberg` block accepts catalog settings only,
+  never credentials.
+- `iceberg.secret` and `iceberg.default_schema` are required. The namespace in
+  `default_schema` must already exist in the catalog.
+- `endpoint`, `warehouse`, `endpoint_type`, and `read_only` identify the
+  catalog, so changing one replaces the database. Every other option changes
+  in place with `ALTER DATABASE`, and MotherDuck reattaches the catalog right
+  away. Removing an optional setting clears it so the catalog default applies.
+- MotherDuck does not report Iceberg options back. Terraform keeps the values
+  it last applied and cannot detect changes made outside Terraform.
+- Removing the whole `iceberg` block keeps the database and stops managing its
+  options.
+- Iceberg databases cannot be shared, and do not support `transient`,
+  `snapshot_retention_days`, or MotherDuck snapshots. The Iceberg catalog
+  keeps its own snapshot history.
+- Destroy drops only the MotherDuck database. The catalog and its tables stay
+  in place. A `motherduck_schema` in an Iceberg database creates and drops the
+  namespace in the catalog itself.
+- Do not manage Iceberg tables with `motherduck_table`. MotherDuck does not
+  list Iceberg table columns in `duckdb_columns()`, so the table resource
+  cannot read them back from `information_schema.columns`.
+
+For Amazon S3 Tables, set `endpoint_type = "s3_tables"` and use the table
+bucket ARN as `warehouse`. For AWS Glue, set `endpoint_type = "glue"` and use
+the AWS account ID as `warehouse`. Both derive the endpoint, so omit
+`endpoint`.
+
+To import an Iceberg database, add the full `iceberg` block to the
+configuration before the first apply. The first apply after import runs
+`ALTER DATABASE` with the configured in-place options and adopts the identity
+options without replacing the database, because MotherDuck cannot report
+which catalog the database points at. Check that `endpoint`, `warehouse`,
+`endpoint_type`, and `read_only` match the existing database.
+
+See the MotherDuck [Apache Iceberg guide](https://motherduck.com/docs/integrations/file-formats/apache-iceberg/)
+for catalog-specific setup.
+
 See [warehouse deployment](../guides/warehouse-examples.md) and
 [state and imports](../guides/state-and-lifecycle.md).
 
@@ -38,6 +86,22 @@ See [warehouse deployment](../guides/warehouse-examples.md) and
 resource "motherduck_database" "analytics" {
   name                    = "analytics"
   snapshot_retention_days = 7
+}
+
+# Register an existing Iceberg REST catalog as a MotherDuck database. The
+# catalog credentials live in a MotherDuck secret, for example a
+# motherduck_secret with type = "iceberg", and the default_schema namespace
+# must already exist in the catalog.
+resource "motherduck_database" "lakehouse" {
+  name          = "lakehouse"
+  database_type = "iceberg"
+
+  iceberg = {
+    secret         = "lakehouse_catalog"
+    endpoint       = "https://catalog.example.com"
+    warehouse      = "analytics_warehouse"
+    default_schema = "default"
+  }
 }
 ```
 
@@ -51,8 +115,9 @@ resource "motherduck_database" "analytics" {
 ### Optional
 
 - `data_path` (String) DuckLake-only non-empty data path used when creating the database.
-- `database_type` (String) `default` or `ducklake`. Use `transient = true` for transient databases.
+- `database_type` (String) `default`, `ducklake`, or `iceberg`. Use `transient = true` for transient databases. An `iceberg` database registers an existing Iceberg REST catalog and needs the `iceberg` block.
 - `encrypted` (Boolean) DuckLake-only. When true, emits the `ENCRYPTED` database option at creation. When false, omits the option.
+- `iceberg` (Attributes) Options for an Iceberg REST catalog database. Required when `database_type = "iceberg"` and invalid otherwise. MotherDuck does not report these options back, so Terraform keeps the configured values and does not detect changes made outside Terraform. Removing the whole block keeps the database and stops managing its options. Catalog credentials belong in a `motherduck_secret`, not here. (see [below for nested schema](#nestedatt--iceberg))
 - `snapshot_retention_days` (Number) Historical snapshot retention in days. Must be nonnegative. MotherDuck enforces any account-specific upper bound.
 - `timeouts` (Attributes) Optional operation timeouts. Values use Go duration syntax such as `30s`, `10m`, or `1h`. (see [below for nested schema](#nestedatt--timeouts))
 - `transient` (Boolean) Whether to create the database as transient. Omit for the MotherDuck default.
@@ -62,6 +127,32 @@ resource "motherduck_database" "analytics" {
 - `created_ts` (String) Database creation timestamp reported by MotherDuck.
 - `id` (String) Database resource ID. This is the database name.
 - `uuid` (String) Database UUID reported by MotherDuck.
+
+<a id="nestedatt--iceberg"></a>
+### Nested Schema for `iceberg`
+
+Required:
+
+- `default_schema` (String) Catalog namespace used to resolve unqualified table names. It must already exist in the catalog. Changed in place with `ALTER DATABASE`.
+- `secret` (String) Name of the MotherDuck Iceberg or S3 secret that holds the catalog credentials. Changed in place with `ALTER DATABASE`.
+
+Optional:
+
+- `access_delegation_mode` (String) `vended_credentials` requests short-lived, table-scoped credentials from the catalog. `none` uses the secret's credentials directly. Changed in place with `ALTER DATABASE`. Removing it clears the option so the catalog default applies.
+- `default_region` (String) Per-catalog region override. Defaults to the MotherDuck organization region. Changed in place with `ALTER DATABASE`. Removing it clears the option so the catalog default applies.
+- `disable_multi_table_commit` (Boolean) Commit tables one at a time instead of using the catalog's multi-table commit endpoint. Changed in place with `ALTER DATABASE`. Removing it clears the option so the catalog default applies.
+- `encode_entire_prefix` (Boolean) Send the catalog prefix as a single URL-encoded path component. MotherDuck turns this on whenever the option is present, so `false` and omitting it both leave it off. Changed in place with `ALTER DATABASE`. Removing it clears the option so the catalog default applies.
+- `endpoint` (String) URL of the Iceberg REST catalog. Required unless the secret sets it or `endpoint_type` derives it. Identifies the catalog, so changing it replaces the database.
+- `endpoint_type` (String) Well-known catalog flavor, `s3_tables` or `glue`. Identifies the catalog, so changing it replaces the database.
+- `max_table_staleness` (String) DuckDB interval, such as `10 minutes`, for how long cached table metadata may be reused before it is reloaded. Changed in place with `ALTER DATABASE`. Removing it clears the option so the catalog default applies.
+- `purge_requested` (Boolean) Ask the catalog to purge table data on `DROP TABLE`. Changed in place with `ALTER DATABASE`. Removing it clears the option so the catalog default applies.
+- `read_only` (Boolean) Attach the catalog as read-only. Identifies the catalog, so changing it replaces the database.
+- `remove_files_on_delete` (Boolean) Delete the underlying data files when a table is dropped. Turn it off for catalogs that handle their own cleanup, such as S3 Tables. Changed in place with `ALTER DATABASE`. Removing it clears the option so the catalog default applies.
+- `skip_create_table_metadata_updates` (Boolean) Skip the metadata update that follows a non-staged `CREATE TABLE`, for catalogs that reject it. Changed in place with `ALTER DATABASE`. Removing it clears the option so the catalog default applies.
+- `stage_create_tables` (Boolean) Create tables through the catalog's stage-create flow. Turn it off for catalogs that do not support staged creates. Changed in place with `ALTER DATABASE`. Removing it clears the option so the catalog default applies.
+- `support_nested_namespaces` (Boolean) Address nested catalog namespaces as multi-level schema names. Changed in place with `ALTER DATABASE`. Removing it clears the option so the catalog default applies.
+- `warehouse` (String) Catalog warehouse identifier. For Amazon S3 Tables this is the table bucket ARN, and for AWS Glue it is the AWS account ID. Identifies the catalog, so changing it replaces the database.
+
 
 <a id="nestedatt--timeouts"></a>
 ### Nested Schema for `timeouts`

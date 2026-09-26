@@ -15,6 +15,8 @@ compute must be isolated.
 
 - Native storage is the default. Select `database_type = "ducklake"` only for a
   deliberate DuckLake deployment. `data_path` and `encrypted` are DuckLake-only.
+- Select `database_type = "iceberg"` to register an existing Iceberg REST
+  catalog as a MotherDuck database. See [Iceberg catalogs](#iceberg-catalogs).
 - Use `transient = true` for a transient database, not a database type named
   `transient`.
 - Snapshot retention updates in place. Name and create-only storage options
@@ -28,6 +30,52 @@ compute must be isolated.
 Import uses the database name. Public catalogs do not reconstruct DuckLake
 `data_path` or `encrypted`. Omit those create-only fields after import unless
 replacement is intentional.
+
+## Iceberg catalogs
+
+`database_type = "iceberg"` does not create an Iceberg catalog. It registers an
+existing Iceberg REST catalog, such as Amazon S3 Tables, AWS Glue, Apache
+Polaris, Cloudflare R2 Data Catalog, or Databricks Unity Catalog, as a
+MotherDuck database. Reads and writes run on MotherDuck compute.
+
+- Put the catalog credentials in a MotherDuck secret, for example a
+  `motherduck_secret` with `type = "iceberg"` or `type = "s3"`, and pass its
+  name as `iceberg.secret`. The `iceberg` block accepts catalog settings only,
+  never credentials.
+- `iceberg.secret` and `iceberg.default_schema` are required. The namespace in
+  `default_schema` must already exist in the catalog.
+- `endpoint`, `warehouse`, `endpoint_type`, and `read_only` identify the
+  catalog, so changing one replaces the database. Every other option changes
+  in place with `ALTER DATABASE`, and MotherDuck reattaches the catalog right
+  away. Removing an optional setting clears it so the catalog default applies.
+- MotherDuck does not report Iceberg options back. Terraform keeps the values
+  it last applied and cannot detect changes made outside Terraform.
+- Removing the whole `iceberg` block keeps the database and stops managing its
+  options.
+- Iceberg databases cannot be shared, and do not support `transient`,
+  `snapshot_retention_days`, or MotherDuck snapshots. The Iceberg catalog
+  keeps its own snapshot history.
+- Destroy drops only the MotherDuck database. The catalog and its tables stay
+  in place. A `motherduck_schema` in an Iceberg database creates and drops the
+  namespace in the catalog itself.
+- Do not manage Iceberg tables with `motherduck_table`. MotherDuck does not
+  list Iceberg table columns in `duckdb_columns()`, so the table resource
+  cannot read them back from `information_schema.columns`.
+
+For Amazon S3 Tables, set `endpoint_type = "s3_tables"` and use the table
+bucket ARN as `warehouse`. For AWS Glue, set `endpoint_type = "glue"` and use
+the AWS account ID as `warehouse`. Both derive the endpoint, so omit
+`endpoint`.
+
+To import an Iceberg database, add the full `iceberg` block to the
+configuration before the first apply. The first apply after import runs
+`ALTER DATABASE` with the configured in-place options and adopts the identity
+options without replacing the database, because MotherDuck cannot report
+which catalog the database points at. Check that `endpoint`, `warehouse`,
+`endpoint_type`, and `read_only` match the existing database.
+
+See the MotherDuck [Apache Iceberg guide](https://motherduck.com/docs/integrations/file-formats/apache-iceberg/)
+for catalog-specific setup.
 
 See [warehouse deployment](../guides/warehouse-examples.md) and
 [state and imports](../guides/state-and-lifecycle.md).
