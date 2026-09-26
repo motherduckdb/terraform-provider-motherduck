@@ -17,6 +17,18 @@ This index lists the headline change for every release.
 - Provider configuration rejects unknown `api_base_url`, `database`, `attach_mode`, and `custom_user_agent` values, and accepts plain HTTP `api_base_url` values only for loopback hosts.
 - Duckling config cooldowns record the live value, so import and refresh no longer plan an update. An unset cooldown keeps its current value while the instance size stays the same, and removing a configured cooldown no longer resets it.
 - Release packages run on Linux with glibc 2.34 or newer and on macOS 13 or newer.
+- `motherduck_database` supports `database_type = "iceberg"` with an `iceberg` block that registers an existing Iceberg REST catalog, such as Amazon S3 Tables or AWS Glue.
+- `motherduck_secret` supports `FLIGHTS` secrets through a sensitive `flight_params` map.
+- `motherduck_access_token` accepts an optional `description`, and `motherduck_user_tokens` returns it. Token names `MotherDuck Extension` and `MotherDuck Flights` are rejected at plan time.
+- Service account usernames must be at least 3 characters, matching the API.
+- `motherduck_dive_embed_session` accepts `session_name`, `version`, `required_resources`, and `initial_state`. `session_hint` is deprecated in favor of `session_name`.
+- `motherduck_flight` reports `schedule_status` and `owner_name`, rejects the reserved config keys `MOTHERDUCK_FLIGHT_ID` and `MOTHERDUCK_FLIGHT_RUN_ID`, and checks the 200 KB source and 20 KB requirements limits at plan time. The `max_runtime_sec` docs describe the per-plan caps.
+- `motherduck_flight_run` reads runs with `MD_GET_FLIGHT_RUN` and falls back to the run listing.
+- `motherduck_flight_logs` pages on the server and accepts `order`, so lines before the last 1,000 are reachable.
+- Destroying a snapshot whose database was dropped now releases its retained name.
+- `motherduck_dive` reads `api_version` and `required_resources` on refresh and import, so an import no longer needs a corrective update.
+- Guide role access is detected by the `role_names` parameter of `MD_SET_GUIDE_ACCESS`, and `motherduck_guide_grantees` reads roles from `MD_GET_GUIDE`. Role access stays experimental and is not yet available in MotherDuck.
+- Docs: filtered shares and custom roles need a Business plan or an active free trial, filtered shares reject DuckLake and Iceberg databases, Flight listings default to 50 rows, and `motherduck_role_members` reports a null `email` for service accounts.
 
 ## v0.2.13
 
