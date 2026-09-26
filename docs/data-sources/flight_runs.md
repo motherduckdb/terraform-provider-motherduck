@@ -2,12 +2,12 @@
 page_title: "motherduck_flight_runs Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Lists runs for one MotherDuck Flight.
+  Lists runs for one MotherDuck Flight. Rows in the returned page are sorted newest run first.
 ---
 
 # motherduck_flight_runs (Data Source)
 
-Lists runs for one MotherDuck Flight.
+Lists runs for one MotherDuck Flight. Rows in the returned page are sorted newest run first.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read

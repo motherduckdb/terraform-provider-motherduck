@@ -14,6 +14,8 @@ and access controls that those workloads run on.
 or service account has its own compute and owns the databases it creates.
 Shares let other accounts query published data on their own compute.
 
+![Terraform admin and writer roots provision accounts, compute, databases, shares, and grants. A pipeline loads data through the writer's Duckling into its database. A restricted share is granted to a separate reader account, attached once, and queried through that reader's read pool by BI and applications.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/readme-architecture.png)
+
 ## Choose what to build
 
 | Your next step | What you will build |
@@ -39,7 +41,7 @@ terraform {
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = "~> 0.2.3"
+      version = "~> 0.2.13"
     }
   }
 }
@@ -94,6 +96,7 @@ deployment workflow.
 | --- | --- |
 | `MOTHERDUCK_TOKEN` | SQL resources, including databases, shares, roles, and catalog reads |
 | `MOTHERDUCK_ADMIN_TOKEN` | REST administration, including service accounts, tokens, and compute settings |
+| `MOTHERDUCK_API_BASE_URL` | Optional REST API base URL override. Provider `api_base_url` takes precedence |
 
 Supply only the credentials required by that Terraform root. A SQL token and an
 organization admin token are separate credentials. Bootstrap identities first,
@@ -133,7 +136,7 @@ a [GitHub issue](https://github.com/motherduckdb/terraform-provider-motherduck/i
 ### Optional
 
 - `admin_token` (String, Sensitive) MotherDuck organization admin token for REST/control-plane operations. Defaults to `MOTHERDUCK_ADMIN_TOKEN`.
-- `api_base_url` (String) MotherDuck REST API base URL. Must be an absolute HTTP or HTTPS URL with a host. Defaults to `https://api.motherduck.com`.
+- `api_base_url` (String) MotherDuck REST API base URL. Must be an absolute HTTPS URL with a host, or HTTP for a loopback host, without credentials, a query string, or a fragment. Can also be set with the `MOTHERDUCK_API_BASE_URL` environment variable. Defaults to `https://api.motherduck.com`.
 - `attach_mode` (String) Optional MotherDuck attach mode. Supported values are `workspace` and `single`. Use `single` with `database` to attach that existing database without attaching other workspace databases. DuckDB/MotherDuck system catalogs such as `memory` and `md_information_schema` can still be present. Omit this argument for MotherDuck's default workspace attachment behavior.
 - `custom_user_agent` (String) Optional custom user agent suffix sent on both the DuckDB/MotherDuck SQL connection and MotherDuck REST API requests.
 - `database` (String) Optional MotherDuck database to attach during provider SQL initialization.

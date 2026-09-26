@@ -19,7 +19,9 @@ tool. Do not let Terraform and dbt manage the same table definition.
 `columns` is a map from column name to DuckDB type. It does not define primary
 keys or `NOT NULL` constraints, and it does not preserve declaration order.
 Use explicit column lists in inserts. Equivalent type aliases, such as `INT`
-and `INTEGER`, are compared semantically.
+and `INTEGER`, are compared semantically. Respelling a type with an alias, for
+example after an import that recorded `INTEGER`, updates state in place and
+does not replace the table.
 
 The database, schema, and name also require replacement when changed. Destroy
 drops the table. Import uses `<database>.<schema>.<table>` and reads its existing
@@ -58,7 +60,7 @@ resource "motherduck_table" "events" {
 
 ### Required
 
-- `columns` (Map of String) Map of column name to DuckDB SQL type. Type aliases are compared semantically during refresh to avoid replacement churn.
+- `columns` (Map of String) Map of column name to DuckDB SQL type. Column changes replace the table. Type aliases such as `INT` and `INTEGER` are compared semantically, so a change that only respells a type updates state in place without replacing the table.
 - `database` (String) Database that contains the table.
 - `name` (String) Table name.
 - `schema` (String) Schema that contains the table.

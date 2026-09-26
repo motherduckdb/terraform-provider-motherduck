@@ -2,12 +2,12 @@
 page_title: "motherduck_dive_versions Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Lists versions for one MotherDuck Dive.
+  Lists versions for one MotherDuck Dive, newest version first.
 ---
 
 # motherduck_dive_versions (Data Source)
 
-Lists versions for one MotherDuck Dive.
+Lists versions for one MotherDuck Dive, newest version first.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read

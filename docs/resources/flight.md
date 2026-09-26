@@ -76,7 +76,7 @@ resource "motherduck_flight" "heartbeat" {
 - `access_token_name` (String) Optional MotherDuck access token name for the Flight. When omitted, MotherDuck uses its default Flight token behavior and Terraform keeps this field unset.
 - `config` (Map of String) Optional string configuration passed to the Flight. Keys become Flight runtime environment variables and must be valid Flight config names.
 - `flight_secret_names` (List of String) Optional MotherDuck secret names available to the Flight.
-- `max_runtime_sec` (Number) Maximum Flight runtime in seconds. `0` disables the runtime limit. When omitted, MotherDuck supplies its current default.
+- `max_runtime_sec` (Number) Maximum Flight runtime in seconds. `0` disables the runtime limit. When omitted at creation, MotherDuck supplies its current default. Removing a configured value keeps the last applied limit, so set the value explicitly to change it.
 - `requirements_txt` (String) Optional Python requirements text for the Flight runtime.
 - `schedule_cron` (String) Optional cron schedule for the Flight.
 

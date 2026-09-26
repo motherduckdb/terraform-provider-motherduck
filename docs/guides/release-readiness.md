@@ -1,6 +1,8 @@
 ---
 page_title: "Prepare a release"
 subcategory: "Contributing"
+description: |-
+  The checklist to complete before tagging a provider release.
 ---
 
 # Prepare a release

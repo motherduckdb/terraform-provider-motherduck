@@ -15,7 +15,7 @@ This guide deploys one database and restricted share per customer, plus a reader
 account and read-scaling pool for each. The writer owns all tenant databases.
 The app never needs its token.
 
-![A central writer owns Acme and Globex databases. Each database has a separate restricted share and reader pool. The authenticated backend chooses the matching reader credential.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/customer-facing-analytics.png)
+![A pipeline writes Acme and Globex data through one central writer that owns both tenant databases and their restricted shares. Each share is granted to and attached by its own tenant reader account with a separate read pool. The backend authenticates users and routes queries to the matching reader.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/customer-facing-analytics.png)
 
 ## What the example isolates
 
@@ -33,7 +33,7 @@ that tenant's data as that identity. See
 
 ## 1. Bootstrap the writer
 
-Apply the [writer-bootstrap example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/blueprints/writer-bootstrap)
+Apply the [writer-bootstrap example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/blueprints/writer-bootstrap)
 in its own state with `MOTHERDUCK_ADMIN_TOKEN` and
 `writer_username = "svc_cfa_writer"`. Transfer its generated token to a protected
 secret-manager entry.
@@ -45,7 +45,7 @@ an admin state and pass usernames to the writer root.
 
 ## 2. Provision the tenants
 
-Copy the complete [customer-facing analytics example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/customer-facing-analytics)
+Copy the complete [customer-facing analytics example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/customer-facing-analytics)
 into a new root with independent, protected state. Its default tenant IDs are
 `acme` and `globex`. Choose an unused prefix before applying.
 
@@ -176,6 +176,10 @@ through the admin workflow.
 
 Each reader pool starts at one Standard replica with a 60-second cooldown.
 Measure concurrency and freshness requirements before changing these defaults.
+
+To pause a tenant without deleting data, add its ID to `suspended_tenants`.
+The next apply revokes that tenant's reader tokens and share grant and keeps
+its database, share, and reader account.
 
 For offboarding, disable the backend route, stop writes, retain or export data
 as required, and review the tenant removal plan. For disposable teardown, detach

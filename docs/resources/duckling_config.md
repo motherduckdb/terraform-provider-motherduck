@@ -63,8 +63,8 @@ resource "motherduck_service_account" "app" {
 
 ### Optional
 
-- `read_scaling_cooldown_seconds` (Number) Optional read-scaling cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds.
-- `read_write_cooldown_seconds` (Number) Optional read-write cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds.
+- `read_scaling_cooldown_seconds` (Number) Optional read-scaling cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds. When unset, Terraform does not manage the cooldown and MotherDuck keeps or applies its own value. Import does not recover this value, so a configured cooldown causes one update after import.
+- `read_write_cooldown_seconds` (Number) Optional read-write cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds. When unset, Terraform does not manage the cooldown and MotherDuck keeps or applies its own value. Import does not recover this value, so a configured cooldown causes one update after import.
 
 ### Read-Only
 

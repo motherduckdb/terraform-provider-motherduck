@@ -2,12 +2,12 @@
 page_title: "motherduck_dives Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Lists MotherDuck Dives available to the current account.
+  Lists MotherDuck Dives available to the current account. Rows in the returned page are sorted by Dive ID.
 ---
 
 # motherduck_dives (Data Source)
 
-Lists MotherDuck Dives available to the current account.
+Lists MotherDuck Dives available to the current account. Rows in the returned page are sorted by Dive ID.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read
