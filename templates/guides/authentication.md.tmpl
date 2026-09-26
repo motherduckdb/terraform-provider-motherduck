@@ -33,7 +33,7 @@ warehouse, or attach a share for the first time.
 
 ## Bootstrap a writer
 
-Use the [writer-bootstrap example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/blueprints/writer-bootstrap)
+Use the [writer-bootstrap example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/blueprints/writer-bootstrap)
 from an admin-only root with its own state. It creates a service account and a
 read-write token. Supply `writer_username`, review the plan, and apply.
 

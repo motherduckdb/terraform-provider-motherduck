@@ -27,7 +27,7 @@ terraform -chdir=bootstrap apply       # creates svc_writer_prod and its token
 ```
 
 Stage two uses a separate root and state. The module source is pinned to
-v0.2.13, which includes reader setup and overlapping token rotation.
+v0.3.0, which includes reader setup and overlapping token rotation.
 
 ```hcl
 terraform {
@@ -44,7 +44,7 @@ terraform {
 provider "motherduck" {}
 
 module "read_hypertenancy" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.2.13"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.3.0"
 
   expected_writer_username = "svc_writer_prod"
 

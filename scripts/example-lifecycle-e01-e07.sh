@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TERRAFORM_BIN="${TERRAFORM_BIN:-terraform}"
-PROVIDER_VERSION="0.2.13"
+PROVIDER_VERSION="0.3.0"
 RUN_DIR="${TMPDIR:-/tmp}/motherduck-example-lifecycle-$$"
 MIRROR_DIR="${RUN_DIR}/provider-mirror"
 CLI_CONFIG="${RUN_DIR}/terraformrc"
