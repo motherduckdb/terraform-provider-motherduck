@@ -235,7 +235,7 @@ func TestReadDiveKeepsUnsetDescriptionNull(t *testing.T) {
 	client := &scriptedAppSQL{
 		functionOK: func(name string) bool { return name != "md_update_dive_status" },
 		queryRow: func(query string) mdsql.RowScanner {
-			return scannedRow{values: []any{"Dive", "", int64(1), "c", "u", "owner", "content"}}
+			return scannedRow{values: []any{"Dive", "", int64(1), "c", "u", "owner", "content", int64(1), nil}}
 		},
 	}
 	res := &diveResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}

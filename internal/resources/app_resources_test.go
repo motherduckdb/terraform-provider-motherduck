@@ -206,8 +206,13 @@ func (diveReadbackClient) QueryRow(context.Context, string, ...any) mdsql.RowSca
 
 type diveReadbackRow struct{}
 
+// diveLiveResourcesJSON is MD_GET_DIVE version_required_resources for one
+// share mounted under the alias wiki. MotherDuck rewrites the share URL to use
+// the share name.
+const diveLiveResourcesJSON = `[{"name":"wiki_share","alias":"wiki","url":"md:_share/wiki_share/0f1e2d3c","id":"00000000-0000-4000-8000-000000000001","resource_type":"share"}]`
+
 func (diveReadbackRow) Scan(dest ...any) error {
-	values := []any{"Audit Dive", "", int64(2), "created", "updated", "owner", "content", "ready", "changed", "00000000-0000-4000-8000-000000000000", int64(2)}
+	values := []any{"Audit Dive", "", int64(2), "created", "updated", "owner", "content", int64(3), diveLiveResourcesJSON, "ready", "changed", "00000000-0000-4000-8000-000000000000", int64(2)}
 	for i, value := range values {
 		switch target := dest[i].(type) {
 		case *stdsql.NullString:
@@ -221,15 +226,101 @@ func (diveReadbackRow) Scan(dest ...any) error {
 	return nil
 }
 
-func TestReadDivePreservesConfiguredAPIVersionWhenPublicReadbackOmitsIt(t *testing.T) {
-	model := diveModel{ID: types.StringValue("123e4567-e89b-42d3-a456-426614174000"), APIVersion: types.Int64Value(1)}
+func TestReadDiveRecoversAPIVersionAndRequiredResources(t *testing.T) {
+	ctx := context.Background()
 	resource := &diveResource{baseResource: baseResource{provider: &providerctx.Context{SQL: diveReadbackClient{}}}}
+	objectType := diveRequiredResourceObjectType()
+	imported := diveModel{ID: types.StringValue("123e4567-e89b-42d3-a456-426614174000"), APIVersion: types.Int64Null(), RequiredResources: types.ListNull(objectType)}
 	var diags diag.Diagnostics
-	if !resource.readDive(context.Background(), &model, &diags) || diags.HasError() {
+	if !resource.readDive(ctx, &imported, &diags) || diags.HasError() {
 		t.Fatalf("readDive diagnostics: %v", diags)
 	}
-	if got := model.APIVersion.ValueInt64(); got != 1 {
-		t.Fatalf("readDive changed configured api_version to %d, want 1", got)
+	if got := imported.APIVersion.ValueInt64(); got != 3 {
+		t.Fatalf("imported api_version = %d, want 3 from MD_GET_DIVE", got)
+	}
+	want, _ := types.ListValueFrom(ctx, objectType, []diveRequiredResourceModel{{Alias: types.StringValue("wiki"), URL: types.StringValue("md:_share/wiki_share/0f1e2d3c")}})
+	if !imported.RequiredResources.Equal(want) {
+		t.Fatalf("imported required_resources = %s, want %s", imported.RequiredResources, want)
+	}
+
+	configuredURL := "md:_share/wiki_db/0F1E2D3C"
+	configured, _ := types.ListValueFrom(ctx, objectType, []diveRequiredResourceModel{{Alias: types.StringValue("wiki"), URL: types.StringValue(configuredURL)}})
+	managed := diveModel{ID: imported.ID, APIVersion: types.Int64Value(3), RequiredResources: configured}
+	if !resource.readDive(ctx, &managed, &diags) || diags.HasError() {
+		t.Fatalf("readDive diagnostics: %v", diags)
+	}
+	if !managed.RequiredResources.Equal(configured) {
+		t.Fatalf("an equivalent share URL should keep its configured spelling, got %s", managed.RequiredResources)
+	}
+}
+
+func TestDiveRequiredResourcesFromLiveReportsDrift(t *testing.T) {
+	ctx := context.Background()
+	objectType := diveRequiredResourceObjectType()
+	prior, _ := types.ListValueFrom(ctx, objectType, []diveRequiredResourceModel{{Alias: types.StringValue("wiki"), URL: types.StringValue("md:_share/wiki_share/other-token")}})
+	var diags diag.Diagnostics
+	got, ok := diveRequiredResourcesFromLive(ctx, prior, stdsql.NullString{String: diveLiveResourcesJSON, Valid: true}, &diags)
+	if !ok || diags.HasError() {
+		t.Fatal(diags)
+	}
+	if got.Equal(prior) {
+		t.Fatal("a different share token must surface as drift")
+	}
+	emptyPrior := types.ListValueMust(objectType, []attr.Value{})
+	for name, tc := range map[string]struct {
+		prior types.List
+		want  types.List
+	}{
+		"unset stays null":        {prior: types.ListNull(objectType), want: types.ListNull(objectType)},
+		"empty list stays empty":  {prior: emptyPrior, want: emptyPrior},
+		"removed mounts go empty": {prior: prior, want: emptyPrior},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, ok := diveRequiredResourcesFromLive(ctx, tc.prior, stdsql.NullString{String: "[]", Valid: true}, &diags)
+			if !ok || !got.Equal(tc.want) {
+				t.Fatalf("got %s, want %s", got, tc.want)
+			}
+		})
+	}
+	alias, _ := diveRequiredResourcesFromLive(ctx, types.ListNull(objectType), stdsql.NullString{String: `[{"name":"analytics","alias":null,"url":"md:analytics"}]`, Valid: true}, &diags)
+	wantAlias, _ := types.ListValueFrom(ctx, objectType, []diveRequiredResourceModel{{Alias: types.StringValue("analytics"), URL: types.StringValue("md:analytics")}})
+	if !alias.Equal(wantAlias) {
+		t.Fatalf("a mount without an alias should read its name, got %s", alias)
+	}
+}
+
+func TestDiveResourceURLsEquivalent(t *testing.T) {
+	for _, tc := range []struct {
+		configured, live string
+		want             bool
+	}{
+		{"md:analytics", "md:analytics", true},
+		{"md:Analytics", "md:analytics", true},
+		{"md:analytics", "md:other", false},
+		{"md:_share/db/abc", "md:_share/share_name/ABC", true},
+		{"md:_share/db/abc", "md:_share/db/def", false},
+		{"md:_share/db/", "md:_share/other/", false},
+		{"md:abc", "md:_share/db/abc", false},
+	} {
+		if got := diveResourceURLsEquivalent(tc.configured, tc.live); got != tc.want {
+			t.Fatalf("diveResourceURLsEquivalent(%q, %q) = %v, want %v", tc.configured, tc.live, got, tc.want)
+		}
+	}
+}
+
+func TestDiveContentArgsIgnoresUnknownAPIVersion(t *testing.T) {
+	plan := &diveModel{Content: types.StringValue("content"), APIVersion: types.Int64Unknown()}
+	state := &diveModel{Content: types.StringValue("content"), APIVersion: types.Int64Value(1)}
+	if _, update := diveContentArgs(context.Background(), plan, state, &diag.Diagnostics{}); update {
+		t.Fatal("an unconfigured api_version must not trigger a content update")
+	}
+	plan.Content = types.StringValue("new content")
+	args, update := diveContentArgs(context.Background(), plan, state, &diag.Diagnostics{})
+	if !update {
+		t.Fatal("changed content should update")
+	}
+	if _, sent := args["api_version"]; sent {
+		t.Fatalf("an unconfigured api_version must be left to MotherDuck, got %v", args)
 	}
 }
 

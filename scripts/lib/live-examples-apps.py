@@ -198,9 +198,7 @@ def run_examples(token):
         address = "motherduck_flight.heartbeat" if kind == "flight" else f"motherduck_{kind}.revenue"
         tf(APP, "state", "rm", address, token=token)
         tf(APP, "import", "-input=false", address, str(after[kind]), token=token)
-        if kind == "dive":
-            # Public getters cannot recover api_version. One configured content update restores it.
-            tf(APP, "apply", "-auto-approve", "-input=false", token=token)
+        # MD_GET_DIVE reports api_version and required_resources, so an imported Dive is a no-op.
         plan(token)
         check(kind + " import and no-op")
 
