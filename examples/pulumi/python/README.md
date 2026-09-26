@@ -35,7 +35,8 @@ pulumi install
 generates the local `pulumi_motherduck` SDK, and creates `.venv` from the
 checked-in runtime options and requirements. Do not run an unversioned
 `pulumi package add` command here because it can select a newer bridge. Keep
-`Pulumi.yaml` and `requirements.txt` under source control. Keep the matching
+`Pulumi.yaml` and `requirements.txt` under source control. `requirements.txt`
+pins every transitive Python dependency and documents how to regenerate it. Keep the matching
 release checksum beside the downloaded artifact while verifying it. `.venv`, `sdks`, `bin`, and
 `Pulumi.<stack>.yaml` are local files and are ignored.
 
@@ -45,12 +46,13 @@ the local state directory still need filesystem protection. Choose a database na
 
 ## Lifecycle
 
-Supply the SQL token through the environment. Wrapping it in
+Inject `MOTHERDUCK_TOKEN` into the environment from your secret manager, never
+by typing it into the shell, where it lands in history. Wrapping it in
 `pulumi.Output.secret` keeps the provider configuration and dependent values
 secret in Pulumi state and UI output.
 
 ```shell
-export MOTHERDUCK_TOKEN='...'
+# MOTHERDUCK_TOKEN must already be set by your secret manager.
 pulumi preview
 pulumi up
 pulumi refresh

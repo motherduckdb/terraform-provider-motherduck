@@ -18,13 +18,14 @@ Use `for_each` over a tenant map. Each tenant gets:
 - `motherduck_database`
 - `motherduck_schema`
 - `motherduck_service_account`
-- `motherduck_access_token`
+- `motherduck_duckling_config`
+- `motherduck_access_token` (a one-hour setup token, a read-scaling token, and one token per rotation generation)
 - `motherduck_share`
 - `motherduck_share_grant`
 
 The example implementation is in `examples/blueprints/hypertenancy`.
 
-This blueprint includes REST-backed service-account and access-token resources. It requires `MOTHERDUCK_TOKEN` for SQL resources and an organization-admin `MOTHERDUCK_ADMIN_TOKEN` for reader service accounts, token creation, and share grants.
+This blueprint includes REST-backed service-account and access-token resources. It requires `MOTHERDUCK_TOKEN` for SQL resources and an organization-admin `MOTHERDUCK_ADMIN_TOKEN` for reader service accounts, Duckling configuration, and token creation. Share grants run over SQL as the share owner.
 
 The identity behind `MOTHERDUCK_TOKEN` owns every tenant database and share this blueprint creates, which makes it the only identity that can write tenant data and the only one allowed to `GRANT READ ON SHARE` to the readers. Run the module with a dedicated writer service account token (see the writer-bootstrap blueprint) rather than a personal token, so ownership does not depend on an individual's account.
 
@@ -50,7 +51,20 @@ Keep platform administration state separate from tenant data state if different 
 
 ## Token Lifecycle And Offboarding
 
-Generated reader tokens expire after `reader_token_ttl_seconds` (30 days by default) and Terraform does not rotate them automatically. Plan a rotation workflow, for example `terraform apply -replace='module.hypertenancy.motherduck_access_token.reader["acme"]'`, before the TTL elapses.
+Generated reader tokens expire after `reader_token_ttl_seconds` (30 days by default) and Terraform does not rotate them automatically. Do not rotate them with `terraform apply -replace`. Replacement revokes the current token in the same apply, so the tenant backend loses access until it receives the new value.
+
+Rotate before the TTL elapses with an overlapping generation:
+
+1. Add a generation and apply. Every tenant reader gets a second read-scaling token named `terraform-reader-<generation>`.
+
+   ```hcl
+   reader_token_generations = ["2026_10"]
+   ```
+
+2. Move `module.hypertenancy.reader_rotation_tokens["acme/2026_10"]` (keyed by `<tenant_id>/<generation>`) into each backend secret and verify new connections.
+3. Set `retire_legacy_reader_token = true`, keep the same generation, and apply again. The module revokes the original `reader_tokens`.
+
+Retirement fails the plan unless MotherDuck already lists a named replacement generation for each reader. Keep the generation managed until the next rotation completes.
 
 Removing a tenant from the `tenants` map destroys that tenant's database and all data inside it on the next apply. Snapshot or export tenant data first and treat tenant removal as deliberate offboarding.
 
@@ -64,6 +78,8 @@ Inputs:
 | `reader_prefix` | Prefix for tenant reader service account usernames. | `"svc_reader"` |
 | `share_prefix` | Prefix for tenant share names. | `"share"` |
 | `reader_token_ttl_seconds` | TTL for generated tenant reader tokens, between 300 and 31536000 seconds. | `2592000` (30 days) |
+| `reader_token_generations` | Additional read-scaling token generations to create for every reader during an overlapping rotation. | `[]` |
+| `retire_legacy_reader_token` | Revoke the original `terraform-reader` tokens after a replacement generation is live. | `false` |
 | `tenants` | Tenant definitions keyed by stable tenant id. Each value accepts optional `display_name`, `slug`, and `snapshot_retention_days` (default `7`). Normalized slugs must be unique across tenants. | required |
 
 Outputs:
@@ -74,7 +90,10 @@ Outputs:
 | `tenant_databases` | Tenant database names keyed by tenant id. |
 | `tenant_shares` | Tenant share names keyed by tenant id. |
 | `reader_usernames` | Reader service account usernames keyed by tenant id. |
-| `reader_tokens` | Generated reader tokens keyed by tenant id (sensitive). Store these in a secret manager. |
+| `reader_tokens` | Original read-scaling reader tokens keyed by tenant id (sensitive). Empty after retirement. |
+| `reader_rotation_tokens` | Overlapping read-scaling tokens keyed by `<tenant_id>/<generation>` (sensitive). |
+| `share_urls` | Restricted share URLs keyed by tenant id (sensitive). Each reader attaches its share once. |
+| `reader_setup_tokens` | One-hour read-write tokens keyed by tenant id (sensitive), used only for the initial share attachment. |
 
 ## Example
 
@@ -82,7 +101,7 @@ Key each tenant by a stable internal tenant id, not by an email or company name.
 
 ```hcl
 module "hypertenancy" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/hypertenancy?ref=v0.2.3"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/hypertenancy?ref=v0.2.13"
 
   tenants = {
     acme = {
@@ -97,18 +116,48 @@ module "hypertenancy" {
 output "tenants" {
   value = module.hypertenancy.tenants
 }
+
+output "share_urls" {
+  value     = module.hypertenancy.share_urls
+  sensitive = true
+}
+
+output "reader_setup_tokens" {
+  value     = module.hypertenancy.reader_setup_tokens
+  sensitive = true
+}
+
+output "reader_tokens" {
+  value     = module.hypertenancy.reader_tokens
+  sensitive = true
+}
+
+output "reader_rotation_tokens" {
+  value     = module.hypertenancy.reader_rotation_tokens
+  sensitive = true
+}
 ```
 
 ## Complete the reader setup
 
-The module creates grants, but does not attach shares as the readers. Reader
-accounts need an initial read-write connection and a share attachment before
-using their read-scaling tokens. The module also leaves compute settings to
-the caller. See [sharing and read scaling](sharing-and-read-scaling.md).
+The module grants each reader its share and configures each reader's Duckling
+(Standard instances, one read-scaling replica, 60-second cooldowns). It does not
+attach the share as the reader. Attach each share once, connected with that
+tenant's `reader_setup_tokens` value:
 
-For a complete example with reader compute, temporary setup credentials, and
-automatic publication, use [customer-facing analytics](customer-facing-analytics.md).
+```sql
+ATTACH '<tenant share_urls value>' AS reporting;
+```
 
-These older modules omit `update_mode` and adopt the service default. If the
-resulting share uses manual publication, the writer pipeline must run
-`UPDATE SHARE` after loading data. A no-change apply does not publish new rows.
+The attachment is stored for the reader account. The setup token lasts one
+hour. Never give it to the serving application. Serve queries with the
+read-scaling reader token after the writer pipeline publishes data. See
+[sharing and read scaling](sharing-and-read-scaling.md) for freshness and
+replica behavior.
+
+The shares omit `update_mode` and adopt the service default. If the resulting
+share uses manual publication, the writer pipeline must run `UPDATE SHARE`
+after loading data. A no-change apply does not publish new rows.
+
+For a complete application with a backend that routes tenant queries, use
+[customer-facing analytics](customer-facing-analytics.md).

@@ -93,7 +93,7 @@ performance changes. Do not use noisy wall-clock thresholds as ordinary PR gates
 Live checks use credentials from environment variables:
 
 - `MOTHERDUCK_TOKEN`: SQL and DuckDB-backed resources and data sources.
-- `MOTHERDUCK_ADMIN_TOKEN`: optional organization-admin coverage for REST-backed administration resources and data sources. Hosted gates do not have this credential.
+- `MOTHERDUCK_ADMIN_TOKEN`: optional organization-admin coverage for REST-backed administration resources and data sources. Pull-request gates never receive it. Only the hosted `Live admin lifecycle` job on `main` uses an admin credential.
 
 Admin-only live smoke scripts fail when the token authenticates but lacks organization-admin permissions. The Terraform version matrix remains SQL-only in that case, and the permission-diagnostics smoke uses the same response to test the provider's 403 diagnostic.
 
@@ -103,7 +103,7 @@ Run the required SQL lifecycle gate:
 MOTHERDUCK_TOKEN=... make test-live-required
 ```
 
-All three targets require `MOTHERDUCK_TOKEN` and fail when it is missing. `test-integration` runs the Go SQL-client integration tests, `test-acceptance` runs Terraform provider lifecycles, and `test-live-required` runs both followed by a cleanup audit. REST administration behavior is required in the hermetic protocol suite. Admin-only Go acceptance tests additionally require the `admin_acceptance` build tag and remain optional because the hosted environment has no organization-admin token.
+All three targets require `MOTHERDUCK_TOKEN` and fail when it is missing. `test-integration` runs the Go SQL-client integration tests, `test-acceptance` runs Terraform provider lifecycles, and `test-live-required` runs both followed by a cleanup audit. REST administration behavior is required in the hermetic protocol suite. Admin-only Go acceptance tests additionally require the `admin_acceptance` build tag. They are optional locally and run in hosted CI only in the `Live admin lifecycle` job on `main`.
 
 Run the broad stable SQL smoke before release candidates or larger SQL lifecycle changes:
 
