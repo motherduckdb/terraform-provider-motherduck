@@ -337,6 +337,21 @@ func (d *rowsDataSource) functionAvailable(ctx context.Context, client sqlfunc.E
 		)
 		return false
 	}
+	if d.spec.requiredParameter == "" {
+		return true
+	}
+	available, err = sqlfunc.ParameterExists(ctx, client, d.spec.requiredFunction, d.spec.requiredParameter)
+	if err != nil {
+		diags.AddError("Unable to inspect MotherDuck SQL functions", err.Error())
+		return false
+	}
+	if !available {
+		diags.AddError(
+			"MotherDuck SQL feature unavailable",
+			fmt.Sprintf("%s does not accept %s in the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_%s data source.", strings.ToUpper(d.spec.requiredFunction), d.spec.requiredParameter, d.spec.name),
+		)
+		return false
+	}
 	return true
 }
 

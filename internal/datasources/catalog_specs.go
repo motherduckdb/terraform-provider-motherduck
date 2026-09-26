@@ -12,11 +12,14 @@ type rowSpec struct {
 	name             string
 	description      string
 	requiredFunction string
-	attrs            []string
-	requiredAttrs    []string
-	typedRows        []typedRowAttribute
-	build            func(rowsModel) (string, error)
-	postProcess      func([]map[string]any) []map[string]any
+	// requiredParameter, when set, must be a named parameter of
+	// requiredFunction in the current session.
+	requiredParameter string
+	attrs             []string
+	requiredAttrs     []string
+	typedRows         []typedRowAttribute
+	build             func(rowsModel) (string, error)
+	postProcess       func([]map[string]any) []map[string]any
 }
 
 type typedRowAttribute struct {
@@ -271,16 +274,17 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_LIST_GUIDE_VERSIONS" + sqlbuild.NamedArgs(args), nil
 		}},
-		{name: "guide_grantees", description: "Lists the direct roles or organization configured to read one MotherDuck Guide.", requiredFunction: "md_list_guide_grantees", attrs: []string{"guide_id"}, requiredAttrs: []string{"guide_id"}, typedRows: []typedRowAttribute{
-			{name: "grantee_name", description: "Role or organization name."},
-			{name: "grantee_type", description: "Grantee type: role or organization."},
-			{name: "privilege", description: "Granted Guide privilege."},
-			{name: "granted_at", description: "Grant creation timestamp."},
+		// Role-scoped Guide access is not in production. Its planned design adds
+		// role_names to MD_SET_GUIDE_ACCESS and access_role_names to Guide rows.
+		{name: "guide_grantees", description: "Experimental. Lists the roles that can read one MotherDuck Guide with role-scoped access, read from the Guide's `access_role_names`. Returns no rows for user or organization access. Requires a MotherDuck SQL session whose `MD_SET_GUIDE_ACCESS` accepts `role_names`, which production MotherDuck does not offer yet. Rows are sorted by role name.", requiredFunction: "md_set_guide_access", requiredParameter: "role_names", attrs: []string{"guide_id"}, requiredAttrs: []string{"guide_id"}, typedRows: []typedRowAttribute{
+			{name: "grantee_name", description: "Role name."},
+			{name: "grantee_type", description: "Grantee type. Always `role`."},
+			{name: "privilege", description: "Granted Guide privilege. Always `read`."},
 		}, build: func(m rowsModel) (string, error) {
 			if m.GuideID.IsNull() {
 				return "", fmt.Errorf("guide_id is required")
 			}
-			return "SELECT * FROM MD_LIST_GUIDE_GRANTEES(id := " + sqlbuild.StringLiteral(m.GuideID.ValueString()) + "::UUID) ORDER BY grantee_type, grantee_name", nil
+			return "SELECT grantee_name, 'role' AS grantee_type, 'read' AS privilege FROM (SELECT unnest(access_role_names) AS grantee_name FROM MD_GET_GUIDE(id := " + sqlbuild.StringLiteral(m.GuideID.ValueString()) + "::UUID) WHERE lower(access) = 'role') ORDER BY lower(grantee_name), grantee_name", nil
 		}},
 	}
 }

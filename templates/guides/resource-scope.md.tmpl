@@ -63,9 +63,9 @@ on refresh/import. Do not rely on complete drift detection for that field.
 Guide audience management also belongs to the same authoritative owner as its
 content until a separately managed, non-overlapping permissions surface exists.
 The public Guide access functions currently document user/private and
-organization audiences. Role audiences remain compatibility fields in the
-provider schema and require the account to expose the Guide grantee functions.
-Check function availability before using `access = "role"` or
+organization audiences. Role audiences are experimental and not available in
+production MotherDuck yet. They require a session whose `MD_SET_GUIDE_ACCESS`
+accepts `role_names`. Check for that parameter before using `access = "role"` or
 `motherduck_guide_grantees`.
 
 ## Move existing content out of Terraform

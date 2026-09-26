@@ -26,8 +26,12 @@ content, references, and audience. Referenced share URLs are sensitive and can
 appear in Terraform state even when normal output is masked.
 
 Import by Guide UUID. User/private and organization audiences are the documented
-public access modes. Role audiences depend on the Guide grantee functions being
-available in the account and are retained as compatibility fields.
+public access modes. `access = "role"` with `role_names` is experimental and is
+not available in production MotherDuck yet. It requires a session whose
+`MD_SET_GUIDE_ACCESS` accepts `role_names`. The provider checks for that
+parameter before it creates the Guide and reports an error during apply
+otherwise.
+Refresh reads the role audience from the Guide's `access_role_names` column.
 
 Destroy deletes the Guide. To retain the remote object while moving to
 Blueprints, remove Terraform ownership without destruction and keep its UUID.
