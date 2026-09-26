@@ -15,15 +15,11 @@ import (
 )
 
 func TestCatalogMentionsRegisteredProviderSurfaces(t *testing.T) {
-	body, err := os.ReadFile("catalog.yaml")
-	if err != nil {
-		t.Fatalf("reading catalog manifest: %v", err)
+	catalog := loadCatalog(t)
+	catalogResources, catalogDataSources, catalogEphemeralResources, unknown := catalogSurfaces(catalog)
+	for _, surface := range unknown {
+		t.Errorf("catalog.yaml provider_surface %q must start with resource., data_source., or ephemeral_resource.", surface)
 	}
-	var catalog catalogManifest
-	if err := yaml.Unmarshal(body, &catalog); err != nil {
-		t.Fatalf("parsing catalog manifest: %v", err)
-	}
-	catalogResources, catalogDataSources, catalogEphemeralResources := catalogSurfaces(catalog)
 	for kind, surfaces := range map[string]map[string]bool{
 		"resources":           catalogResources,
 		"data-sources":        catalogDataSources,
@@ -105,7 +101,10 @@ func TestCatalogMentionsRegisteredProviderSurfaces(t *testing.T) {
 
 type catalogManifest struct {
 	REST []struct {
+		Path            string    `yaml:"path"`
+		Methods         []string  `yaml:"methods"`
 		ProviderSurface yaml.Node `yaml:"provider_surface"`
+		Status          string    `yaml:"status"`
 	} `yaml:"rest"`
 	SQL struct {
 		Resources   []string `yaml:"resources"`
@@ -113,10 +112,88 @@ type catalogManifest struct {
 	} `yaml:"sql"`
 }
 
-func catalogSurfaces(catalog catalogManifest) (map[string]bool, map[string]bool, map[string]bool) {
-	resources := map[string]bool{}
-	dataSources := map[string]bool{}
-	ephemeralResources := map[string]bool{}
+func loadCatalog(t *testing.T) catalogManifest {
+	t.Helper()
+	body, err := os.ReadFile("catalog.yaml")
+	if err != nil {
+		t.Fatalf("reading catalog manifest: %v", err)
+	}
+	var catalog catalogManifest
+	if err := yaml.Unmarshal(body, &catalog); err != nil {
+		t.Fatalf("parsing catalog manifest: %v", err)
+	}
+	return catalog
+}
+
+func TestCatalogRESTEntriesAreWellFormed(t *testing.T) {
+	catalog := loadCatalog(t)
+	clientSource, err := os.ReadFile(filepath.Join("..", "client", "rest", "client.go"))
+	if err != nil {
+		t.Fatalf("reading REST client: %v", err)
+	}
+	validStatus := map[string]bool{"stable": true, "preview": true, "experimental": true, "deprecated": true, "ephemeral": true}
+	validMethods := map[string]bool{"GET": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true}
+	for _, entry := range catalog.REST {
+		if !validStatus[entry.Status] {
+			t.Errorf("REST path %s has invalid status %q", entry.Path, entry.Status)
+		}
+		if len(entry.Methods) == 0 {
+			t.Errorf("REST path %s lists no methods", entry.Path)
+		}
+		for _, method := range entry.Methods {
+			if !validMethods[method] {
+				t.Errorf("REST path %s has invalid method %q", entry.Path, method)
+			}
+		}
+		if len(providerSurfaceValues(entry.ProviderSurface)) == 0 {
+			t.Errorf("REST path %s names no provider surface", entry.Path)
+		}
+		// Every literal part of the path must appear as a string literal in
+		// the REST client, which catches typos and removed endpoints.
+		for _, fragment := range pathLiteralFragments(entry.Path) {
+			if !strings.Contains(string(clientSource), `"`+fragment) {
+				t.Errorf("REST path %s fragment %q is not used by internal/client/rest", entry.Path, fragment)
+			}
+		}
+	}
+}
+
+func TestCatalogSurfacesRejectUnknownPrefixes(t *testing.T) {
+	var catalog catalogManifest
+	if err := yaml.Unmarshal([]byte("rest:\n  - provider_surface: [resouce.motherduck_typo, resource.motherduck_ok]\n"), &catalog); err != nil {
+		t.Fatal(err)
+	}
+	resources, _, _, unknown := catalogSurfaces(catalog)
+	if !resources["motherduck_ok"] {
+		t.Fatal("known prefix was not parsed")
+	}
+	if len(unknown) != 1 || unknown[0] != "resouce.motherduck_typo" {
+		t.Fatalf("unknown surfaces = %v, want the misspelled prefix", unknown)
+	}
+}
+
+// pathLiteralFragments returns the literal parts of a templated REST path,
+// for example "/v1/users/" and "/tokens" for /v1/users/{username}/tokens.
+func pathLiteralFragments(path string) []string {
+	var fragments []string
+	for path != "" {
+		before, after, found := strings.Cut(path, "{")
+		if before != "" {
+			fragments = append(fragments, before)
+		}
+		if !found {
+			break
+		}
+		_, rest, _ := strings.Cut(after, "}")
+		path = rest
+	}
+	return fragments
+}
+
+func catalogSurfaces(catalog catalogManifest) (resources, dataSources, ephemeralResources map[string]bool, unknown []string) {
+	resources = map[string]bool{}
+	dataSources = map[string]bool{}
+	ephemeralResources = map[string]bool{}
 	for _, surface := range catalog.SQL.Resources {
 		resources[surface] = true
 	}
@@ -125,17 +202,18 @@ func catalogSurfaces(catalog catalogManifest) (map[string]bool, map[string]bool,
 	}
 	for _, entry := range catalog.REST {
 		for _, surface := range providerSurfaceValues(entry.ProviderSurface) {
-			switch {
-			case len(surface) > len("resource.") && surface[:len("resource.")] == "resource.":
-				resources[surface[len("resource."):]] = true
-			case len(surface) > len("data_source.") && surface[:len("data_source.")] == "data_source.":
-				dataSources[surface[len("data_source."):]] = true
-			case len(surface) > len("ephemeral_resource.") && surface[:len("ephemeral_resource.")] == "ephemeral_resource.":
-				ephemeralResources[surface[len("ephemeral_resource."):]] = true
+			if name, ok := strings.CutPrefix(surface, "resource."); ok && name != "" {
+				resources[name] = true
+			} else if name, ok := strings.CutPrefix(surface, "data_source."); ok && name != "" {
+				dataSources[name] = true
+			} else if name, ok := strings.CutPrefix(surface, "ephemeral_resource."); ok && name != "" {
+				ephemeralResources[name] = true
+			} else {
+				unknown = append(unknown, surface)
 			}
 		}
 	}
-	return resources, dataSources, ephemeralResources
+	return resources, dataSources, ephemeralResources, unknown
 }
 
 func providerSurfaceValues(node yaml.Node) []string {
