@@ -8,7 +8,7 @@ source "${ROOT_DIR}/scripts/lib/live-common.sh"
 
 isolate_live_test_environment
 RUN_ID="${RUN_ID:-$(date +%Y%m%d%H%M%S)_$$}"
-PROVIDER_VERSION="${PROVIDER_VERSION:-0.2.13}"
+PROVIDER_VERSION="${PROVIDER_VERSION:-0.3.0}"
 TERRAFORM_BIN="${TERRAFORM_BIN:-terraform}"
 
 require_safe_run_id "${RUN_ID}"

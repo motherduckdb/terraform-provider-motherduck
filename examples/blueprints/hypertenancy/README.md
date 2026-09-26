@@ -11,7 +11,7 @@ This module needs both provider credentials in the environment:
 
 ## Quick Start
 
-The module source is pinned to v0.2.13, which includes reader setup and
+The module source is pinned to v0.3.0, which includes reader setup and
 overlapping token rotation. Keep the module ref pinned independently from
 the provider version constraint.
 
@@ -30,7 +30,7 @@ terraform {
 provider "motherduck" {}
 
 module "hypertenancy" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/hypertenancy?ref=v0.2.13"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/hypertenancy?ref=v0.3.0"
 
   tenants = {
     acme = {

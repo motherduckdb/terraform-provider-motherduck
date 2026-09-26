@@ -23,7 +23,7 @@ terraform {
 provider "motherduck" {}
 
 module "writer_bootstrap" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.2.13"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.3.0"
 
   writer_username = "svc_writer_prod"
 }
@@ -39,7 +39,7 @@ output "writer_rotation_tokens" {
 }
 ```
 
-The module source is pinned to v0.2.13, which includes overlapping token
+The module source is pinned to v0.3.0, which includes overlapping token
 rotation. Keep the module ref independent from the provider version constraint.
 
 ```bash

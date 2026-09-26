@@ -33,7 +33,7 @@ that tenant's data as that identity. See
 
 ## 1. Bootstrap the writer
 
-Apply the [writer-bootstrap example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/blueprints/writer-bootstrap)
+Apply the [writer-bootstrap example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/blueprints/writer-bootstrap)
 in its own state with `MOTHERDUCK_ADMIN_TOKEN` and
 `writer_username = "svc_cfa_writer"`. Transfer its generated token to a protected
 secret-manager entry.
@@ -45,7 +45,7 @@ an admin state and pass usernames to the writer root.
 
 ## 2. Provision the tenants
 
-Copy the complete [customer-facing analytics example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/customer-facing-analytics)
+Copy the complete [customer-facing analytics example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/customer-facing-analytics)
 into a new root with independent, protected state. Its default tenant IDs are
 `acme` and `globex`. Choose an unused prefix before applying.
 
@@ -189,7 +189,7 @@ databases and tables before adopting this example for real customer data.
 
 ## Run the backend companion
 
-The [Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.2.13/examples/customer-facing-analytics/backend/README.md)
+The [Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.3.0/examples/customer-facing-analytics/backend/README.md)
 queries these tenant databases with separate reader pools and verified server-side
 sessions. It includes tests for tampered tenant parameters and suspended access.
 Run it locally before adapting it to your authentication and deployment system.

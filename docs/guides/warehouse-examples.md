@@ -17,9 +17,9 @@ guide uses an orders feed with source revisions and a physical revenue mart.
 
 | Example | Layout | Use it for |
 | --- | --- | --- |
-| [Simple](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/warehouses/simple) | One database, raw table, analytics view | A small feed with one row per order |
-| [Layered](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/warehouses/layered) | Three databases, two tables, one view | Revised source records and a separately refreshed mart |
-| [Bootstrap](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/warehouses/bootstrap) | Dev/prod writers, tokens, compute settings | Dedicated ownership for either layout |
+| [Simple](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/warehouses/simple) | One database, raw table, analytics view | A small feed with one row per order |
+| [Layered](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/warehouses/layered) | Three databases, two tables, one view | Revised source records and a separately refreshed mart |
+| [Bootstrap](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/warehouses/bootstrap) | Dev/prod writers, tokens, compute settings | Dedicated ownership for either layout |
 
 The steps below use the layered root. Follow [environment setup](environments.md)
 first and inject the selected writer's token as `MOTHERDUCK_TOKEN`. The warehouse
@@ -135,7 +135,7 @@ Use each intended reader credential to verify both allowed and denied reads.
 
 ## Continue with ingestion and dbt
 
-The [cookbook pipeline companion](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.2.13/examples/cookbook-pipeline/README.md)
+The [cookbook pipeline companion](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.3.0/examples/cookbook-pipeline/README.md)
 passes a Terraform-owned database into a pinned dlt recipe and dbt models.
 Those tools own their tables. Use a separate root or deliberately transfer
 overlapping table ownership before adopting it.

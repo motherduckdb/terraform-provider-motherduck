@@ -20,7 +20,7 @@ Terraform 1.5 or later is supported. Ephemeral resources require Terraform 1.10.
 Install the provider with `terraform init` from the Terraform Registry. A
 filesystem mirror is optional for offline installation. Copy every file in a
 runnable root, including SQL templates. For modules, pin the Git source to a
-reviewed release tag such as `v0.2.13` and pass providers from your root. The module source ref
+reviewed release tag such as `v0.3.0` and pass providers from your root. The module source ref
 and the provider version constraint are independent.
 
 Check [authentication](../docs/guides/authentication.md) before applying. A
