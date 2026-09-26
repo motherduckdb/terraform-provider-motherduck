@@ -2,22 +2,28 @@
 page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
 subcategory: "Application definitions"
 description: |-
-  Reads Guide grantees when the connected MotherDuck SQL session supports that catalog.
+  Reads the role audience of a Guide when the connected MotherDuck SQL session supports role-scoped Guide access.
 ---
 
 # {{.Name}} ({{.Type}})
 
-This experimental data source requires `MD_LIST_GUIDE_GRANTEES` in the connected
-MotherDuck SQL session. It returns an explicit unavailable-function diagnostic
-when that function is absent. An organization-admin token alone does not make
-the function available.
+This experimental data source lists the roles that can read a Guide with
+role-scoped access. It reads the Guide's `access_role_names` column through
+`MD_GET_GUIDE` and returns no rows for user or organization access.
+
+Production MotherDuck supports only user and organization Guide access today.
+Role-scoped access requires a session whose `MD_SET_GUIDE_ACCESS` accepts a
+`role_names` parameter. Without it, the data source returns an explicit
+unavailable-feature diagnostic. An organization-admin token alone does not make
+the feature available.
 
 Check the authenticated session before using it:
 
 ```sql
-SELECT function_name
+SELECT count(*)
 FROM duckdb_functions()
-WHERE lower(function_name) = 'md_list_guide_grantees';
+WHERE lower(function_name) = 'md_set_guide_access'
+  AND list_contains(parameters, 'role_names');
 ```
 
 For documented private and organization-wide Guide visibility, see
@@ -25,7 +31,7 @@ For documented private and organization-wide Guide visibility, see
 
 ## Example Usage
 
-Use an existing Guide ID in a session that supports the grantee catalog:
+Use an existing Guide ID in a session that supports role-scoped Guide access:
 
 {{tffile "examples/data-sources/motherduck_guide_grantees/data-source.tf"}}
 

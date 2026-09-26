@@ -5,8 +5,10 @@ import (
 	stdsql "database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	resourceTimeouts "github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -117,12 +119,44 @@ func (r *snapshotResource) Read(ctx context.Context, req resource.ReadRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	found := r.readSnapshot(ctx, &state, &resp.Diagnostics)
-	if !found && !resp.Diagnostics.HasError() {
+	priorID := state.ID
+	status := r.readSnapshotStatus(ctx, &state, &resp.Diagnostics)
+	if status == snapshotRetainedWithoutDatabase {
+		resp.Diagnostics.Append(snapshotRetainedWarning(state.Database.ValueString(), state.Name.ValueString()))
+		resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+		return
+	}
+	if status != snapshotFound && !resp.Diagnostics.HasError() {
+		if status == snapshotUnlisted && !priorID.IsNull() && !priorID.IsUnknown() && priorID.ValueString() != "" {
+			resp.Diagnostics.Append(snapshotUnlistedWarning(state.Database.ValueString(), priorID.ValueString()))
+		}
 		resp.State.RemoveResource(ctx)
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+}
+
+// snapshotUnlistedWarning explains that a snapshot missing from
+// MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS may still hold its name.
+// MotherDuck lists only snapshots of databases that still exist, but a named
+// snapshot outlives the database that created it and stays retained and
+// billed until its name is cleared.
+func snapshotUnlistedWarning(database, id string) diag.Diagnostic {
+	return diag.NewWarningDiagnostic(
+		"MotherDuck snapshot is no longer listed",
+		fmt.Sprintf("Snapshot %s of database %q is no longer listed in MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS, so Terraform removed it from state. "+
+			"MotherDuck lists only snapshots of databases that still exist. If database %q was dropped or recreated, the named snapshot may still be retained and billed. "+
+			"Release it with: %s", id, database, database, snapshotUnnameSQL(id)),
+	)
+}
+
+// snapshotRetainedWarning explains that a named snapshot outlived the
+// database that created it and stays retained until its name is cleared.
+func snapshotRetainedWarning(database, name string) diag.Diagnostic {
+	return diag.NewWarningDiagnostic(
+		"MotherDuck snapshot outlived its database",
+		fmt.Sprintf("Database %q no longer exists, but its named snapshot %q is still retained and billed. Destroy this resource to release the snapshot name.", database, name),
+	)
 }
 
 func (r *snapshotResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -180,21 +214,64 @@ func (r *snapshotResource) Delete(ctx context.Context, req resource.DeleteReques
 	if state.ID.IsNull() || state.ID.ValueString() == "" {
 		return
 	}
-	if err := client.AttachDatabase(ctx, state.Database.ValueString()); err != nil {
-		if isNotFound(err) {
+	unname := snapshotUnnameSQL(state.ID.ValueString())
+	var err error
+	if attachErr := client.AttachDatabase(ctx, state.Database.ValueString()); attachErr != nil {
+		if !isNotFound(attachErr) {
+			resp.Diagnostics.AddError("Unable to attach MotherDuck database", attachErr.Error())
 			return
 		}
-		resp.Diagnostics.AddError("Unable to attach MotherDuck database", err.Error())
-		return
-	}
-	err := retry.SQL(ctx, func() error {
-		return client.WithDatabaseUse(ctx, state.Database.ValueString(), func(exec func(string, ...any) error) error {
-			return exec("ALTER SNAPSHOT " + sqlbuild.StringLiteral(state.ID.ValueString()) + " SET snapshot_name = ''")
+		// A named snapshot outlives the database that created it. MotherDuck
+		// resolves a snapshot ID across all of the user's snapshots, but
+		// ALTER SNAPSHOT must run while a native database is selected.
+		native, nativeErr := nativeSnapshotDatabase(ctx, client)
+		if nativeErr != nil {
+			resp.Diagnostics.AddError("Unable to unname MotherDuck snapshot", fmt.Sprintf("Database %q no longer exists and no native MotherDuck database is available to release snapshot %s from: %s. Run %s while a native database is selected.", state.Database.ValueString(), state.ID.ValueString(), nativeErr, unname))
+			return
+		}
+		err = retry.SQL(ctx, func() error {
+			if err := client.AttachDatabase(ctx, native); err != nil {
+				return err
+			}
+			return client.WithDatabaseUse(ctx, native, func(exec func(string, ...any) error) error {
+				return exec(unname)
+			})
 		})
-	})
-	if err != nil && !isNotFound(err) {
+	} else {
+		err = retry.SQL(ctx, func() error {
+			return client.WithDatabaseUse(ctx, state.Database.ValueString(), func(exec func(string, ...any) error) error {
+				return exec(unname)
+			})
+		})
+	}
+	if err != nil && !isNotFound(err) && !isSnapshotNotFound(err) {
 		resp.Diagnostics.AddError("Unable to unname MotherDuck snapshot", err.Error())
 	}
+}
+
+// nativeSnapshotDatabase returns a native MotherDuck database to select while
+// releasing a snapshot whose own database was dropped.
+func nativeSnapshotDatabase(ctx context.Context, client providerctx.SQLClient) (string, error) {
+	var name string
+	err := retry.SQL(ctx, func() error {
+		return client.QueryRow(ctx, `SELECT name FROM MD_INFORMATION_SCHEMA.DATABASES WHERE upper(type) = 'DEFAULT' ORDER BY name LIMIT 1`).Scan(&name)
+	})
+	if errors.Is(err, stdsql.ErrNoRows) {
+		return "", errors.New("the account has no native databases")
+	}
+	return name, err
+}
+
+func snapshotUnnameSQL(id string) string {
+	return "ALTER SNAPSHOT " + sqlbuild.StringLiteral(id) + " SET snapshot_name = ''"
+}
+
+// isSnapshotNotFound reports whether MotherDuck rejected ALTER SNAPSHOT
+// because no snapshot matches the selector. MotherDuck reports this as an
+// invalid input error, which isNotFound does not cover.
+func isSnapshotNotFound(err error) bool {
+	var duckErr *duckdb.Error
+	return errors.As(err, &duckErr) && strings.Contains(strings.ToLower(duckErr.Msg), "snapshot not found")
 }
 
 func (r *snapshotResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -212,46 +289,86 @@ func (r *snapshotResource) ImportState(ctx context.Context, req resource.ImportS
 // is no longer listed. A snapshot whose name was cleared is treated as removed
 // because deleting the resource clears the name.
 func (r *snapshotResource) readSnapshot(ctx context.Context, model *snapshotModel, diags *diag.Diagnostics) bool {
+	status := r.readSnapshotStatus(ctx, model, diags)
+	return status == snapshotFound || status == snapshotRetainedWithoutDatabase
+}
+
+// snapshotReadStatus separates a snapshot whose name was cleared from one
+// that is no longer listed at all. Only an unlisted snapshot can still hold
+// its name, because MotherDuck hides snapshots whose database no longer
+// exists.
+type snapshotReadStatus int
+
+const (
+	snapshotFound snapshotReadStatus = iota
+	// snapshotRetainedWithoutDatabase is a named snapshot that is still
+	// listed by ID after its database was dropped.
+	snapshotRetainedWithoutDatabase
+	snapshotCleared
+	snapshotUnlisted
+	snapshotReadFailed
+)
+
+func (r *snapshotResource) readSnapshotStatus(ctx context.Context, model *snapshotModel, diags *diag.Diagnostics) snapshotReadStatus {
 	client := r.sql(ctx, diags)
 	if client == nil {
-		return false
+		return snapshotReadFailed
 	}
 	if !model.ID.IsNull() && !model.ID.IsUnknown() && model.ID.ValueString() != "" {
-		found, ok := r.readSnapshotByID(ctx, client, model, diags)
-		if found || !ok {
-			return found
+		found, ok, databaseGone := r.readSnapshotByID(ctx, client, model, diags)
+		switch {
+		case found && databaseGone:
+			return snapshotRetainedWithoutDatabase
+		case found:
+			return snapshotFound
+		case !ok && diags.HasError():
+			return snapshotReadFailed
+		case !ok:
+			return snapshotCleared
 		}
 	}
-	return r.readSnapshotByName(ctx, client, model, diags)
+	if r.readSnapshotByName(ctx, client, model, diags) {
+		return snapshotFound
+	}
+	if diags.HasError() {
+		return snapshotReadFailed
+	}
+	return snapshotUnlisted
 }
 
 // readSnapshotByID returns found and ok. ok is false when a diagnostic was
 // added or the named snapshot was cleared, which callers must not override
-// with a name lookup.
-func (r *snapshotResource) readSnapshotByID(ctx context.Context, client providerctx.SQLClient, model *snapshotModel, diags *diag.Diagnostics) (bool, bool) {
+// with a name lookup. databaseGone reports that the snapshot's database no
+// longer exists. The catalog still lists a named snapshot by ID after its
+// database is dropped, so the lookup runs without attaching it.
+func (r *snapshotResource) readSnapshotByID(ctx context.Context, client providerctx.SQLClient, model *snapshotModel, diags *diag.Diagnostics) (found, ok, databaseGone bool) {
 	var name, created stdsql.NullString
 	err := retry.SQL(ctx, func() error {
+		databaseGone = false
 		if err := client.AttachDatabase(ctx, model.Database.ValueString()); err != nil {
-			return err
+			if !isNotFoundFor(err, model.Database.ValueString()) {
+				return err
+			}
+			databaseGone = true
 		}
 		return client.QueryRow(ctx, `SELECT snapshot_name, created_ts::VARCHAR FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE database_name = ? AND snapshot_id::VARCHAR = ?`, model.Database.ValueString(), model.ID.ValueString()).Scan(&name, &created)
 	})
 	if err != nil && isNotFoundFor(err, model.Database.ValueString(), model.ID.ValueString()) {
-		return false, true
+		return false, true, databaseGone
 	}
 	if errors.Is(err, stdsql.ErrNoRows) {
-		return false, true
+		return false, true, databaseGone
 	}
 	if err != nil {
 		diags.AddError("Unable to read MotherDuck snapshot", err.Error())
-		return false, false
+		return false, false, databaseGone
 	}
 	if !name.Valid || name.String == "" {
-		return false, false
+		return false, false, databaseGone
 	}
 	model.Name = types.StringValue(name.String)
 	model.CreatedTS = nullString(created)
-	return true, true
+	return true, true, databaseGone
 }
 
 func (r *snapshotResource) readSnapshotByName(ctx context.Context, client providerctx.SQLClient, model *snapshotModel, diags *diag.Diagnostics) bool {

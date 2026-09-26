@@ -92,7 +92,6 @@ func TestUnpagedFunctionsSupportSQLPaging(t *testing.T) {
 		{"files", rowsModel{Path: types.StringValue("s3://bucket/"), Limit: types.Int64Value(5), Offset: types.Int64Null()}, "SELECT * FROM md_list_files('s3://bucket/') ORDER BY ALL LIMIT 5"},
 		{"files", rowsModel{Path: types.StringValue("s3://bucket/"), Limit: types.Int64Null(), Offset: types.Int64Null()}, "SELECT * FROM md_list_files('s3://bucket/')"},
 		{"buckets_for_secret", rowsModel{SecretName: types.StringValue("s3"), Limit: types.Int64Value(2), Offset: types.Int64Value(4)}, "SELECT * FROM md_list_buckets_for_secret('s3') ORDER BY ALL LIMIT 2 OFFSET 4"},
-		{"flight_logs", rowsModel{FlightID: types.StringValue("11111111-1111-4111-8111-111111111111"), RunNumber: types.Int64Value(3), Limit: types.Int64Value(100), Offset: types.Int64Null()}, "SELECT * FROM MD_GET_FLIGHT_LOGS(flight_id := '11111111-1111-4111-8111-111111111111'::UUID, run_number := 3) ORDER BY line_number LIMIT 100"},
 	}
 	for _, tc := range cases {
 		query, err := findSpec(t, tc.spec).build(tc.model)

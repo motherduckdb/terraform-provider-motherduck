@@ -138,7 +138,7 @@ func TestRowsSpecsDeclareRequiredFunctions(t *testing.T) {
 		"flight_logs":        "md_get_flight_logs",
 		"guides":             "md_list_guides",
 		"guide":              "md_get_guide",
-		"guide_grantees":     "md_list_guide_grantees",
+		"guide_grantees":     "md_set_guide_access",
 		"guide_versions":     "md_list_guide_versions",
 		"share_grants":       "md_list_share_grantees",
 	}
@@ -201,6 +201,7 @@ func TestRowsSpecAttributesAreSupportedByConfigAndStateSwitches(t *testing.T) {
 		"run_number":         true,
 		"limit":              true,
 		"offset":             true,
+		"order":              true,
 		"include_org_shares": true,
 		"owner_only":         true,
 	}
@@ -234,6 +235,43 @@ func TestRowsDataSourceFunctionAvailableDiagnostics(t *testing.T) {
 	}
 	if !errDiags.HasError() || !strings.Contains(errDiags[0].Summary(), "inspect") {
 		t.Fatalf("expected inspection diagnostic, got %v", errDiags)
+	}
+}
+
+// parameterFunctionClient reports every function as present and answers
+// named parameter probes with parameter.
+type parameterFunctionClient struct{ parameter bool }
+
+func (f parameterFunctionClient) Exists(_ context.Context, query string, _ ...any) (bool, error) {
+	if strings.Contains(query, "parameters") {
+		return f.parameter, nil
+	}
+	return true, nil
+}
+
+func TestGuideGranteesRequiresRoleNamesParameter(t *testing.T) {
+	spec := findSpec(t, "guide_grantees")
+	if spec.requiredParameter != "role_names" {
+		t.Fatalf("guide_grantees requiredParameter = %q, want role_names", spec.requiredParameter)
+	}
+	ds := &rowsDataSource{spec: spec}
+	var missing diag.Diagnostics
+	if ds.functionAvailable(context.Background(), parameterFunctionClient{parameter: false}, &missing) {
+		t.Fatal("production sessions without role_names must not be available")
+	}
+	if !missing.HasError() || !strings.Contains(missing[0].Detail(), "MD_SET_GUIDE_ACCESS does not accept role_names") {
+		t.Fatalf("expected role_names diagnostic, got %v", missing)
+	}
+	var ok diag.Diagnostics
+	if !ds.functionAvailable(context.Background(), parameterFunctionClient{parameter: true}, &ok) || ok.HasError() {
+		t.Fatalf("role-capable session should be available: %v", ok)
+	}
+	query, err := spec.build(rowsModel{GuideID: types.StringValue("123e4567-e89b-42d3-a456-426614174000")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(query, "unnest(access_role_names)") || !strings.Contains(query, "FROM MD_GET_GUIDE(id := '123e4567-e89b-42d3-a456-426614174000'::UUID)") || strings.Contains(query, "MD_LIST_GUIDE_GRANTEES") {
+		t.Fatalf("guide_grantees query = %s", query)
 	}
 }
 
@@ -429,7 +467,7 @@ func TestRowsSpecSchemasExposeOnlyRelevantAttributes(t *testing.T) {
 		"shared_with_me":     {"limit", "name", "offset", "rows", "rows_json"},
 		"attached_databases": {"rows_json"},
 		"dives":              {"include_org_shares", "limit", "offset", "rows_json"},
-		"flight_logs":        {"flight_id", "limit", "offset", "rows", "rows_json", "run_number"},
+		"flight_logs":        {"flight_id", "limit", "offset", "order", "rows", "rows_json", "run_number"},
 		"files":              {"limit", "offset", "path", "rows_json"},
 		"buckets_for_secret": {"limit", "offset", "rows_json", "secret_name"},
 		"flights":            {"limit", "offset", "owner_only", "rows", "rows_json"},

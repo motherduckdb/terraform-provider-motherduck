@@ -176,7 +176,7 @@ func (r *guideResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"access": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Guide access: `user`, `role`, or `organization`. Organization access requires administrator permission.",
+				MarkdownDescription: "Guide access: `user`, `organization`, or the experimental `role`. Organization access requires administrator permission. `role` requires a MotherDuck SQL session whose `MD_SET_GUIDE_ACCESS` accepts `role_names`, which production MotherDuck does not offer yet.",
 				PlanModifiers:       stringUseStateForUnknown(),
 				Validators: []validator.String{stringEnumValidator{
 					name:   "MotherDuck Guide access",
@@ -187,7 +187,7 @@ func (r *guideResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 				Optional:            true,
 				Computed:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Roles that can read the Guide when `access = \"role\"`. The configured set replaces the previous role audience.",
+				MarkdownDescription: "Experimental. Roles that can read the Guide when `access = \"role\"`. The configured set replaces the previous role audience. Refresh reads it from the Guide's `access_role_names` column.",
 			},
 			"owner_id": schema.StringAttribute{
 				Computed:            true,
@@ -243,12 +243,11 @@ func (r *guideResource) Create(ctx context.Context, req resource.CreateRequest, 
 		return
 	}
 	roleAccess := !plan.Access.IsNull() && !plan.Access.IsUnknown() && plan.Access.ValueString() == "role"
-	if roleAccess {
-		for _, fn := range []string{"md_set_guide_access", "md_list_guide_grantees"} {
-			if !r.sqlFunctionAvailable(ctx, client, &resp.Diagnostics, fn, "motherduck_guide") {
-				return
-			}
-		}
+	// Check role support before creating so an unsupported audience never
+	// leaves a Guide behind.
+	if roleAccess && (!r.sqlFunctionAvailable(ctx, client, &resp.Diagnostics, "md_set_guide_access", "motherduck_guide") ||
+		!guideRoleAccessAvailable(ctx, client, &resp.Diagnostics)) {
+		return
 	}
 	args := map[string]string{
 		"title":   sqlbuild.StringLiteral(plan.Title.ValueString()),
@@ -495,6 +494,9 @@ func (r *guideResource) setGuideAccess(
 		"access": sqlbuild.StringLiteral(access.ValueString()),
 	}
 	if access.ValueString() == "role" {
+		if !guideRoleAccessAvailable(ctx, client, diags) {
+			return false
+		}
 		names, ok := guideRoleNamesArg(ctx, roleNames, diags)
 		if !ok {
 			return false
@@ -514,13 +516,13 @@ func (r *guideResource) readGuideRoleNames(
 	id types.String,
 	diags *diag.Diagnostics,
 ) types.Set {
-	if !r.sqlFunctionAvailable(ctx, client, diags, "md_list_guide_grantees", "motherduck_guide") {
+	if !guideRoleAccessAvailable(ctx, client, diags) {
 		return types.SetNull(types.StringType)
 	}
 	var raw stdsql.NullString
-	query := `SELECT to_json(list(grantee_name ORDER BY lower(grantee_name)))::VARCHAR
-		FROM MD_LIST_GUIDE_GRANTEES(id := ` + guideUUIDArg(id) + `)
-		WHERE lower(grantee_type) = 'role' AND lower(privilege) = 'read'`
+	// access_role_names only exists in sessions that support role access, so
+	// it is read separately from the Guide columns every session reports.
+	query := `SELECT to_json(access_role_names)::VARCHAR FROM MD_GET_GUIDE(id := ` + guideUUIDArg(id) + `)`
 	if err := retry.SQL(ctx, func() error { return client.QueryRow(ctx, query).Scan(&raw) }); err != nil {
 		diags.AddError("Unable to read MotherDuck Guide role audience", err.Error())
 		return types.SetNull(types.StringType)
@@ -532,6 +534,27 @@ func (r *guideResource) readGuideRoleNames(
 	value, valueDiags := types.SetValueFrom(ctx, types.StringType, names)
 	diags.Append(valueDiags...)
 	return value
+}
+
+// guideRoleAccessAvailable reports whether the session supports role-scoped
+// Guide access. Production MotherDuck supports only user and organization
+// access. The planned role design adds a role_names parameter to
+// MD_CREATE_GUIDE and MD_SET_GUIDE_ACCESS and an access_role_names column to
+// Guide rows, so the provider probes for the parameter.
+func guideRoleAccessAvailable(ctx context.Context, client sqlfunc.Exister, diags *diag.Diagnostics) bool {
+	available, err := sqlfunc.ParameterExists(ctx, client, "md_set_guide_access", "role_names")
+	if err != nil {
+		diags.AddError("Unable to inspect MotherDuck SQL functions", err.Error())
+		return false
+	}
+	if !available {
+		diags.AddError(
+			"MotherDuck Guide role access unavailable",
+			"MD_SET_GUIDE_ACCESS does not accept role_names in the current MotherDuck SQL session, so role-scoped Guide access is not available. Use `access = \"user\"` or `access = \"organization\"`.",
+		)
+		return false
+	}
+	return true
 }
 
 func validateGuideRoleAccess(ctx context.Context, access types.String, roleNames types.Set, diags *diag.Diagnostics) {

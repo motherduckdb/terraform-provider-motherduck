@@ -69,7 +69,7 @@ func (c *appContractSQL) QueryRow(_ context.Context, query string, args ...any) 
 		if !c.dive || !strings.Contains(query, contractDiveID) {
 			return flightDependencyRow{err: stdsql.ErrNoRows}
 		}
-		return flightDependencyRow{values: []any{"Contract Dive", nil, int64(1), "2026-09-01T00:00:00Z", "2026-09-01T00:00:00Z", "owner", "export default () => null"}}
+		return flightDependencyRow{values: []any{"Contract Dive", nil, int64(1), "2026-09-01T00:00:00Z", "2026-09-01T00:00:00Z", "owner", "export default () => null", int64(1), "[]"}}
 	case strings.Contains(query, "FROM MD_CREATE_GUIDE("):
 		if c.guide {
 			return flightDependencyRow{err: errors.New("duplicate Guide create")}

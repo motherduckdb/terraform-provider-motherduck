@@ -90,7 +90,7 @@ func TestSecretCreateFindsLowercasedName(t *testing.T) {
 	plan := tfsdk.Plan(emptyResourceState(ctx, t, r))
 	model := secretModel{
 		Name: types.StringValue("MySecret"), Type: types.StringValue("s3"), ID: types.StringUnknown(),
-		SecretProvider: types.StringUnknown(), Params: types.MapNull(types.StringType), Storage: types.StringUnknown(),
+		SecretProvider: types.StringUnknown(), Params: types.MapNull(types.StringType), FlightParams: types.MapNull(types.StringType), Storage: types.StringUnknown(),
 		Scope: types.StringUnknown(), SecretSQL: types.StringNull(),
 	}
 	if d := plan.Set(ctx, &model); d.HasError() {
@@ -118,7 +118,7 @@ func TestSecretDeleteToleratesMissingSecret(t *testing.T) {
 		state := emptyResourceState(ctx, t, r)
 		model := secretModel{
 			Name: types.StringValue("tf_gone"), Type: types.StringValue("s3"), ID: types.StringValue("tf_gone"),
-			SecretProvider: types.StringNull(), Params: types.MapNull(types.StringType), Storage: types.StringValue("motherduck"),
+			SecretProvider: types.StringNull(), Params: types.MapNull(types.StringType), FlightParams: types.MapNull(types.StringType), Storage: types.StringValue("motherduck"),
 			Scope: types.StringNull(), SecretSQL: types.StringNull(),
 		}
 		if d := state.Set(ctx, &model); d.HasError() {
