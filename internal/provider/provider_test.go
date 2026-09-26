@@ -4,11 +4,13 @@ import (
 	"context"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -164,6 +166,7 @@ func TestAPIBaseURLValidator(t *testing.T) {
 		"missing scheme": {value: types.StringValue("api.motherduck.com"), wantErr: true},
 		"missing host":   {value: types.StringValue("https:///api"), wantErr: true},
 		"bad scheme":     {value: types.StringValue("ftp://api.motherduck.com"), wantErr: true},
+		"http remote":    {value: types.StringValue("http://api.motherduck.com"), wantErr: true},
 		"credentials":    {value: types.StringValue("https://user:pass@api.motherduck.com"), wantErr: true},
 		"query":          {value: types.StringValue("https://api.motherduck.com?token=bad"), wantErr: true},
 		"fragment":       {value: types.StringValue("https://api.motherduck.com#v1"), wantErr: true},
@@ -282,6 +285,90 @@ func providerTestConfig(t *testing.T, values map[string]tftypes.Value) tfsdk.Con
 	return tfsdk.Config{
 		Raw:    tftypes.NewValue(tftypes.Object{AttributeTypes: attrTypes}, rawValues),
 		Schema: schemaResp.Schema,
+	}
+}
+
+func TestConfigureRejectsUnknownArguments(t *testing.T) {
+	t.Setenv("MOTHERDUCK_TOKEN", "md_test_token")
+	t.Setenv("MOTHERDUCK_ADMIN_TOKEN", "")
+	t.Setenv("MOTHERDUCK_API_BASE_URL", "")
+
+	attributes := map[string]tftypes.Type{
+		"token":                   tftypes.String,
+		"admin_token":             tftypes.String,
+		"api_base_url":            tftypes.String,
+		"database":                tftypes.String,
+		"attach_mode":             tftypes.String,
+		"custom_user_agent":       tftypes.String,
+		"request_timeout_seconds": tftypes.Number,
+	}
+	for name, attrType := range attributes {
+		t.Run(name, func(t *testing.T) {
+			p := New("test")()
+			var resp provider.ConfigureResponse
+			p.Configure(context.Background(), provider.ConfigureRequest{Config: providerTestConfig(t, map[string]tftypes.Value{
+				name: tftypes.NewValue(attrType, tftypes.UnknownValue),
+			})}, &resp)
+			if !resp.Diagnostics.HasError() {
+				t.Fatalf("unknown %s was accepted", name)
+			}
+			found := false
+			for _, d := range resp.Diagnostics {
+				if withPath, ok := d.(diag.DiagnosticWithPath); ok && withPath.Path().Equal(path.Root(name)) {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("diagnostics %v do not point at %s", resp.Diagnostics, name)
+			}
+			if resp.ResourceData != nil {
+				t.Fatal("provider data was configured despite an unknown argument")
+			}
+		})
+	}
+}
+
+func TestConfigurePrefersConfigOverEnvironment(t *testing.T) {
+	t.Setenv("MOTHERDUCK_TOKEN", "env_token")
+	t.Setenv("MOTHERDUCK_ADMIN_TOKEN", "")
+	t.Setenv("MOTHERDUCK_API_BASE_URL", "https://env.example.com/?invalid=1")
+
+	p := New("test")()
+	var resp provider.ConfigureResponse
+	p.Configure(context.Background(), provider.ConfigureRequest{Config: providerTestConfig(t, map[string]tftypes.Value{
+		"token":        tftypes.NewValue(tftypes.String, "config_token"),
+		"api_base_url": tftypes.NewValue(tftypes.String, "https://config.example.com"),
+	})}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("configured api_base_url should override the environment: %v", resp.Diagnostics)
+	}
+	data := resp.ResourceData.(*providerctx.Context)
+	if data.SQLConfig.Token != "config_token" {
+		t.Fatalf("SQLConfig.Token = %q, want configured token", data.SQLConfig.Token)
+	}
+}
+
+func TestConfigureValidatesEnvironmentBaseURL(t *testing.T) {
+	t.Setenv("MOTHERDUCK_TOKEN", "md_test_token")
+	t.Setenv("MOTHERDUCK_ADMIN_TOKEN", "")
+	for name, value := range map[string]string{
+		"query":       "https://h/?x=1",
+		"http remote": "http://api.motherduck.com",
+		"credentials": "https://user:pass@api.motherduck.com",
+		"whitespace":  "https://api.motherduck.com\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("MOTHERDUCK_API_BASE_URL", value)
+			p := New("test")()
+			var resp provider.ConfigureResponse
+			p.Configure(context.Background(), provider.ConfigureRequest{Config: providerTestConfig(t, map[string]tftypes.Value{})}, &resp)
+			if !resp.Diagnostics.HasError() {
+				t.Fatalf("MOTHERDUCK_API_BASE_URL=%q was accepted", value)
+			}
+			if got := resp.Diagnostics[0].Detail(); !strings.Contains(got, "MOTHERDUCK_API_BASE_URL") {
+				t.Fatalf("diagnostic detail %q does not name the environment variable", got)
+			}
+		})
 	}
 }
 
