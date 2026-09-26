@@ -386,7 +386,10 @@ func roleGranteeTypeValidators() []validator.String {
 }
 
 func restUsernameValidators() []validator.String {
-	return []validator.String{tfvalidators.StringLength("MotherDuck REST username", 1, 255)}
+	return []validator.String{
+		tfvalidators.StringLength("MotherDuck REST username", 1, 255),
+		tfvalidators.RESTPathSegment("MotherDuck REST username"),
+	}
 }
 
 func accessTokenNameValidators() []validator.String {

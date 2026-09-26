@@ -6,6 +6,7 @@ import (
 	"time"
 
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -338,7 +339,7 @@ func (r *accessTokenResource) ImportState(ctx context.Context, req resource.Impo
 
 func setTokenModelFromREST(model *accessTokenModel, token *mdrest.Token) {
 	model.ID = types.StringValue(token.ID)
-	model.TokenType = types.StringValue(token.TokenType)
+	model.TokenType = normalizedTokenType(model.TokenType, token.TokenType)
 	model.CreatedTS = types.StringValue(token.CreatedTS)
 	model.ReadOnly = types.BoolValue(token.ReadOnly)
 	if token.Name != "" {
@@ -352,6 +353,20 @@ func setTokenModelFromREST(model *accessTokenModel, token *mdrest.Token) {
 	} else {
 		model.ExpireAt = types.StringNull()
 	}
+}
+
+// normalizedTokenType lowercases the reported token type. An empty report
+// keeps the known prior value, or the read_write default, so a listing that
+// omits the type never plans an unsupported in-place update.
+func normalizedTokenType(current types.String, reported string) types.String {
+	tokenType := strings.ToLower(strings.TrimSpace(reported))
+	if tokenType != "" {
+		return types.StringValue(tokenType)
+	}
+	if !current.IsNull() && !current.IsUnknown() && current.ValueString() != "" {
+		return current
+	}
+	return types.StringValue("read_write")
 }
 
 type ducklingConfigResource struct {
@@ -397,7 +412,7 @@ func (r *ducklingConfigResource) Schema(ctx context.Context, req resource.Schema
 			},
 			"read_write_cooldown_seconds": schema.Int64Attribute{
 				Optional:            true,
-				MarkdownDescription: "Optional read-write cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds.",
+				MarkdownDescription: "Optional read-write cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds. When unset, Terraform does not manage the cooldown and MotherDuck keeps or applies its own value. Import does not recover this value, so a configured cooldown causes one update after import.",
 				Validators:          ducklingCooldownValidators(),
 			},
 			"read_scaling_instance_size": schema.StringAttribute{
@@ -412,7 +427,7 @@ func (r *ducklingConfigResource) Schema(ctx context.Context, req resource.Schema
 			},
 			"read_scaling_cooldown_seconds": schema.Int64Attribute{
 				Optional:            true,
-				MarkdownDescription: "Optional read-scaling cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds.",
+				MarkdownDescription: "Optional read-scaling cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds. When unset, Terraform does not manage the cooldown and MotherDuck keeps or applies its own value. Import does not recover this value, so a configured cooldown causes one update after import.",
 				Validators:          ducklingCooldownValidators(),
 			},
 		},
@@ -515,25 +530,30 @@ func (r *ducklingConfigResource) putDucklingConfig(ctx context.Context, planGett
 		return
 	}
 	plan.ID = types.StringValue(plan.Username.ValueString())
+	planned := plan
 	setDucklingModelFromREST(&plan, updated)
+	// A write response that omits a configured cooldown does not mean the
+	// write was ignored. Keep the planned value so apply stays consistent and
+	// let the next refresh report real drift.
+	if plan.ReadWriteCooldownSeconds.IsNull() {
+		plan.ReadWriteCooldownSeconds = planned.ReadWriteCooldownSeconds
+	}
+	if plan.ReadScalingCooldownSeconds.IsNull() {
+		plan.ReadScalingCooldownSeconds = planned.ReadScalingCooldownSeconds
+	}
 	diags.Append(stateSetter.Set(ctx, &plan)...)
 }
 
+// setDucklingModelFromREST copies the live configuration into the model.
+// Cooldowns are config-owned: while an attribute is unset, a default reported
+// by MotherDuck stays out of state so it never causes an unplanned value.
 func setDucklingModelFromREST(model *ducklingConfigModel, cfg *mdrest.DucklingConfig) {
 	model.ID = types.StringValue(model.Username.ValueString())
 	model.ReadWriteInstanceSize = types.StringValue(cfg.ReadWrite.InstanceSize)
-	if cfg.ReadWrite.CooldownSeconds != nil {
-		model.ReadWriteCooldownSeconds = types.Int64Value(*cfg.ReadWrite.CooldownSeconds)
-	} else {
-		model.ReadWriteCooldownSeconds = types.Int64Null()
-	}
+	model.ReadWriteCooldownSeconds = configOwnedInt64FromLive(model.ReadWriteCooldownSeconds, cfg.ReadWrite.CooldownSeconds)
 	model.ReadScalingInstanceSize = types.StringValue(cfg.ReadScaling.InstanceSize)
 	model.ReadScalingFlockSize = types.Float64Value(cfg.ReadScaling.FlockSize)
-	if cfg.ReadScaling.CooldownSeconds != nil {
-		model.ReadScalingCooldownSeconds = types.Int64Value(*cfg.ReadScaling.CooldownSeconds)
-	} else {
-		model.ReadScalingCooldownSeconds = types.Int64Null()
-	}
+	model.ReadScalingCooldownSeconds = configOwnedInt64FromLive(model.ReadScalingCooldownSeconds, cfg.ReadScaling.CooldownSeconds)
 }
 
 func validateDucklingCooldowns(model *ducklingConfigModel, diags *diag.Diagnostics) bool {
@@ -574,6 +594,10 @@ func validateRESTUsernameImportID(id, usage string, diags *diag.Diagnostics) boo
 		diags.AddError("Invalid import ID", "MotherDuck username import segments must not include leading or trailing whitespace.")
 		return false
 	}
+	if detail, ok := tfvalidators.ValidateRESTPathSegmentValue(id, "MotherDuck username import segment"); !ok {
+		diags.AddError("Invalid import ID", detail)
+		return false
+	}
 	return true
 }
 
@@ -585,6 +609,10 @@ func validateRESTImportIDPart(part, usage, label string, diags *diag.Diagnostics
 	}
 	if part != trimmed {
 		diags.AddError("Invalid import ID", "MotherDuck "+label+" import segments must not include leading or trailing whitespace.")
+		return false
+	}
+	if detail, ok := tfvalidators.ValidateRESTPathSegmentValue(part, "MotherDuck "+label+" import segment"); !ok {
+		diags.AddError("Invalid import ID", detail)
 		return false
 	}
 	return true

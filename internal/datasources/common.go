@@ -55,7 +55,10 @@ func (d *baseDataSource) sql(ctx context.Context, diags *diag.Diagnostics) provi
 }
 
 func restUsernameValidators() []validator.String {
-	return []validator.String{tfvalidators.StringLength("MotherDuck REST username", 1, 255)}
+	return []validator.String{
+		tfvalidators.StringLength("MotherDuck REST username", 1, 255),
+		tfvalidators.RESTPathSegment("MotherDuck REST username"),
+	}
 }
 
 func uuidValidators() []validator.String {
