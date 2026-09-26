@@ -1,17 +1,19 @@
 ---
-page_title: "Testing The Provider"
+page_title: "Test the provider"
 subcategory: "Contributing"
+description: |-
+  Offline, contract, and live test layers and the commands that run them.
 ---
 
-# Testing The Provider
+# Test the provider
 
 This guide summarizes the test layers for users and contributors. The full contributor workflow lives in [Contributing](https://github.com/motherduckdb/terraform-provider-motherduck/blob/main/CONTRIBUTING.md).
 
-See the [fixture guide](../../test-fixtures/README.md) for fixture ownership and
+See the [fixture guide](https://github.com/motherduckdb/terraform-provider-motherduck/blob/main/test-fixtures/README.md) for fixture ownership and
 [testing patterns](testing-patterns.md) for independent SQL checks,
 update/import cycles, and the comparison with other database providers.
 
-## Offline Checks
+## Offline checks
 
 Offline checks do not require MotherDuck credentials:
 
@@ -100,6 +102,8 @@ Admin-only live smoke scripts fail when the token authenticates but lacks organi
 Run the required SQL lifecycle gate:
 
 ```bash
+MOTHERDUCK_TOKEN=... make test-integration
+MOTHERDUCK_TOKEN=... make test-acceptance
 MOTHERDUCK_TOKEN=... make test-live-required
 ```
 
@@ -196,7 +200,7 @@ Private per-apply JSON reports contain resource identities and planned actions,
 not credential values. They are saved under `test-results/lifecycle-cycles-*`.
 Unavailable catalog capabilities still produce a nonzero aggregate result.
 
-## Terraform Version Matrix
+## Terraform version matrix
 
 Run the offline matrix without credentials before changing CLI setup or fixtures:
 
@@ -246,7 +250,7 @@ The SQL lifecycle matrix runs the database drop-with-objects smoke and the Guide
 
 Both lifecycle matrices create durable MotherDuck objects while they run and clean them up on exit.
 
-## Output And Cleanup
+## Output and cleanup
 
 The CLI suite prints one result per group and saves detailed logs under
 `test-results/cli-<run-id>/`. Failures print the failed group's log. Live smoke
@@ -262,14 +266,14 @@ fixture retains state for diagnosis. It is not evidence that cleanup succeeded. 
 
 After interrupted live runs, audit common `tf_` leftovers:
 
+```bash
+MOTHERDUCK_TOKEN=... make test-live-cleanup-audit
+```
+
 Each catalog read uses a fresh connection. Ordinary reads retain the two-minute
 timeout, while the slower snapshot catalog has a five-minute budget. Reusing one
 connection across all four reads caused repeated CI timeouts. Missing results,
 extra results, and query failures fail the audit and identify the affected check.
-
-```bash
-MOTHERDUCK_TOKEN=... make test-live-cleanup-audit
-```
 
 To remove those common leftovers after an interrupted run:
 

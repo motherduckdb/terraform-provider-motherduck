@@ -1,6 +1,8 @@
 ---
 page_title: "Write useful provider tests"
 subcategory: "Contributing"
+description: |-
+  Patterns for provider tests that verify remote behavior, state, and imports.
 ---
 
 # Write useful provider tests
@@ -58,7 +60,7 @@ assessment of those projects.
 | --- | --- | --- |
 | Snowflake | Remote-object and Terraform-state assertions through create/import/update/re-import | Add independent SQL checks and update/import cycles |
 | Google BigQuery | Table lifecycle sequences, remote checks, scoped import exclusions, VCR harness | Adopt the lifecycle checks using our existing SQL/HTTP seams |
-| ClickHouse Cloud | Shared Make targets, generated docs checks, E2E upgrade inputs | Keep local/CI commands aligned. Test upgrades once a published baseline exists |
+| ClickHouse Cloud | Shared Make targets, generated docs checks, E2E upgrade inputs | Keep local/CI commands aligned. Test upgrades from the previous release |
 | Databricks | Docs formatting, link integrity, schema comparison, separate unit/integration tests | Retain generated docs checks. Review schema compatibility explicitly |
 
 Sources:
@@ -101,9 +103,9 @@ Keep PR gates deterministic, credential-free, and bounded. Native package jobs
 own artifact installation. Static checks should not duplicate them. Trusted main
 checks own live SQL behavior.
 
-Once an immutable first release exists, add old-provider create → new-provider
-refresh/no-op → update → import → destroy tests. Do not invent a published
-baseline. For public schema changes, compare attribute types, defaults,
+Add upgrade tests against the previous release: create with the old provider,
+then refresh with the new provider and expect no changes, then update, import,
+and destroy. For public schema changes, compare attribute types, defaults,
 sensitivity, and import behavior, and test state upgrades where needed.
 
 See Terraform's [testing patterns](https://developer.hashicorp.com/terraform/plugin/testing/testing-patterns)

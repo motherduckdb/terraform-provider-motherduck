@@ -76,6 +76,7 @@ deployment workflow.
 | --- | --- |
 | `MOTHERDUCK_TOKEN` | SQL resources, including databases, shares, roles, and catalog reads |
 | `MOTHERDUCK_ADMIN_TOKEN` | REST administration, including service accounts, tokens, and compute settings |
+| `MOTHERDUCK_API_BASE_URL` | Optional REST API base URL override. Provider `api_base_url` takes precedence |
 
 Supply only the credentials required by that Terraform root. A SQL token and an
 organization admin token are separate credentials. Bootstrap identities first,

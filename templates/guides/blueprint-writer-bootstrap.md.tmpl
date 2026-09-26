@@ -1,25 +1,27 @@
 ---
-page_title: "Writer Bootstrap"
+page_title: "Writer bootstrap blueprint"
 subcategory: "Reusable blueprints"
+description: |-
+  Create the writer service account and rotating read-write tokens that own tenant data.
 ---
 
-# Blueprint: Writer Bootstrap
+# Writer bootstrap blueprint
 
 This blueprint creates the writer service account and read-write token that own tenant data infrastructure. It is stage one for the hypertenancy and read-hypertenancy blueprints: MotherDuck databases are writable only by the identity that owns them, and only the owner of a share can `GRANT READ ON SHARE`, so tenant data planes should be applied as a dedicated writer identity instead of a personal token.
 
-## Terraform Shape
+## Terraform shape
 
 One `motherduck_service_account`, one legacy `motherduck_access_token` with `token_type = "read_write"`, and one additional read-write token per entry in `writer_token_generations`. The example implementation is in `examples/blueprints/writer-bootstrap`.
 
 This blueprint is REST-only and requires an organization-admin `MOTHERDUCK_ADMIN_TOKEN`. No SQL token is needed.
 
-## Operating Model
+## Operating model
 
 Apply this module from an admin-owned root module with its own state, separate from tenant data state. The workflow holds organization-admin credentials and produces a read-write token, so it deserves tighter access than routine tenant changes.
 
 Store the generated writer token in a secret manager immediately. Downstream data-plane Terraform (for example the read-hypertenancy blueprint) reads it from there and uses it as `MOTHERDUCK_TOKEN`, which makes the writer the owner of every tenant database and share it creates.
 
-## Token Lifecycle
+## Token lifecycle
 
 The writer token expires after `writer_token_ttl_seconds` (30 days by default) and Terraform does not rotate it automatically. Do not rotate it with `terraform apply -replace`. Replacement revokes the current token in the same apply, which breaks the data-plane Terraform and the ingestion runtime until they receive the new value.
 
@@ -36,7 +38,7 @@ Rotate with an overlapping generation instead:
 
 Retirement fails the plan unless MotherDuck already lists a token for a named generation. Terraform cannot verify that every consumer has switched, so confirm that before step 3. Keep the generation managed until the next rotation completes.
 
-## Inputs And Outputs
+## Inputs and outputs
 
 Inputs:
 

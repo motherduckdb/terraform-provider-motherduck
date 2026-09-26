@@ -1,6 +1,8 @@
 ---
 page_title: "Install from GitHub Releases"
 subcategory: "Operations"
+description: |-
+  Install signed provider packages from GitHub Releases through a filesystem mirror.
 ---
 
 # Install from GitHub Releases
@@ -21,11 +23,11 @@ Terraform where to obtain it.
 
 Use Terraform 1.5 or later and select your platform: `linux_amd64`,
 `linux_arm64`, `darwin_amd64` (Intel Mac), or `darwin_arm64` (Apple Silicon).
-The example uses the GitHub CLI, `shasum`, and `awk`. Alternatively download
+The example uses the GitHub CLI, `shasum` (use `sha256sum` on Linux), and `awk`. Alternatively download
 the same files from the release page.
 
 ```shell
-version=0.1.0
+version=0.2.13
 platform=darwin_arm64
 archive="terraform-provider-motherduck_${version}_${platform}.zip"
 sums="terraform-provider-motherduck_${version}_SHA256SUMS"
@@ -91,7 +93,7 @@ terraform {
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = "= 0.1.0"
+      version = "= 0.2.13"
     }
   }
 }

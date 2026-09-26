@@ -17,7 +17,7 @@ do not select a different MotherDuck token for you.
 
 ## 1. Create the environment identities
 
-Copy the [bootstrap root](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/warehouses/bootstrap)
+Copy the [bootstrap root](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/warehouses/bootstrap)
 into an admin-controlled working directory. Configure an encrypted, locking
 backend, inject `MOTHERDUCK_ADMIN_TOKEN`, and choose an organization-unique
 `account_prefix`.

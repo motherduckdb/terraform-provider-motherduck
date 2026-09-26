@@ -33,7 +33,7 @@ that tenant's data as that identity. See
 
 ## 1. Bootstrap the writer
 
-Apply the [writer-bootstrap example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/blueprints/writer-bootstrap)
+Apply the [writer-bootstrap example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/blueprints/writer-bootstrap)
 in its own state with `MOTHERDUCK_ADMIN_TOKEN` and
 `writer_username = "svc_cfa_writer"`. Transfer its generated token to a protected
 secret-manager entry.
@@ -45,7 +45,7 @@ an admin state and pass usernames to the writer root.
 
 ## 2. Provision the tenants
 
-Copy the complete [customer-facing analytics example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/customer-facing-analytics)
+Copy the complete [customer-facing analytics example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/customer-facing-analytics)
 into a new root with independent, protected state. Its default tenant IDs are
 `acme` and `globex`. Choose an unused prefix before applying.
 
@@ -176,6 +176,10 @@ through the admin workflow.
 
 Each reader pool starts at one Standard replica with a 60-second cooldown.
 Measure concurrency and freshness requirements before changing these defaults.
+
+To pause a tenant without deleting data, add its ID to `suspended_tenants`.
+The next apply revokes that tenant's reader tokens and share grant and keeps
+its database, share, and reader account.
 
 For offboarding, disable the backend route, stop writes, retain or export data
 as required, and review the tenant removal plan. For disposable teardown, detach

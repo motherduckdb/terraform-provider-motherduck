@@ -15,7 +15,7 @@ to assign roles. Configuring only `admin_token` does not authorize SQL grants.
 
 ## Example Usage
 
-## Grant a preset or existing custom role
+### Grant a preset or existing custom role
 
 Use the existing role's name without declaring a `motherduck_role` resource:
 
@@ -31,7 +31,7 @@ The same configuration works with an existing custom role name. The grantee must
 already exist. For an account or role created in the same configuration, reference
 its resource attribute so Terraform orders creation and destruction correctly.
 
-## Create a custom role, give it platform permissions, and assign it
+### Create a custom role, give it platform permissions, and assign it
 
 {{tffile "examples/resources/motherduck_role_grant/resource.tf"}}
 
@@ -39,7 +39,7 @@ Here `analytics_readers` inherits Explorer permissions. Assigning it to the serv
 account gives the account those inherited permissions. Share data access is a
 separate [motherduck_share_grant](share_grant.md) resource.
 
-## Lifecycle and import
+## Lifecycle
 
 This resource owns one **direct** grant. Inherited membership alone does not
 satisfy it. If the direct grant is revoked outside Terraform, the next apply

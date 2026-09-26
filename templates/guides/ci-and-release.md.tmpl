@@ -1,13 +1,15 @@
 ---
-page_title: "CI and Release"
+page_title: "CI and release"
 subcategory: "Contributing"
+description: |-
+  How pull-request, live, and tag-driven release workflows gate this provider.
 ---
 
-# CI and Release
+# CI and release
 
 This repository uses separate workflows for pull-request checks, live MotherDuck smoke tests, and tag-driven releases.
 
-## Pull Request And Push CI
+## Pull request and push CI
 
 `.github/workflows/ci.yml` runs on pull requests, pushes to `main`, and manual dispatch.
 
@@ -114,7 +116,7 @@ Signing is the only release step that needs credentials beyond the live test
 token. The publisher key and its passphrase are held as secrets on the protected
 `motherduck-release` environment. `GPG_FINGERPRINT` pins the expected key.
 
-Initial release targets:
+Release targets:
 
 - `linux_amd64`
 - `linux_arm64`
@@ -125,7 +127,7 @@ The provider embeds DuckDB through CGO, so release packages are built on native 
 
 Add a target only after proving its native runner can build `scripts/package-release.sh` and Terraform can initialize the produced provider binary. Windows packages are intentionally not published until there is a tested native Windows CGO build path.
 
-## Local Release Checks
+## Local release checks
 
 Run the release package and signing checks before pushing release workflow changes:
 
