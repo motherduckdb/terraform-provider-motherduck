@@ -100,7 +100,7 @@ func TestCreateReadbackFailureKeepsCleanupState(t *testing.T) {
 					r = &secretResource{baseResource: base}
 					model = &secretModel{
 						Name: types.StringValue("tf_readback"), Type: types.StringValue("s3"), ID: types.StringUnknown(),
-						SecretProvider: types.StringUnknown(), Params: types.MapNull(types.StringType), Storage: types.StringUnknown(),
+						SecretProvider: types.StringUnknown(), Params: types.MapNull(types.StringType), FlightParams: types.MapNull(types.StringType), Storage: types.StringUnknown(),
 						Scope: types.StringUnknown(), SecretSQL: types.StringNull(),
 					}
 					cleanup = `DROP SECRET IF EXISTS "tf_readback" FROM motherduck`
