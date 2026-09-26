@@ -11,6 +11,7 @@ import (
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
 
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/guideref"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
@@ -700,18 +701,7 @@ func guideReferencesArg(ctx context.Context, value types.List, diags *diag.Diagn
 		if !validateGuideReference(reference, i, diags) {
 			continue
 		}
-		fields := []string{
-			"'type': " + guideReferenceString(reference.Type, "VARCHAR"),
-			"'url': " + guideReferenceString(reference.URL, "VARCHAR"),
-			"'schema': " + guideReferenceString(reference.Schema, "VARCHAR"),
-			"'table': " + guideReferenceString(reference.Table, "VARCHAR"),
-			"'column': " + guideReferenceString(reference.Column, "VARCHAR"),
-			"'view': " + guideReferenceString(reference.View, "VARCHAR"),
-			"'macro': " + guideReferenceString(reference.Macro, "VARCHAR"),
-			"'uuid': " + guideReferenceString(reference.UUID, "UUID"),
-			"'description': " + guideReferenceString(reference.Description, "VARCHAR"),
-		}
-		parts = append(parts, "{"+strings.Join(fields, ", ")+"}")
+		parts = append(parts, guideref.StructLiteral(reference.ref(), reference.Description))
 	}
 	if diags.HasError() {
 		return "", false
@@ -719,53 +709,34 @@ func guideReferencesArg(ctx context.Context, value types.List, diags *diag.Diagn
 	return "[" + strings.Join(parts, ", ") + "]", true
 }
 
-func guideReferenceString(value types.String, sqlType string) string {
-	if value.IsNull() || value.IsUnknown() {
-		return "NULL::" + sqlType
+func (m guideReferenceModel) ref() guideref.Reference {
+	return guideref.Reference{
+		Type: m.Type, URL: m.URL, Schema: m.Schema, Table: m.Table,
+		Column: m.Column, View: m.View, Macro: m.Macro, UUID: m.UUID,
 	}
-	literal := sqlbuild.StringLiteral(value.ValueString())
-	if sqlType == "UUID" {
-		return literal + "::UUID"
-	}
-	return literal
 }
 
 func validateGuideReference(reference guideReferenceModel, index int, diags *diag.Diagnostics) bool {
 	refType := reference.Type.ValueString()
 	prefix := fmt.Sprintf("Guide reference %d", index)
-	if refType == "catalog" {
-		if reference.URL.IsNull() || !strings.HasPrefix(reference.URL.ValueString(), "md:") {
-			diags.AddError("Invalid MotherDuck Guide reference", prefix+" is a catalog reference and requires a `url` beginning with `md:`.")
-			return false
-		}
-		narrowings := 0
-		for _, value := range []types.String{reference.Table, reference.View, reference.Macro} {
-			if !value.IsNull() && value.ValueString() != "" {
-				narrowings++
-			}
-		}
-		if narrowings > 1 {
-			diags.AddError("Invalid MotherDuck Guide reference", prefix+" may set at most one of `table`, `view`, or `macro`.")
-			return false
-		}
-		if !reference.Column.IsNull() && reference.Table.IsNull() {
-			diags.AddError("Invalid MotherDuck Guide reference", prefix+" sets `column` without `table`.")
-			return false
-		}
-		if narrowings > 0 && reference.Schema.IsNull() {
-			diags.AddError("Invalid MotherDuck Guide reference", prefix+" requires `schema` when narrowing to a table, view, or macro.")
-			return false
-		}
+	var detail string
+	switch guideref.Validate(reference.ref()) {
+	case guideref.Valid:
 		return true
+	case guideref.MissingURL:
+		detail = prefix + " is a catalog reference and requires a `url` beginning with `md:`."
+	case guideref.MultipleNarrowings:
+		detail = prefix + " may set at most one of `table`, `view`, or `macro`."
+	case guideref.ColumnWithoutTable:
+		detail = prefix + " sets `column` without `table`."
+	case guideref.MissingSchema:
+		detail = prefix + " requires `schema` when narrowing to a table, view, or macro."
+	case guideref.MissingUUID:
+		detail = prefix + " is a " + refType + " reference and requires `uuid`."
+	default:
+		detail = prefix + " has unsupported type " + refType + "."
 	}
-	if refType == "dive" || refType == "flight" || refType == "guide" {
-		if reference.UUID.IsNull() {
-			diags.AddError("Invalid MotherDuck Guide reference", prefix+" is a "+refType+" reference and requires `uuid`.")
-			return false
-		}
-		return true
-	}
-	diags.AddError("Invalid MotherDuck Guide reference", prefix+" has unsupported type "+refType+".")
+	diags.AddError("Invalid MotherDuck Guide reference", detail)
 	return false
 }
 
