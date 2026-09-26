@@ -43,8 +43,13 @@ for group in "${groups[@]}"; do
     continue
   fi
 
+  # Groups share RUN_ID for object names but build their provider binaries
+  # under per-group directories, because two groups can use the same
+  # PROVIDER_VERSION and the build refuses to overwrite a binary.
   set +e
-  "${script}" >"${log_file}" 2>&1
+  PROVIDER_BIN_DIR="${ROOT_DIR}/tools/provider-bin/${RUN_ID}-${group}" \
+    PROVIDER_MIRROR_DIR="${ROOT_DIR}/tools/provider-mirror/${RUN_ID}-${group}" \
+    "${script}" >"${log_file}" 2>&1
   group_status=$?
   set -e
 

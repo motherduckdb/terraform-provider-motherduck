@@ -15,6 +15,7 @@ for group in core warehouses apps roles; do
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\\n' '${group}' >> '${test_dir}/called'
+printf '%s\\n' "\${PROVIDER_BIN_DIR}" >> '${test_dir}/bin-dirs'
 EOF
   chmod +x "${test_dir}/groups/test-live-examples-${group}.sh"
 done
@@ -42,6 +43,9 @@ if MOTHERDUCK_TOKEN=stub MOTHERDUCK_ADMIN_TOKEN=stub \
   exit 1
 fi
 [[ "$(cat "${test_dir}/called")" == $'core\nwarehouses\napps\nroles' ]]
+# Every group that builds a provider gets its own binary directory.
+[[ "$(sort -u "${test_dir}/bin-dirs" | wc -l | tr -d ' ')" == "$(wc -l <"${test_dir}/bin-dirs" | tr -d ' ')" ]]
+grep -F "/tools/provider-bin/${run_id}-apps" "${test_dir}/bin-dirs" >/dev/null
 grep -F 'core         UNAVAILABLE' "${test_dir}/failure.log" >/dev/null
 grep -F 'warehouses   FAIL' "${test_dir}/failure.log" >/dev/null
 grep -F 'roles        PASS' "${test_dir}/failure.log" >/dev/null
