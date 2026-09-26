@@ -86,6 +86,10 @@ if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_di
   echo "Expected Flight max_runtime_sec to refresh as 300" >&2
   exit 1
 fi
+if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw flights_listing_ok)" != "true" ]]; then
+  echo "Expected motherduck_flights to return decodable rows" >&2
+  exit 1
+fi
 
 set +e
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false

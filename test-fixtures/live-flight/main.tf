@@ -89,8 +89,12 @@ output "max_runtime_sec" {
   value = motherduck_flight.smoke.max_runtime_sec
 }
 
-output "flights_rows_json" {
-  value     = data.motherduck_flights.all.rows_json
+# The account-wide listing changes while parallel smoke runs create and delete
+# Flights, so exposing its rows would break the no-op plan check. Keep the
+# data source in every plan and output only a stable decoding check.
+output "flights_listing_ok" {
+  value = can(jsondecode(data.motherduck_flights.all.rows_json)) && can(length(data.motherduck_flights.all.rows))
+  # Derived from sensitive rows_json.
   sensitive = true
 }
 

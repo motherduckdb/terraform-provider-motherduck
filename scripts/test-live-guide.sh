@@ -78,6 +78,10 @@ if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_di
   echo "Expected Guide content update to create version 2" >&2
   exit 1
 fi
+if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw roles_listing_ok)" != "true" ]]; then
+  echo "Expected motherduck_roles to return decodable rows" >&2
+  exit 1
+fi
 
 set +e
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false

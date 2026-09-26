@@ -102,7 +102,10 @@ output "guide_versions_rows_json" {
   sensitive = true
 }
 
-output "roles_rows_json" {
-  value     = data.motherduck_roles.all.rows_json
+# Roles are account-wide and other live runs create and drop them, so exposing
+# the rows would break the no-op plan check. Output only a stable decoding check.
+output "roles_listing_ok" {
+  value = can(jsondecode(data.motherduck_roles.all.rows_json))
+  # Derived from sensitive rows_json.
   sensitive = true
 }
