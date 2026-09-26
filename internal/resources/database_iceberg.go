@@ -94,7 +94,7 @@ func databaseIcebergAttribute() schema.SingleNestedAttribute {
 		Optional: true,
 		MarkdownDescription: "Options for an Iceberg REST catalog database. Required when `database_type = \"iceberg\"` and invalid otherwise. " +
 			"MotherDuck does not report these options back, so Terraform keeps the configured values and does not detect changes made outside Terraform. " +
-			"Removing the whole block keeps the database and stops managing its options. " +
+			"Removing the whole block together with `database_type` keeps the database and stops managing its options. " +
 			"Catalog credentials belong in a `motherduck_secret`, not here.",
 		Attributes: map[string]schema.Attribute{
 			"secret": schema.StringAttribute{
@@ -183,7 +183,12 @@ func icebergIdentityStringReplace(ctx context.Context, req planmodifier.StringRe
 	resp.RequiresReplace = icebergOptionsManaged(ctx, req.State.GetAttribute, req.Plan.GetAttribute, &resp.Diagnostics)
 }
 
+// An unset read_only attaches the catalog read-write, so moving between unset
+// and false changes nothing and does not replace the database.
 func icebergIdentityBoolReplace(ctx context.Context, req planmodifier.BoolRequest, resp *boolplanmodifier.RequiresReplaceIfFuncResponse) {
+	if !req.StateValue.ValueBool() && !req.PlanValue.IsUnknown() && !req.PlanValue.ValueBool() {
+		return
+	}
 	resp.RequiresReplace = icebergOptionsManaged(ctx, req.State.GetAttribute, req.Plan.GetAttribute, &resp.Diagnostics)
 }
 

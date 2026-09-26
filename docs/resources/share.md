@@ -100,7 +100,7 @@ terraform import motherduck_share.analytics 'analytics_share'
 ### Optional
 
 - `access` (String) Share access mode: `organization`, `restricted`, or `unrestricted`.
-- `include_pattern` (List of String) Optional catalog include patterns that limit the share to matching schemas and tables. Null shares the entire database. An empty list shares no objects. Changes are applied in place. Filtered shares require a Business plan or an active free trial, and only standard MotherDuck databases can be filtered. DuckLake and Iceberg databases reject include patterns.
+- `include_pattern` (List of String) Optional catalog include patterns that limit the share to matching schemas and tables. Null shares the entire database. An empty list shares no objects. Changes are applied in place. Filtered shares require a Business plan or an active free trial, and only standard MotherDuck databases can be filtered. DuckLake databases reject include patterns, and Iceberg databases cannot be shared.
 - `update_mode` (String) Share update mode: `manual` or `automatic`.
 - `visibility` (String) Share visibility mode: `discoverable` or `hidden`.
 

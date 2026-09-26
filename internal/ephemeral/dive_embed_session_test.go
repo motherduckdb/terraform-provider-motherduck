@@ -190,6 +190,8 @@ func TestDiveEmbedSessionEphemeralSessionNameConflictsWithHint(t *testing.T) {
 	}{
 		"both set":  {hint: tftypes.NewValue(tftypes.String, "legacy"), wantErr: true},
 		"name only": {hint: tftypes.NewValue(tftypes.String, nil)},
+		// An unknown hint may resolve to null, so it is not a conflict yet.
+		"unknown hint": {hint: tftypes.NewValue(tftypes.String, tftypes.UnknownValue)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			config := embedSessionConfigWith(schemaResp.Schema, map[string]tftypes.Value{

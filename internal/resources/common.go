@@ -391,7 +391,12 @@ func accessTokenNameValidators() []validator.String {
 }
 
 func accessTokenDescriptionValidators() []validator.String {
-	return []validator.String{tfvalidators.StringLength("MotherDuck access token description", 1, 1000)}
+	return []validator.String{
+		tfvalidators.StringLength("MotherDuck access token description", 1, 1000),
+		// MotherDuck measures the limit in UTF-16 code units, where a
+		// character outside the Basic Multilingual Plane counts twice.
+		tfvalidators.StringMaxUTF16Units("MotherDuck access token description", 1000),
+	}
 }
 
 // reservedAccessTokenNames are labels MotherDuck keeps for tokens it mints

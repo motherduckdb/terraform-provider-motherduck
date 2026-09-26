@@ -32,7 +32,7 @@ data "motherduck_dive_embed_session" "reader" {
 ### Optional
 
 - `initial_state` (String) Optional JSON object that seeds the embedded Dive's UI state. Each key is read by the matching `useDiveState` call in the Dive. Build it with `jsonencode()`. The JSON encoding must be at most 64 KiB.
-- `required_resources` (Attributes List) Optional override for the databases and shares the Dive renders against. When set, it replaces the Dive's declared required resources for this session. The JSON encoding of the list must be at most 8192 bytes. (see [below for nested schema](#nestedatt--required_resources))
+- `required_resources` (Attributes List) Optional override for the databases and shares the Dive renders against. When set, it replaces the Dive's declared required resources for this session. An empty list declares no resources, so the Dive attaches the whole workspace of the session user. The JSON encoding of the list must be at most 8192 bytes. (see [below for nested schema](#nestedatt--required_resources))
 - `session_hint` (String, Deprecated) Deprecated alias for `session_name`. Must be non-blank when set.
 - `session_name` (String) Optional name used to reuse the same read-scaling session across embed requests. Must be non-blank when set. Conflicts with `session_hint`.
 - `version` (Number) Optional Dive version to embed. Must be a positive integer. Omit it to embed the current version.

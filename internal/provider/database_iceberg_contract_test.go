@@ -93,6 +93,9 @@ func TestContractIcebergDatabaseLifecycle(t *testing.T) {
 		`default_schema         = "default"`, `default_schema         = "analytics"`,
 		`access_delegation_mode = "vended_credentials"`, `purge_requested        = true`,
 	).Replace(config)
+	// An unset read_only is read-write, so writing it as false must not
+	// replace the database.
+	explicitReadWrite := strings.Replace(config, `remove_files_on_delete = false`, "remove_files_on_delete = false\n    read_only              = false", 1)
 	replaced := strings.Replace(altered, `warehouse              = "analytics"`, `warehouse              = "other"`, 1)
 	unmanaged := contractProviderConfig("http://127.0.0.1") + `
 resource "motherduck_database" "test" {
@@ -123,6 +126,13 @@ resource "motherduck_database" "test" {
 					resource.TestCheckResourceAttr("motherduck_database.test", "iceberg.secret", "catalog_secret"),
 					resource.TestCheckNoResourceAttr("motherduck_database.test", "snapshot_retention_days"),
 				),
+			},
+			{
+				Config: explicitReadWrite,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_database.test", plancheck.ResourceActionUpdate)},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
 			},
 			{
 				Config: altered,

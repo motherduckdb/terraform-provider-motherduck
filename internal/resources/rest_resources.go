@@ -604,8 +604,9 @@ func int64FromLive(live *int64) types.Int64 {
 // ducklingCooldownPlanModifier plans an unset cooldown. A configured value
 // always wins. While unset, the cooldown keeps its state value as long as the
 // matching instance size is unchanged, and the write sends that value so
-// MotherDuck keeps it. When the instance size changes, the value is unknown
-// because MotherDuck applies the default for the new size, or none for Pulse.
+// MotherDuck keeps it. When the instance size changes, or state has no value
+// for a non-Pulse size, the value is unknown because MotherDuck applies the
+// default for the size, or none for Pulse.
 type ducklingCooldownPlanModifier struct {
 	sizeAttribute string
 }
@@ -629,6 +630,12 @@ func (m ducklingCooldownPlanModifier) PlanModifyInt64(ctx context.Context, req p
 		return
 	}
 	if !strings.EqualFold(strings.TrimSpace(planned.ValueString()), strings.TrimSpace(current.ValueString())) {
+		return
+	}
+	// A null cooldown on a non-Pulse size comes from state written before
+	// cooldowns were recorded. The write omits it and MotherDuck fills in its
+	// default, so the value stays unknown until apply.
+	if req.StateValue.IsNull() && !strings.EqualFold(strings.TrimSpace(planned.ValueString()), "pulse") {
 		return
 	}
 	resp.PlanValue = req.StateValue

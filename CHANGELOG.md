@@ -24,8 +24,8 @@ This index lists the headline change for every release.
 - `motherduck_dive_embed_session` accepts `session_name`, `version`, `required_resources`, and `initial_state`. `session_hint` is deprecated in favor of `session_name`.
 - `motherduck_flight` reports `schedule_status` and `owner_name`, rejects the reserved config keys `MOTHERDUCK_FLIGHT_ID` and `MOTHERDUCK_FLIGHT_RUN_ID`, and checks the 200 KB source and 20 KB requirements limits at plan time. The `max_runtime_sec` docs describe the per-plan caps.
 - `motherduck_flight_run` reads runs with `MD_GET_FLIGHT_RUN` and falls back to the run listing.
-- `motherduck_flight_logs` pages on the server and accepts `order`, so lines before the last 1,000 are reachable.
-- Destroying a snapshot whose database was dropped now releases its retained name.
+- `motherduck_flight_logs` pages on the server and accepts `order`, so lines before the last 1,000 are reachable. With `limit` set, rows now count from the start of the log instead of from the start of the last 1,000 lines. Use `order = "desc"` to read the tail.
+- A named snapshot whose database was dropped outside Terraform stays in state with a warning, and destroying it releases the retained name from another native database.
 - `motherduck_dive` reads `api_version` and `required_resources` on refresh and import, so an import no longer needs a corrective update.
 - Guide role access is detected by the `role_names` parameter of `MD_SET_GUIDE_ACCESS`, and `motherduck_guide_grantees` reads roles from `MD_GET_GUIDE` and no longer has a `granted_at` column. Role access stays experimental and is not yet available in MotherDuck.
 - Docs: filtered shares and custom roles need a Business plan or an active free trial, filtered shares reject DuckLake and Iceberg databases, Flight listings default to 50 rows, and `motherduck_role_members` reports a null `email` for service accounts.

@@ -175,12 +175,12 @@ func (v conflictsWithValidator) MarkdownDescription(context.Context) string {
 }
 
 func (v conflictsWithValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
-	if req.ConfigValue.IsNull() {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
 	var other types.String
 	diags := req.Config.GetAttribute(ctx, path.Root(v.other), &other)
-	if diags.HasError() || other.IsNull() {
+	if diags.HasError() || other.IsNull() || other.IsUnknown() {
 		return
 	}
 	resp.Diagnostics.AddAttributeError(

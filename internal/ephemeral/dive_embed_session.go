@@ -80,7 +80,7 @@ func (r *diveEmbedSessionEphemeralResource) Schema(ctx context.Context, req tfep
 			},
 			"required_resources": ephschema.ListNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional override for the databases and shares the Dive renders against. When set, it replaces the Dive's declared required resources for this session. The JSON encoding of the list must be at most 8192 bytes.",
+				MarkdownDescription: "Optional override for the databases and shares the Dive renders against. When set, it replaces the Dive's declared required resources for this session. An empty list declares no resources, so the Dive attaches the whole workspace of the session user. The JSON encoding of the list must be at most 8192 bytes.",
 				Validators:          diveembed.RequiredResourcesValidators(),
 				NestedObject: ephschema.NestedAttributeObject{
 					Attributes: map[string]ephschema.Attribute{
