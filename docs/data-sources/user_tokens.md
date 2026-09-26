@@ -2,12 +2,12 @@
 page_title: "motherduck_user_tokens Data Source - motherduck"
 subcategory: "Identity and compute"
 description: |-
-  Lists access token metadata for a MotherDuck user or service account, sorted by token ID.
+  Lists metadata for the unexpired access tokens of a MotherDuck user or service account, sorted by token ID. MotherDuck omits expired and revoked tokens from the listing.
 ---
 
 # motherduck_user_tokens (Data Source)
 
-Lists access token metadata for a MotherDuck user or service account, sorted by token ID.
+Lists metadata for the unexpired access tokens of a MotherDuck user or service account, sorted by token ID. MotherDuck omits expired and revoked tokens from the listing.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read
@@ -39,6 +39,7 @@ data "motherduck_user_tokens" "app" {
 Read-Only:
 
 - `created_ts` (String) Token creation timestamp.
+- `description` (String) Free-form notes on the token's purpose, when set.
 - `expire_at` (String) Token expiration timestamp when present.
 - `id` (String) Access token ID.
 - `name` (String) Access token label.

@@ -56,7 +56,7 @@ func (r *serviceAccountResource) Schema(ctx context.Context, req resource.Schema
 			},
 			"username": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Unique service account username. Must start with an ASCII letter, contain only ASCII letters, digits, and underscores, and be at most 255 characters.",
+				MarkdownDescription: "Unique service account username. Must be 3-255 characters, start with an ASCII letter, and contain only ASCII letters, digits, and underscores.",
 				Validators:          serviceAccountUsernameValidators(),
 				PlanModifiers:       stringRequiresReplace(),
 			},
@@ -141,15 +141,16 @@ type accessTokenResource struct {
 }
 
 type accessTokenModel struct {
-	ID        types.String `tfsdk:"id"`
-	Username  types.String `tfsdk:"username"`
-	Name      types.String `tfsdk:"name"`
-	TTL       types.Int64  `tfsdk:"ttl"`
-	TokenType types.String `tfsdk:"token_type"`
-	Token     types.String `tfsdk:"token"`
-	ExpireAt  types.String `tfsdk:"expire_at"`
-	CreatedTS types.String `tfsdk:"created_ts"`
-	ReadOnly  types.Bool   `tfsdk:"read_only"`
+	ID          types.String `tfsdk:"id"`
+	Username    types.String `tfsdk:"username"`
+	Name        types.String `tfsdk:"name"`
+	Description types.String `tfsdk:"description"`
+	TTL         types.Int64  `tfsdk:"ttl"`
+	TokenType   types.String `tfsdk:"token_type"`
+	Token       types.String `tfsdk:"token"`
+	ExpireAt    types.String `tfsdk:"expire_at"`
+	CreatedTS   types.String `tfsdk:"created_ts"`
+	ReadOnly    types.Bool   `tfsdk:"read_only"`
 }
 
 func NewAccessTokenResource() resource.Resource { return &accessTokenResource{} }
@@ -175,9 +176,16 @@ func (r *accessTokenResource) Schema(ctx context.Context, req resource.SchemaReq
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Access token label. Must be non-blank and 1-255 characters.",
+				MarkdownDescription: "Access token label. Must be non-blank and 1-255 characters. `MotherDuck Extension` and `MotherDuck Flights` are reserved.",
 				Validators:          accessTokenNameValidators(),
 				PlanModifiers:       stringRequiresReplace(),
+			},
+			"description": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Optional free-form notes on the token's purpose. Must be non-blank and 1-1000 characters. MotherDuck cannot edit a description, so changing a configured value replaces the token. When omitted, Terraform keeps whatever description MotherDuck reports, including one set outside Terraform.",
+				Validators:          accessTokenDescriptionValidators(),
+				PlanModifiers:       stringOptionalComputedRequiresReplaceIfConfigured(),
 			},
 			"ttl": schema.Int64Attribute{
 				Optional:            true,
@@ -230,6 +238,9 @@ func (r *accessTokenResource) Create(ctx context.Context, req resource.CreateReq
 		tokenType = strings.ToLower(strings.TrimSpace(plan.TokenType.ValueString()))
 	}
 	createReq := mdrest.CreateTokenRequest{Name: plan.Name.ValueString(), TokenType: tokenType}
+	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
+		createReq.Description = plan.Description.ValueString()
+	}
 	if !plan.TTL.IsNull() {
 		ttl := plan.TTL.ValueInt64()
 		createReq.TTL = &ttl
@@ -239,8 +250,19 @@ func (r *accessTokenResource) Create(ctx context.Context, req resource.CreateReq
 		resp.Diagnostics.AddError("Unable to create MotherDuck access token", err.Error())
 		return
 	}
+	requestedDescription := createReq.Description
 	setTokenModelFromREST(&plan, created)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if requestedDescription != "" && created.Description != requestedDescription {
+		// The token exists and its state is saved, so Terraform can revoke or
+		// replace it. The API silently drops fields it does not know, which
+		// happens in a region that has not yet received token descriptions.
+		resp.Diagnostics.AddAttributeError(
+			path.Root("description"),
+			"MotherDuck did not store the access token description",
+			"MotherDuck created access token "+created.ID+" but did not return the requested description. The MotherDuck region may not support token descriptions yet. Remove description from the configuration, or retry after the region is updated.",
+		)
+	}
 }
 
 func (r *accessTokenResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -345,6 +367,12 @@ func setTokenModelFromREST(model *accessTokenModel, token *mdrest.Token) {
 	model.ReadOnly = types.BoolValue(token.ReadOnly)
 	if token.Name != "" {
 		model.Name = types.StringValue(token.Name)
+	}
+	// MotherDuck stores an empty description as null and omits it on read.
+	if token.Description != "" {
+		model.Description = types.StringValue(token.Description)
+	} else {
+		model.Description = types.StringNull()
 	}
 	if token.Token != "" {
 		model.Token = types.StringValue(token.Token)

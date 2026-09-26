@@ -62,10 +62,45 @@ func (r *diveEmbedSessionEphemeralResource) Schema(ctx context.Context, req tfep
 				MarkdownDescription: "Service account username. Must be non-blank and 1-255 characters.",
 				Validators:          diveembed.UsernameValidators(),
 			},
+			"session_name": ephschema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "Optional name used to reuse the same read-scaling session across embed requests. Must be non-blank when set. Conflicts with `session_hint`.",
+				Validators:          diveembed.SessionNameValidators(),
+			},
 			"session_hint": ephschema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional hint used to reuse the same read-scaling session across embed requests. Must be non-blank when set.",
+				DeprecationMessage:  diveembed.SessionHintDeprecationMessage,
+				MarkdownDescription: "Deprecated alias for `session_name`. Must be non-blank when set.",
 				Validators:          diveembed.SessionHintValidators(),
+			},
+			"version": ephschema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Optional Dive version to embed. Must be a positive integer. Omit it to embed the current version.",
+				Validators:          diveembed.VersionValidators(),
+			},
+			"required_resources": ephschema.ListNestedAttribute{
+				Optional:            true,
+				MarkdownDescription: "Optional override for the databases and shares the Dive renders against. When set, it replaces the Dive's declared required resources for this session. The JSON encoding of the list must be at most 8192 bytes.",
+				Validators:          diveembed.RequiredResourcesValidators(),
+				NestedObject: ephschema.NestedAttributeObject{
+					Attributes: map[string]ephschema.Attribute{
+						"url": ephschema.StringAttribute{
+							Required:            true,
+							Sensitive:           true,
+							MarkdownDescription: "MotherDuck share URL the Dive renders against. This value is sensitive and can be sourced from `motherduck_share.url`. Must be non-blank.",
+							Validators:          diveembed.RequiredResourceURLValidators(),
+						},
+						"alias": ephschema.StringAttribute{
+							Optional:            true,
+							MarkdownDescription: "Optional alias exposed to the Dive content for this resource.",
+						},
+					},
+				},
+			},
+			"initial_state": ephschema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "Optional JSON object that seeds the embedded Dive's UI state. Each key is read by the matching `useDiveState` call in the Dive. Build it with `jsonencode()`. The JSON encoding must be at most 64 KiB.",
+				Validators:          diveembed.InitialStateValidators(),
 			},
 			"session": ephschema.StringAttribute{
 				Computed:            true,
