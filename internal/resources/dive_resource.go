@@ -8,10 +8,12 @@ import (
 	"strings"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
@@ -72,12 +74,14 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"api_version": schema.Int64Attribute{
 				Optional:            true,
-				MarkdownDescription: "Optional Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default. The public MD_GET_DIVE output does not report this value, so import cannot recover it. Keep it configured and expect one corrective update after import.",
+				Computed:            true,
+				MarkdownDescription: "Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default. Refresh and import read the current version's API version from `MD_GET_DIVE`.",
+				PlanModifiers:       []planmodifier.Int64{diveAPIVersionPlanModifier{}},
 			},
 			"required_resources": schema.ListNestedAttribute{
 				Optional:            true,
 				Sensitive:           true,
-				MarkdownDescription: "Optional share resources to mount into the Dive. This is config-owned because the current public `MD_GET_DIVE` output does not expose mounted resources during refresh or import.",
+				MarkdownDescription: "Optional shares or databases to mount into the Dive. Refresh and import read the current version's mounted resources from `MD_GET_DIVE`, so a mount changed outside Terraform plans an update. MotherDuck stores a share URL under the share's name. A configured URL that names the same share token keeps its spelling in state.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"alias": schema.StringAttribute{
@@ -161,7 +165,7 @@ func (r *diveResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if !plan.Description.IsNull() {
 		args["description"] = sqlbuild.StringLiteral(plan.Description.ValueString())
 	}
-	if !plan.APIVersion.IsNull() {
+	if diveAPIVersionConfigured(plan.APIVersion) {
 		args["api_version"] = fmt.Sprintf("%d", plan.APIVersion.ValueInt64())
 	}
 	if !plan.RequiredResources.IsNull() {
@@ -331,8 +335,10 @@ func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *di
 		diags.AddError("Unable to inspect MotherDuck Dive status support", err.Error())
 		return false
 	}
-	columns := "title, description, current_version, created_at::VARCHAR, updated_at::VARCHAR, owner_name, content"
-	scanTargets := []any{&title, &description, &currentVersion, &created, &updated, &ownerName, &content}
+	var apiVersion stdsql.NullInt64
+	var requiredResourcesJSON stdsql.NullString
+	columns := "title, description, current_version, created_at::VARCHAR, updated_at::VARCHAR, owner_name, content, version_api_version, to_json(version_required_resources)::VARCHAR"
+	scanTargets := []any{&title, &description, &currentVersion, &created, &updated, &ownerName, &content, &apiVersion, &requiredResourcesJSON}
 	if statusAvailable {
 		columns += ", status, status_changed_at::VARCHAR, status_set_by::VARCHAR, status_applies_to_version"
 		scanTargets = append(scanTargets, &status, &statusChangedAt, &statusSetBy, &statusVersion)
@@ -357,6 +363,16 @@ func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *di
 	model.UpdatedAt = nullString(updated)
 	model.OwnerName = nullString(ownerName)
 	model.Content = nullString(content)
+	if apiVersion.Valid {
+		model.APIVersion = types.Int64Value(apiVersion.Int64)
+	} else {
+		model.APIVersion = types.Int64Null()
+	}
+	requiredResources, ok := diveRequiredResourcesFromLive(ctx, model.RequiredResources, requiredResourcesJSON, diags)
+	if !ok {
+		return false
+	}
+	model.RequiredResources = requiredResources
 	if statusAvailable {
 		model.Status = nullString(status)
 		model.StatusChangedAt = nullString(statusChangedAt)
@@ -415,13 +431,52 @@ func diveMetadataArgs(plan, state *diveModel, diags *diag.Diagnostics) (map[stri
 	return args, len(args) > 0
 }
 
+// diveAPIVersionPlanModifier keeps an unconfigured api_version from state
+// unless the plan writes a new content version, which is the only update that
+// can change it. A content update leaves it unknown for MotherDuck to choose.
+type diveAPIVersionPlanModifier struct{}
+
+func (diveAPIVersionPlanModifier) Description(context.Context) string {
+	return "Keeps the prior API version unless the Dive content or mounted resources change."
+}
+
+func (m diveAPIVersionPlanModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (diveAPIVersionPlanModifier) PlanModifyInt64(ctx context.Context, req planmodifier.Int64Request, resp *planmodifier.Int64Response) {
+	if req.State.Raw.IsNull() || req.StateValue.IsNull() || !req.ConfigValue.IsNull() || !req.PlanValue.IsUnknown() {
+		return
+	}
+	var planContent, stateContent types.String
+	var planResources, stateResources types.List
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("content"), &planContent)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("content"), &stateContent)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("required_resources"), &planResources)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("required_resources"), &stateResources)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if planContent.Equal(stateContent) && optionalListValuesEqual(planResources, stateResources) {
+		resp.PlanValue = req.StateValue
+	}
+}
+
+// diveAPIVersionConfigured reports whether api_version has a planned value to
+// send. An unconfigured api_version is computed and plans as unknown, which
+// leaves the choice to MotherDuck and never triggers a content update.
+func diveAPIVersionConfigured(value types.Int64) bool {
+	return !value.IsNull() && !value.IsUnknown()
+}
+
 func diveContentArgs(ctx context.Context, plan, state *diveModel, diags *diag.Diagnostics) (map[string]string, bool) {
 	requiredResourcesEqual := optionalListValuesEqual(plan.RequiredResources, state.RequiredResources)
-	if plan.Content.Equal(state.Content) && plan.APIVersion.Equal(state.APIVersion) && requiredResourcesEqual {
+	apiVersionEqual := !diveAPIVersionConfigured(plan.APIVersion) || plan.APIVersion.Equal(state.APIVersion)
+	if plan.Content.Equal(state.Content) && apiVersionEqual && requiredResourcesEqual {
 		return nil, false
 	}
 	args := map[string]string{"content": sqlbuild.StringLiteral(plan.Content.ValueString())}
-	if !plan.APIVersion.IsNull() {
+	if diveAPIVersionConfigured(plan.APIVersion) {
 		args["api_version"] = fmt.Sprintf("%d", plan.APIVersion.ValueInt64())
 	}
 	if !plan.RequiredResources.IsNull() {
@@ -441,6 +496,76 @@ func optionalListValuesEqual(left, right types.List) bool {
 		return true
 	}
 	return left.Equal(right)
+}
+
+// diveLiveResource is one entry of MD_GET_DIVE version_required_resources.
+type diveLiveResource struct {
+	Name  *string `json:"name"`
+	Alias *string `json:"alias"`
+	URL   string  `json:"url"`
+}
+
+func diveRequiredResourceObjectType() types.ObjectType {
+	return types.ObjectType{AttrTypes: map[string]attr.Type{"alias": types.StringType, "url": types.StringType}}
+}
+
+// diveRequiredResourcesFromLive maps the mounted resources of the current Dive
+// version. MotherDuck rewrites each URL to a canonical form, so an entry whose
+// alias and target match the prior value keeps the prior spelling. A missing
+// alias reads as the resource name, which MotherDuck uses in its place.
+func diveRequiredResourcesFromLive(ctx context.Context, prior types.List, raw stdsql.NullString, diags *diag.Diagnostics) (types.List, bool) {
+	var live []diveLiveResource
+	if !decodeNullableJSON(raw, &live, "Unable to parse MotherDuck Dive required resources", diags) {
+		return prior, false
+	}
+	if len(live) == 0 {
+		if prior.IsNull() || prior.IsUnknown() {
+			return types.ListNull(diveRequiredResourceObjectType()), true
+		}
+		return types.ListValueMust(diveRequiredResourceObjectType(), []attr.Value{}), true
+	}
+	var priorItems []diveRequiredResourceModel
+	if !prior.IsNull() && !prior.IsUnknown() {
+		diags.Append(prior.ElementsAs(ctx, &priorItems, false)...)
+		if diags.HasError() {
+			return prior, false
+		}
+	}
+	items := make([]diveRequiredResourceModel, len(live))
+	for i, resource := range live {
+		alias := ""
+		if resource.Alias != nil {
+			alias = *resource.Alias
+		} else if resource.Name != nil {
+			alias = *resource.Name
+		}
+		if i < len(priorItems) && strings.EqualFold(priorItems[i].Alias.ValueString(), alias) && diveResourceURLsEquivalent(priorItems[i].URL.ValueString(), resource.URL) {
+			items[i] = priorItems[i]
+			continue
+		}
+		items[i] = diveRequiredResourceModel{Alias: types.StringValue(alias), URL: types.StringValue(resource.URL)}
+	}
+	value, valueDiags := types.ListValueFrom(ctx, diveRequiredResourceObjectType(), items)
+	diags.Append(valueDiags...)
+	return value, !valueDiags.HasError()
+}
+
+// diveResourceURLsEquivalent reports whether a configured mount URL names the
+// same resource as the canonical URL MotherDuck stores. Database URLs compare
+// case-insensitively. Share URLs are identified by their token, the last path
+// segment, because MotherDuck rewrites the name segment to the share name.
+func diveResourceURLsEquivalent(configured, live string) bool {
+	if strings.EqualFold(configured, live) {
+		return true
+	}
+	const sharePrefix = "md:_share/"
+	configured, live = strings.ToLower(configured), strings.ToLower(live)
+	if !strings.HasPrefix(configured, sharePrefix) || !strings.HasPrefix(live, sharePrefix) {
+		return false
+	}
+	configuredToken := configured[strings.LastIndex(configured, "/")+1:]
+	liveToken := live[strings.LastIndex(live, "/")+1:]
+	return configuredToken != "" && configuredToken == liveToken
 }
 
 func diveRequiredResourcesArg(ctx context.Context, value types.List, diags *diag.Diagnostics) (string, bool) {

@@ -36,7 +36,7 @@ func TestValidateDatabaseConfigDefersUnknownDatabaseType(t *testing.T) {
 		Transient:    types.BoolValue(true),
 	}
 	var diags diag.Diagnostics
-	validateDatabaseConfig(model, &diags)
+	validateDatabaseConfig(context.Background(), model, &diags)
 	if diags.HasError() {
 		t.Fatalf("unknown database_type should defer cross-field validation: %v", diags)
 	}

@@ -26,7 +26,7 @@ const (
 
 var (
 	contractFlightIDPattern  = regexp.MustCompile(`flight_id := '([^']+)'::UUID`)
-	contractRunNumberPattern = regexp.MustCompile(`run_number = ([0-9]+)`)
+	contractRunNumberPattern = regexp.MustCompile(`run_number :?= ([0-9]+)`)
 )
 
 type flightDependencyContractSQL struct {
@@ -71,7 +71,7 @@ func (c *flightDependencyContractSQL) Exists(_ context.Context, query string, ar
 		return false, fmt.Errorf("unexpected function check %q with args %#v", query, args)
 	}
 	switch strings.ToLower(fmt.Sprint(args[0])) {
-	case "md_create_flight", "md_get_flight", "md_get_flight_version", "md_update_flight", "md_delete_flight", "md_run_flight", "md_list_flight_runs":
+	case "md_create_flight", "md_get_flight", "md_get_flight_version", "md_update_flight", "md_delete_flight", "md_run_flight", "md_get_flight_run", "md_list_flight_runs":
 		return true, nil
 	default:
 		return false, fmt.Errorf("unexpected function check for %q", args[0])
@@ -171,10 +171,12 @@ func (c *flightDependencyContractSQL) QueryRow(_ context.Context, query string, 
 		return flightDependencyRow{values: []any{
 			flight.name,
 			nil,
+			nil,
 			"ACTIVE",
 			flight.version,
 			"2026-09-01T00:00:00Z",
 			"2026-09-01T00:00:00Z",
+			"contract_owner",
 		}}
 	case strings.Contains(query, "FROM MD_RUN_FLIGHT("):
 		id, err := contractFlightID(query)
@@ -200,7 +202,7 @@ func (c *flightDependencyContractSQL) QueryRow(_ context.Context, query string, 
 		c.runsByID[run.id] = run
 		c.runsMu.Unlock()
 		return flightDependencyRow{values: []any{run.id, run.status, run.runNumber, run.flightVersion, run.created}}
-	case strings.Contains(query, "FROM MD_LIST_FLIGHT_RUNS("):
+	case strings.Contains(query, "FROM MD_GET_FLIGHT_RUN("), strings.Contains(query, "FROM MD_LIST_FLIGHT_RUNS("):
 		id, err := contractFlightID(query)
 		if err != nil {
 			return flightDependencyRow{err: err}
@@ -370,6 +372,8 @@ func TestContractFlightDefinitionDependencyLifecycle(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("motherduck_flight.initial", "id", contractInitialFlightID),
+					resource.TestCheckResourceAttr("motherduck_flight.initial", "owner_name", "contract_owner"),
+					resource.TestCheckNoResourceAttr("motherduck_flight.initial", "schedule_status"),
 					resource.TestCheckResourceAttr("motherduck_flight_run.dependent", "flight_id", contractInitialFlightID),
 					checkFlightRunCount(sqlClient, 1),
 				),

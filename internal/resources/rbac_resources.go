@@ -45,7 +45,7 @@ func (r *roleResource) Metadata(ctx context.Context, req resource.MetadataReques
 func (r *roleResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:             1,
-		MarkdownDescription: "Manages a custom MotherDuck role.",
+		MarkdownDescription: "Manages a custom MotherDuck role. Custom roles are available on the Business plan and during an active free trial.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,

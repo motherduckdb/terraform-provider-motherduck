@@ -58,14 +58,14 @@ Teams choosing Terraform for Flight definitions should use a separate workload
 state when its owners or release cadence differ from platform infrastructure.
 Creating a definition and configuring its schedule are distinct from executing it.
 
-Dive mounted resources cannot currently be reconstructed by this implementation
-on refresh/import. Do not rely on complete drift detection for that field.
+Dive refresh and import read the mounted resources and API version of the
+current Dive version, so drift in those fields is detected.
 Guide audience management also belongs to the same authoritative owner as its
 content until a separately managed, non-overlapping permissions surface exists.
 The public Guide access functions currently document user/private and
-organization audiences. Role audiences remain compatibility fields in the
-provider schema and require the account to expose the Guide grantee functions.
-Check function availability before using `access = "role"` or
+organization audiences. Role audiences are experimental and not available in
+production MotherDuck yet. They require a session whose `MD_SET_GUIDE_ACCESS`
+accepts `role_names`. Check for that parameter before using `access = "role"` or
 `motherduck_guide_grantees`.
 
 ## Move existing content out of Terraform

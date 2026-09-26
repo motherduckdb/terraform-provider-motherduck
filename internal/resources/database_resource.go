@@ -28,6 +28,7 @@ type databaseModel struct {
 	DatabaseType          types.String           `tfsdk:"database_type"`
 	DataPath              types.String           `tfsdk:"data_path"`
 	Encrypted             types.Bool             `tfsdk:"encrypted"`
+	Iceberg               types.Object           `tfsdk:"iceberg"`
 	UUID                  types.String           `tfsdk:"uuid"`
 	CreatedTS             types.String           `tfsdk:"created_ts"`
 	Timeouts              resourceTimeouts.Value `tfsdk:"timeouts"`
@@ -71,7 +72,7 @@ func (r *databaseResource) Schema(ctx context.Context, req resource.SchemaReques
 			"database_type": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "`default` or `ducklake`. Use `transient = true` for transient databases.",
+				MarkdownDescription: "`default`, `ducklake`, or `iceberg`. Use `transient = true` for transient databases. An `iceberg` database registers an existing Iceberg REST catalog and needs the `iceberg` block.",
 				PlanModifiers:       stringRequiresReplaceIfConfigured(),
 				Validators:          databaseTypeValidators(),
 			},
@@ -85,6 +86,7 @@ func (r *databaseResource) Schema(ctx context.Context, req resource.SchemaReques
 				MarkdownDescription: "DuckLake-only. When true, emits the `ENCRYPTED` database option at creation. When false, omits the option.",
 				PlanModifiers:       boolRequiresReplace(),
 			},
+			"iceberg": databaseIcebergAttribute(),
 			"uuid": schema.StringAttribute{
 				Computed:            true,
 				PlanModifiers:       stringUseStateForUnknown(),
@@ -115,10 +117,10 @@ func (r *databaseResource) ValidateConfig(ctx context.Context, req resource.Vali
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	validateDatabaseConfig(config, &resp.Diagnostics)
+	validateDatabaseConfig(ctx, config, &resp.Diagnostics)
 }
 
-func validateDatabaseConfig(config databaseModel, diags *diag.Diagnostics) {
+func validateDatabaseConfig(ctx context.Context, config databaseModel, diags *diag.Diagnostics) {
 	databaseType := ""
 	databaseTypeKnown := !config.DatabaseType.IsUnknown()
 	if !config.DatabaseType.IsNull() && !config.DatabaseType.IsUnknown() {
@@ -137,6 +139,7 @@ func validateDatabaseConfig(config databaseModel, diags *diag.Diagnostics) {
 	if databaseTypeKnown && !config.Encrypted.IsNull() && !config.Encrypted.IsUnknown() && databaseType != "ducklake" {
 		diags.AddAttributeError(path.Root("encrypted"), "Invalid MotherDuck database configuration", "`encrypted` is only valid when `database_type = \"ducklake\"`.")
 	}
+	validateDatabaseIcebergConfig(ctx, config, databaseType, databaseTypeKnown, diags)
 }
 
 func (r *databaseResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -160,6 +163,13 @@ func (r *databaseResource) Create(ctx context.Context, req resource.CreateReques
 	}
 	if !plan.DatabaseType.IsNull() && strings.EqualFold(plan.DatabaseType.ValueString(), "ducklake") {
 		options = append(options, "TYPE DUCKLAKE")
+	}
+	if !plan.DatabaseType.IsNull() && strings.EqualFold(plan.DatabaseType.ValueString(), "iceberg") {
+		options = append(options, "TYPE ICEBERG")
+		options = append(options, databaseIcebergCreateOptions(databaseIcebergOptions(ctx, plan.Iceberg, &resp.Diagnostics))...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 	if !plan.DataPath.IsNull() && plan.DataPath.ValueString() != "" {
 		options = append(options, "DATA_PATH "+sqlbuild.StringLiteral(plan.DataPath.ValueString()))
@@ -237,12 +247,27 @@ func (r *databaseResource) Update(ctx context.Context, req resource.UpdateReques
 	if client == nil {
 		return
 	}
+	statements := make([]string, 0, 2)
 	if knownInt64(plan.SnapshotRetentionDays) && !plan.SnapshotRetentionDays.Equal(state.SnapshotRetentionDays) {
+		statements = append(statements, fmt.Sprintf("ALTER DATABASE %s SET SNAPSHOT_RETENTION_DAYS = %d", sqlbuild.QuoteIdentifier(plan.Name.ValueString()), plan.SnapshotRetentionDays.ValueInt64()))
+	}
+	icebergAssignments := databaseIcebergAlterAssignments(
+		databaseIcebergOptions(ctx, plan.Iceberg, &resp.Diagnostics),
+		databaseIcebergOptions(ctx, state.Iceberg, &resp.Diagnostics),
+	)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if len(icebergAssignments) > 0 {
+		statements = append(statements, "ALTER DATABASE "+sqlbuild.QuoteIdentifier(plan.Name.ValueString())+" SET "+strings.Join(icebergAssignments, ", "))
+	}
+	if len(statements) > 0 {
 		if err := client.AttachDatabase(ctx, plan.Name.ValueString()); err != nil {
 			resp.Diagnostics.AddError("Unable to attach MotherDuck database", err.Error())
 			return
 		}
-		query := fmt.Sprintf("ALTER DATABASE %s SET SNAPSHOT_RETENTION_DAYS = %d", sqlbuild.QuoteIdentifier(plan.Name.ValueString()), plan.SnapshotRetentionDays.ValueInt64())
+	}
+	for _, query := range statements {
 		if err := client.Exec(ctx, query); err != nil {
 			resp.Diagnostics.AddError("Unable to update MotherDuck database", err.Error())
 			return

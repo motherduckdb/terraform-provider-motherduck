@@ -30,6 +30,8 @@ type flightModel struct {
 	AccessTokenName   types.String `tfsdk:"access_token_name"`
 	FlightSecretNames types.List   `tfsdk:"flight_secret_names"`
 	MaxRuntimeSec     types.Int64  `tfsdk:"max_runtime_sec"`
+	ScheduleStatus    types.String `tfsdk:"schedule_status"`
+	OwnerName         types.String `tfsdk:"owner_name"`
 	Status            types.String `tfsdk:"status"`
 	CurrentVersion    types.Int64  `tfsdk:"current_version"`
 	CreatedAt         types.String `tfsdk:"created_at"`
@@ -58,15 +60,17 @@ func (r *flightResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			},
 			"source_code": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Flight source code sent to MotherDuck.",
+				MarkdownDescription: "Flight source code sent to MotherDuck. Must not be empty and must be at most 204,800 bytes (200 KiB) of UTF-8.",
+				Validators:          []validator.String{flightContentBytes("MotherDuck Flight source code", 1, flightMaxSourceCodeBytes)},
 			},
 			"schedule_cron": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional cron schedule for the Flight.",
+				MarkdownDescription: "Optional cron schedule for the Flight. MotherDuck rejects schedules on plans without scheduled runs, such as the Free plan. See `schedule_status` for whether MotherDuck is currently running the schedule.",
 			},
 			"requirements_txt": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional Python requirements text for the Flight runtime.",
+				MarkdownDescription: "Optional Python requirements text for the Flight runtime. Must be at most 20,480 bytes (20 KiB) of UTF-8.",
+				Validators:          []validator.String{flightContentBytes("MotherDuck Flight requirements", 0, flightMaxRequirementsBytes)},
 			},
 			"config": schema.MapAttribute{
 				Optional:            true,
@@ -86,9 +90,17 @@ func (r *flightResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"max_runtime_sec": schema.Int64Attribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Maximum Flight runtime in seconds. `0` disables the runtime limit. When omitted at creation, MotherDuck supplies its current default. Removing a configured value keeps the last applied limit, so set the value explicitly to change it.",
+				MarkdownDescription: "Maximum Flight runtime in seconds. MotherDuck enforces a per-plan cap: 3,600 seconds (1 hour) on the Lite and Free plans, 28,800 seconds (8 hours) during a free trial, and no cap on the Business plan. On a capped plan, a value above the cap or `0` is rejected. On the Business plan, `0` removes the runtime limit. When omitted at creation, MotherDuck applies the plan default: 8 hours on the Business plan and during a free trial, and 1 hour on the Lite and Free plans. Removing a configured value keeps the last applied limit, so set the value explicitly to change it.",
 				PlanModifiers:       int64UseStateForUnknown(),
 				Validators:          []validator.Int64{tfvalidators.Int64Range("MotherDuck Flight maximum runtime", 0, 4294967295)},
+			},
+			"schedule_status": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "Schedule status reported by MotherDuck, such as `ACTIVE` or `DISABLED`, or null when the Flight has no schedule. MotherDuck can disable a schedule on its own, for example when the organization moves to a plan without scheduled runs. Terraform reports this status but does not manage it.",
+			},
+			"owner_name": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "Name of the Flight owner reported by MotherDuck.",
 			},
 			"status": schema.StringAttribute{
 				Computed:            true,
@@ -242,11 +254,11 @@ func (r *flightResource) readFlight(ctx context.Context, model *flightModel, dia
 	if !r.sqlFunctionAvailable(ctx, client, diags, "md_get_flight_version", "motherduck_flight") {
 		return false
 	}
-	var name, schedule, status, created, updated stdsql.NullString
+	var name, schedule, scheduleStatus, status, created, updated, owner stdsql.NullString
 	var currentVersion stdsql.NullInt64
-	query := "SELECT flight_name, schedule_cron, status, current_version, created_at::VARCHAR, updated_at::VARCHAR FROM MD_GET_FLIGHT(flight_id := " + sqlbuild.StringLiteral(model.ID.ValueString()) + "::UUID)"
+	query := "SELECT flight_name, schedule_cron, schedule_status, status, current_version, created_at::VARCHAR, updated_at::VARCHAR, owner_name FROM MD_GET_FLIGHT(flight_id := " + sqlbuild.StringLiteral(model.ID.ValueString()) + "::UUID)"
 	err := retry.SQL(ctx, func() error {
-		return client.QueryRow(ctx, query).Scan(&name, &schedule, &status, &currentVersion, &created, &updated)
+		return client.QueryRow(ctx, query).Scan(&name, &schedule, &scheduleStatus, &status, &currentVersion, &created, &updated, &owner)
 	})
 	if err == stdsql.ErrNoRows || isNotFound(err) {
 		return false
@@ -257,6 +269,8 @@ func (r *flightResource) readFlight(ctx context.Context, model *flightModel, dia
 	}
 	model.Name = nullString(name)
 	model.ScheduleCron = clearableStringFromLive(model.ScheduleCron, schedule)
+	model.ScheduleStatus = nullString(scheduleStatus)
+	model.OwnerName = nullString(owner)
 	model.Status = nullString(status)
 	if currentVersion.Valid {
 		model.CurrentVersion = types.Int64Value(currentVersion.Int64)
@@ -332,11 +346,20 @@ func (v flightConfigMapValidator) ValidateMap(ctx context.Context, req validator
 	}
 }
 
+// reservedFlightConfigKeys mirrors the run parameters MotherDuck sets itself.
+// The server rejects them as config keys with an exact, case-sensitive match.
+var reservedFlightConfigKeys = map[string]bool{
+	"MOTHERDUCK_TOKEN":         true,
+	"MOTHERDUCK_FLIGHTS_RUN":   true,
+	"MOTHERDUCK_FLIGHT_ID":     true,
+	"MOTHERDUCK_FLIGHT_RUN_ID": true,
+}
+
 func invalidFlightConfigKey(key string) string {
 	switch {
 	case key == "":
 		return "Flight config keys must not be empty."
-	case key == "MOTHERDUCK_TOKEN" || key == "MOTHERDUCK_FLIGHTS_RUN":
+	case reservedFlightConfigKeys[key]:
 		return fmt.Sprintf("Flight config key %q is reserved and cannot be set.", key)
 	case strings.Contains(key, "="):
 		return fmt.Sprintf("Flight config key %q must not contain \"=\".", key)
@@ -344,6 +367,44 @@ func invalidFlightConfigKey(key string) string {
 		return fmt.Sprintf("Flight config key %q must not contain a NULL byte.", key)
 	default:
 		return ""
+	}
+}
+
+// MotherDuck rejects Flight content above these UTF-8 byte sizes.
+const (
+	flightMaxSourceCodeBytes   = 200 * 1024
+	flightMaxRequirementsBytes = 20 * 1024
+)
+
+func flightContentBytes(name string, min, max int) validator.String {
+	return flightContentBytesValidator{name: name, min: min, max: max}
+}
+
+// flightContentBytesValidator checks the UTF-8 byte length that MotherDuck
+// enforces, which is larger than the character count for non-ASCII text.
+type flightContentBytesValidator struct {
+	name     string
+	min, max int
+}
+
+func (v flightContentBytesValidator) Description(ctx context.Context) string {
+	return fmt.Sprintf("must be between %d and %d bytes of UTF-8", v.min, v.max)
+}
+
+func (v flightContentBytesValidator) MarkdownDescription(ctx context.Context) string {
+	return fmt.Sprintf("must be between `%d` and `%d` bytes of UTF-8", v.min, v.max)
+}
+
+func (v flightContentBytesValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	size := len(req.ConfigValue.ValueString())
+	switch {
+	case size < v.min && v.min == 1:
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid "+v.name, "Value must not be empty.")
+	case size < v.min || size > v.max:
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid "+v.name, fmt.Sprintf("Value is %d bytes of UTF-8. MotherDuck accepts between %d and %d bytes.", size, v.min, v.max))
 	}
 }
 

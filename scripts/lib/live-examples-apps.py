@@ -198,17 +198,16 @@ def run_examples(token):
         address = "motherduck_flight.heartbeat" if kind == "flight" else f"motherduck_{kind}.revenue"
         tf(APP, "state", "rm", address, token=token)
         tf(APP, "import", "-input=false", address, str(after[kind]), token=token)
-        if kind == "dive":
-            # Public getters cannot recover api_version. One configured content update restores it.
-            tf(APP, "apply", "-auto-approve", "-input=false", token=token)
+        # MD_GET_DIVE reports api_version and required_resources, so an imported Dive is a no-op.
         plan(token)
         check(kind + " import and no-op")
 
-    available = sql("SELECT count(*)::VARCHAR FROM duckdb_functions() WHERE lower(function_name) = 'md_list_guide_grantees'", token)
+    # Role-scoped Guide access is detected by the role_names parameter on MD_SET_GUIDE_ACCESS.
+    available = sql("SELECT count(*)::VARCHAR FROM duckdb_functions() WHERE lower(function_name) = 'md_set_guide_access' AND list_contains(parameters, 'role_names')", token)
     path = "examples/data-sources/motherduck_guide_grantees/data-source.tf"
     if available == "0":
-        REPORT["examples"][path] = "UNAVAILABLE: md_list_guide_grantees is not exposed"
-        print("UNAVAILABLE Guide grantees: md_list_guide_grantees is not exposed", flush=True)
+        REPORT["examples"][path] = "UNAVAILABLE: MD_SET_GUIDE_ACCESS does not accept role_names"
+        print("UNAVAILABLE Guide grantees: MD_SET_GUIDE_ACCESS does not accept role_names", flush=True)
     else:
         grantees = sample(path).replace('"123e4567-e89b-42d3-a456-426614174000"', "motherduck_guide.revenue.id")
         (APP / "grantees.tf").write_text(grantees)

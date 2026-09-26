@@ -27,6 +27,7 @@ type secretModel struct {
 	Type           types.String `tfsdk:"type"`
 	SecretProvider types.String `tfsdk:"secret_provider"`
 	Params         types.Map    `tfsdk:"params"`
+	FlightParams   types.Map    `tfsdk:"flight_params"`
 	Storage        types.String `tfsdk:"storage"`
 	Scope          types.String `tfsdk:"scope"`
 	SecretSQL      types.String `tfsdk:"secret_sql"`
@@ -56,7 +57,7 @@ func (r *secretResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			},
 			"type": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "DuckDB secret type, such as `S3`.",
+				MarkdownDescription: "DuckDB secret type, such as `s3`, or `flights` for a secret that Flights read as environment variables.",
 				Validators:          sqlBareWordValidators(),
 			},
 			"secret_provider": schema.StringAttribute{
@@ -69,7 +70,13 @@ func (r *secretResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Optional:            true,
 				Sensitive:           true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Sensitive secret parameters inserted into the CREATE SECRET statement.",
+				MarkdownDescription: "Sensitive secret parameters inserted into the CREATE SECRET statement. Not valid for `flights` secrets, which use `flight_params`.",
+			},
+			"flight_params": schema.MapAttribute{
+				Optional:            true,
+				Sensitive:           true,
+				ElementType:         types.StringType,
+				MarkdownDescription: "Sensitive key and value pairs of a `flights` secret, sent as `PARAMS MAP {...}`. Required when `type = \"flights\"` unless `secret_sql` supplies `PARAMS`, and only valid for that type. A Flight that attaches the secret receives each pair as the environment variables `<key>` and `<secret name>_<key>`. MotherDuck redacts the values on read, so import cannot recover them.",
 			},
 			"storage": schema.StringAttribute{
 				Computed:            true,
@@ -180,9 +187,22 @@ func (r *secretResource) createSecret(ctx context.Context, getter stateGetter, s
 	if !plan.Params.IsNull() {
 		diags.Append(plan.Params.ElementsAs(ctx, &params, false)...)
 	}
+	var flightParams map[string]string
+	if !plan.FlightParams.IsNull() {
+		flightParams = map[string]string{}
+		diags.Append(plan.FlightParams.ElementsAs(ctx, &flightParams, false)...)
+	}
 	if diags.HasError() {
 		return
 	}
+	validateFlightSecretValues(flightSecretValues{
+		Type:              plan.Type.ValueString(),
+		HasParams:         len(params) > 0,
+		HasRawSQL:         strings.TrimSpace(plan.SecretSQL.ValueString()) != "",
+		HasFlightParams:   flightParams != nil,
+		FlightParamsKnown: flightParams != nil,
+		FlightParamKeys:   slices.Sorted(maps.Keys(flightParams)),
+	}, diags)
 	// Re-validate on the resolved plan: values unknown at plan time skipped the
 	// plan-time checks, and everything below is spliced into raw SQL.
 	validateSecretValues(secretValidationValues{
@@ -205,6 +225,9 @@ func (r *secretResource) createSecret(ctx context.Context, getter stateGetter, s
 	sort.Strings(keys)
 	for _, key := range keys {
 		entries = append(entries, strings.ToUpper(key)+" "+sqlbuild.StringLiteral(params[key]))
+	}
+	if flightParams != nil {
+		entries = append(entries, "PARAMS "+sqlbuild.MapLiteral(flightParams))
 	}
 	if !plan.SecretSQL.IsNull() && strings.TrimSpace(plan.SecretSQL.ValueString()) != "" {
 		entries = append(entries, strings.TrimSpace(plan.SecretSQL.ValueString()))
@@ -282,6 +305,81 @@ func validateSecretConfig(config secretModel, diags *diag.Diagnostics) {
 		values.RawSQL = config.SecretSQL.ValueString()
 	}
 	validateSecretValues(values, diags)
+	validateFlightSecretConfig(config, diags)
+}
+
+// flightReservedParamNames are Flight run parameters that MotherDuck sets
+// itself. A FLIGHTS secret key with one of these names is exposed to the run
+// only under its <secret name>_<key> alias.
+var flightReservedParamNames = []string{"MOTHERDUCK_TOKEN", "MOTHERDUCK_FLIGHTS_RUN", "MOTHERDUCK_FLIGHT_ID", "MOTHERDUCK_FLIGHT_RUN_ID"}
+
+// flightSecretValues carries the fields that decide whether a FLIGHTS secret
+// is well formed. An empty Type means the type is not known yet.
+type flightSecretValues struct {
+	Type            string
+	HasParams       bool
+	HasRawSQL       bool
+	HasFlightParams bool
+	// FlightParamsKnown is true when flight_params is set and its keys are
+	// known, so an empty map can be told apart from an unknown one.
+	FlightParamsKnown bool
+	FlightParamKeys   []string // sorted, so diagnostics are deterministic
+}
+
+func validateFlightSecretConfig(config secretModel, diags *diag.Diagnostics) {
+	values := flightSecretValues{
+		HasParams:       !config.Params.IsNull() && (config.Params.IsUnknown() || len(config.Params.Elements()) > 0),
+		HasRawSQL:       config.SecretSQL.IsUnknown() || strings.TrimSpace(config.SecretSQL.ValueString()) != "",
+		HasFlightParams: !config.FlightParams.IsNull(),
+	}
+	if !config.Type.IsUnknown() {
+		values.Type = config.Type.ValueString()
+	}
+	if !config.FlightParams.IsNull() && !config.FlightParams.IsUnknown() {
+		elements := config.FlightParams.Elements()
+		values.FlightParamsKnown = true
+		values.FlightParamKeys = slices.Sorted(maps.Keys(elements))
+		for _, key := range values.FlightParamKeys {
+			if value, ok := elements[key].(types.String); ok && value.IsNull() {
+				diags.AddAttributeError(path.Root("flight_params").AtMapKey(key), "Invalid MotherDuck Flights secret parameter", "Flights secret parameter values must not be null.")
+			}
+			if slices.Contains(flightReservedParamNames, key) {
+				diags.AddAttributeWarning(path.Root("flight_params").AtMapKey(key), "Reserved MotherDuck Flights parameter name",
+					fmt.Sprintf("MotherDuck sets %s for every Flight run, so a Flight that attaches this secret receives this value only as <secret name>_%s.", key, key))
+			}
+		}
+	}
+	validateFlightSecretValues(values, diags)
+}
+
+// validateFlightSecretValues checks a FLIGHTS secret. MotherDuck takes its
+// values only from a non-empty PARAMS map, so ordinary params are rejected
+// and flight_params is required unless secret_sql supplies PARAMS.
+func validateFlightSecretValues(values flightSecretValues, diags *diag.Diagnostics) {
+	if values.Type == "" {
+		return
+	}
+	if !strings.EqualFold(values.Type, "flights") {
+		if values.HasFlightParams {
+			diags.AddAttributeError(path.Root("flight_params"), "Invalid MotherDuck secret parameters", "`flight_params` is only valid when `type = \"flights\"`. Use `params` for other secret types.")
+		}
+		return
+	}
+	if values.HasParams {
+		diags.AddAttributeError(path.Root("params"), "Invalid MotherDuck Flights secret parameters", "A `flights` secret takes its values from `flight_params`. Move these entries to `flight_params`.")
+	}
+	if !values.HasFlightParams && !values.HasRawSQL {
+		diags.AddAttributeError(path.Root("flight_params"), "Missing MotherDuck Flights secret parameters", "A `flights` secret requires `flight_params` with at least one entry.")
+		return
+	}
+	if values.FlightParamsKnown && len(values.FlightParamKeys) == 0 {
+		diags.AddAttributeError(path.Root("flight_params"), "Missing MotherDuck Flights secret parameters", "`flight_params` must contain at least one entry.")
+	}
+	for _, key := range values.FlightParamKeys {
+		if strings.TrimSpace(key) == "" {
+			diags.AddAttributeError(path.Root("flight_params"), "Invalid MotherDuck Flights secret parameter", "Flights secret parameter keys must not be empty.")
+		}
+	}
 }
 
 // secretValidationValues carries the secret fields that are spliced into the

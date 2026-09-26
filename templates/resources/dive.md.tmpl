@@ -25,10 +25,13 @@ The example's unrestricted share is suitable only for data intended to be
 accessible to anyone with its URL. For private or tenant data, design restricted
 sharing and embedding access explicitly.
 
-Import by Dive UUID. The current read API does not expose mounted
-`required_resources` or `api_version`, so Terraform cannot reconstruct those
-fields during import or fully detect external mount changes. Keep the intended
-mount configuration in source control.
+Import by Dive UUID. Refresh and import read `api_version` and the mounted
+`required_resources` of the current Dive version from `MD_GET_DIVE`, so a mount
+added, removed, or retargeted outside Terraform plans an update. MotherDuck
+stores a share URL under the share's name. A configured share URL with the same
+token keeps its configured spelling in state. After import, a configured URL
+spelled differently from the stored one plans a single update. Omit
+`api_version` to let MotherDuck choose it when content changes.
 
 Set `description = ""` to clear an existing description. Removing that field is
 not the same operation. Setting `endorsed` status requires the appropriate

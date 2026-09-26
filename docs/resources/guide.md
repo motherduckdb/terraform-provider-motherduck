@@ -26,8 +26,12 @@ content, references, and audience. Referenced share URLs are sensitive and can
 appear in Terraform state even when normal output is masked.
 
 Import by Guide UUID. User/private and organization audiences are the documented
-public access modes. Role audiences depend on the Guide grantee functions being
-available in the account and are retained as compatibility fields.
+public access modes. `access = "role"` with `role_names` is experimental and is
+not available in production MotherDuck yet. It requires a session whose
+`MD_SET_GUIDE_ACCESS` accepts `role_names`. The provider checks for that
+parameter before it creates the Guide and reports an error during apply
+otherwise.
+Refresh reads the role audience from the Guide's `access_role_names` column.
 
 Destroy deletes the Guide. To retain the remote object while moving to
 Blueprints, remove Terraform ownership without destruction and keep its UUID.
@@ -85,12 +89,12 @@ resource "motherduck_guide" "revenue" {
 
 ### Optional
 
-- `access` (String) Guide access: `user`, `role`, or `organization`. Organization access requires administrator permission.
+- `access` (String) Guide access: `user`, `organization`, or the experimental `role`. Organization access requires administrator permission. `role` requires a MotherDuck SQL session whose `MD_SET_GUIDE_ACCESS` accepts `role_names`, which production MotherDuck does not offer yet.
 - `change_comment` (String) Audit comment attached to the managed Guide version. Changing it appends a version.
 - `description` (String) Optional Guide description. Set to an empty string or remove the attribute to clear it.
 - `external_id` (String) External identifier attached to the managed Guide version. Changing it appends a version.
 - `references` (Attributes List) Catalog, Dive, Flight, or Guide references attached to the managed Guide version. A supplied list replaces the previous version's references. (see [below for nested schema](#nestedatt--references))
-- `role_names` (Set of String) Roles that can read the Guide when `access = "role"`. The configured set replaces the previous role audience.
+- `role_names` (Set of String) Experimental. Roles that can read the Guide when `access = "role"`. The configured set replaces the previous role audience. Refresh reads it from the Guide's `access_role_names` column.
 - `topic` (String) Optional slash-separated grouping topic. Set to an empty string or remove the attribute to clear the topic.
 
 ### Read-Only
