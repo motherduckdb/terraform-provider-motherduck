@@ -1,4 +1,4 @@
-//go:build acceptance
+//go:build acceptance && iceberg_acceptance
 
 package acceptance
 
@@ -15,8 +15,9 @@ import (
 )
 
 // TestPluginTestingIcebergDatabaseLifecycle needs an existing Iceberg REST
-// catalog and a MotherDuck secret that can reach it. It is skipped unless
-// MOTHERDUCK_ICEBERG_SECRET and MOTHERDUCK_ICEBERG_DEFAULT_SCHEMA are set.
+// catalog and a MotherDuck secret that can reach it, so it builds only with the
+// iceberg_acceptance tag and requires MOTHERDUCK_ICEBERG_SECRET and
+// MOTHERDUCK_ICEBERG_DEFAULT_SCHEMA.
 // MOTHERDUCK_ICEBERG_ENDPOINT, MOTHERDUCK_ICEBERG_WAREHOUSE, and
 // MOTHERDUCK_ICEBERG_ENDPOINT_TYPE are passed through when set.
 func TestPluginTestingIcebergDatabaseLifecycle(t *testing.T) {
@@ -27,7 +28,7 @@ func TestPluginTestingIcebergDatabaseLifecycle(t *testing.T) {
 	secret := os.Getenv("MOTHERDUCK_ICEBERG_SECRET")
 	defaultSchema := os.Getenv("MOTHERDUCK_ICEBERG_DEFAULT_SCHEMA")
 	if secret == "" || defaultSchema == "" {
-		t.Skip("set MOTHERDUCK_ICEBERG_SECRET and MOTHERDUCK_ICEBERG_DEFAULT_SCHEMA to run the Iceberg database acceptance test")
+		t.Fatal("MOTHERDUCK_ICEBERG_SECRET and MOTHERDUCK_ICEBERG_DEFAULT_SCHEMA are required for the Iceberg database acceptance test")
 	}
 
 	databaseName := fmt.Sprintf("tf_acc_iceberg_%d", time.Now().UTC().UnixNano())
