@@ -68,7 +68,7 @@ func (p *motherduckProvider) Schema(ctx context.Context, req provider.SchemaRequ
 			},
 			"api_base_url": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "MotherDuck REST API base URL. Must be an absolute HTTP or HTTPS URL with a host. Defaults to `https://api.motherduck.com`.",
+				MarkdownDescription: "MotherDuck REST API base URL. Must be an absolute HTTPS URL with a host, or HTTP for a loopback host, without credentials, a query string, or a fragment. Can also be set with the `MOTHERDUCK_API_BASE_URL` environment variable. Defaults to `https://api.motherduck.com`.",
 				Validators:          []validator.String{apiBaseURLValidator{}},
 			},
 			"database": schema.StringAttribute{
