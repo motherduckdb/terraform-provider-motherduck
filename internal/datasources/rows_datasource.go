@@ -58,6 +58,7 @@ type rowsModel struct {
 	RunNumber        types.Int64  `tfsdk:"run_number"`
 	Limit            types.Int64  `tfsdk:"limit"`
 	Offset           types.Int64  `tfsdk:"offset"`
+	Order            types.String `tfsdk:"order"`
 	IncludeOrgShares types.Bool   `tfsdk:"include_org_shares"`
 	OwnerOnly        types.Bool   `tfsdk:"owner_only"`
 	RowsJSON         types.String `tfsdk:"rows_json"`
@@ -356,6 +357,8 @@ func rowAttribute(name string, required bool) schema.Attribute {
 		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Min("MotherDuck data source offset", 0)}, "Number of rows to skip when the underlying MotherDuck catalog function supports offsets.")
 	case "run_number":
 		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Min("MotherDuck data source run number", 1)}, "MotherDuck Flight run number.")
+	case "order":
+		return rowStringAttribute(required, flightLogOrderValidators(), "Which end of the Flight run log `limit` counts from. `asc`, the default, reads from the first line. `desc` reads the most recent lines. Lines are always returned in ascending line order. Applies only when `limit` is set.")
 	case "dive_id":
 		return rowStringAttribute(required, uuidValidators(), "Dive ID. Must be a UUID with no leading or trailing whitespace.")
 	case "flight_id":
@@ -471,6 +474,8 @@ func (m *rowsModel) attribute(name string) attr.Value {
 		return &m.Limit
 	case "offset":
 		return &m.Offset
+	case "order":
+		return &m.Order
 	case "include_org_shares":
 		return &m.IncludeOrgShares
 	case "owner_only":

@@ -201,6 +201,7 @@ func TestRowsSpecAttributesAreSupportedByConfigAndStateSwitches(t *testing.T) {
 		"run_number":         true,
 		"limit":              true,
 		"offset":             true,
+		"order":              true,
 		"include_org_shares": true,
 		"owner_only":         true,
 	}
@@ -429,7 +430,7 @@ func TestRowsSpecSchemasExposeOnlyRelevantAttributes(t *testing.T) {
 		"shared_with_me":     {"limit", "name", "offset", "rows", "rows_json"},
 		"attached_databases": {"rows_json"},
 		"dives":              {"include_org_shares", "limit", "offset", "rows_json"},
-		"flight_logs":        {"flight_id", "limit", "offset", "rows", "rows_json", "run_number"},
+		"flight_logs":        {"flight_id", "limit", "offset", "order", "rows", "rows_json", "run_number"},
 		"files":              {"limit", "offset", "path", "rows_json"},
 		"buckets_for_secret": {"limit", "offset", "rows_json", "secret_name"},
 		"flights":            {"limit", "offset", "owner_only", "rows", "rows_json"},

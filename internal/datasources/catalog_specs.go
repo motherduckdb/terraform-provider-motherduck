@@ -135,7 +135,7 @@ func rowSpecs() []rowSpec {
 		{name: "role_members", description: "Lists users and roles directly granted to one MotherDuck role using SHOW USERS OF ROLE and SHOW ROLES OF ROLE.", attrs: []string{"role_name"}, requiredAttrs: []string{"role_name"}, typedRows: []typedRowAttribute{
 			{name: "member_name", description: "User or role principal name."},
 			{name: "member_type", description: "Principal type: user or role."},
-			{name: "email", description: "User email when the member is a user."},
+			{name: "email", description: "User email when the member is a user. Null for service accounts and role members."},
 			{name: "is_service_account", description: "Whether the user member is a service account."},
 			{name: "granted_at", description: "Grant creation timestamp."},
 		}, build: func(m rowsModel) (string, error) {
@@ -182,7 +182,7 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_LIST_DIVE_VERSIONS(id := " + sqlbuild.StringLiteral(m.DiveID.ValueString()) + "::UUID)", nil
 		}},
-		{name: "flights", description: "Lists MotherDuck Flights available to the current account. Callers with organization-wide Flight visibility can restrict results to their own Flights. Rows in the returned page are sorted by Flight ID.", requiredFunction: "md_list_flights", attrs: []string{"limit", "offset", "owner_only"}, typedRows: flightSummaryRows(), postProcess: sortRowsByKeys(rowSortKey{field: "flight_id"}), build: func(m rowsModel) (string, error) {
+		{name: "flights", description: "Lists MotherDuck Flights available to the current account. Callers with organization-wide Flight visibility can restrict results to their own Flights. MotherDuck returns 50 Flights when `limit` is omitted, so set `limit` and `offset` to read more. Rows in the returned page are sorted by Flight ID.", requiredFunction: "md_list_flights", attrs: []string{"limit", "offset", "owner_only"}, typedRows: flightSummaryRows(), postProcess: sortRowsByKeys(rowSortKey{field: "flight_id"}), build: func(m rowsModel) (string, error) {
 			args := map[string]string{}
 			if !m.Limit.IsNull() {
 				args[`"LIMIT"`] = fmt.Sprintf("%d", m.Limit.ValueInt64())
@@ -201,7 +201,7 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_GET_FLIGHT(flight_id := " + sqlbuild.StringLiteral(m.FlightID.ValueString()) + "::UUID)", nil
 		}},
-		{name: "flight_versions", description: "Lists versions for one MotherDuck Flight. Rows in the returned page are sorted newest version first.", requiredFunction: "md_list_flight_versions", attrs: []string{"flight_id", "limit", "offset"}, requiredAttrs: []string{"flight_id"}, postProcess: sortRowsByKeys(newestVersionFirst()...), build: func(m rowsModel) (string, error) {
+		{name: "flight_versions", description: "Lists versions for one MotherDuck Flight. MotherDuck returns 50 versions when `limit` is omitted, so set `limit` and `offset` to read more. Rows in the returned page are sorted newest version first.", requiredFunction: "md_list_flight_versions", attrs: []string{"flight_id", "limit", "offset"}, requiredAttrs: []string{"flight_id"}, postProcess: sortRowsByKeys(newestVersionFirst()...), build: func(m rowsModel) (string, error) {
 			if m.FlightID.IsNull() {
 				return "", fmt.Errorf("flight_id is required")
 			}
@@ -214,7 +214,7 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_LIST_FLIGHT_VERSIONS" + sqlbuild.NamedArgs(args), nil
 		}},
-		{name: "flight_runs", description: "Lists runs for one MotherDuck Flight. Rows in the returned page are sorted newest run first.", requiredFunction: "md_list_flight_runs", attrs: []string{"flight_id", "limit", "offset"}, requiredAttrs: []string{"flight_id"}, postProcess: sortRowsByKeys(rowSortKey{field: "run_number", descending: true}), build: func(m rowsModel) (string, error) {
+		{name: "flight_runs", description: "Lists runs for one MotherDuck Flight. MotherDuck returns the 50 newest runs when `limit` is omitted, so set `limit` and `offset` to read more. Rows in the returned page are sorted newest run first.", requiredFunction: "md_list_flight_runs", attrs: []string{"flight_id", "limit", "offset"}, requiredAttrs: []string{"flight_id"}, postProcess: sortRowsByKeys(rowSortKey{field: "run_number", descending: true}), build: func(m rowsModel) (string, error) {
 			if m.FlightID.IsNull() {
 				return "", fmt.Errorf("flight_id is required")
 			}
@@ -227,17 +227,11 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_LIST_FLIGHT_RUNS" + sqlbuild.NamedArgs(args), nil
 		}},
-		{name: "flight_logs", description: "Reads line-oriented logs for one MotherDuck Flight run, in the order returned by MotherDuck. Set `limit` and `offset` to read a window of lines ordered by line number.", requiredFunction: "md_get_flight_logs", attrs: []string{"flight_id", "run_number", "limit", "offset"}, requiredAttrs: []string{"flight_id", "run_number"}, typedRows: []typedRowAttribute{
+		{name: "flight_logs", description: "Reads line-oriented logs for one MotherDuck Flight run, in ascending line order. Without `limit`, MotherDuck returns only the most recent 1,000 lines. Set `limit` to read a window of lines from the start of the log, add `offset` to skip lines, and set `order = \"desc\"` to count the window from the end of the log instead. MotherDuck applies the window on the server, so large logs are not transferred in full. An `offset` without `limit` skips lines within the most recent 1,000.", requiredFunction: "md_get_flight_logs", attrs: []string{"flight_id", "run_number", "limit", "offset", "order"}, requiredAttrs: []string{"flight_id", "run_number"}, typedRows: []typedRowAttribute{
 			{name: "line_number", description: "Absolute zero-based position of the line in the Flight run log."},
 			{name: "reported_at", description: "Timestamp reported for the Flight log line."},
 			{name: "line", description: "Flight stdout or stderr line.", sensitive: true},
-		}, build: func(m rowsModel) (string, error) {
-			if m.FlightID.IsNull() || m.RunNumber.IsNull() {
-				return "", fmt.Errorf("flight_id and run_number are required")
-			}
-			query := fmt.Sprintf("SELECT * FROM MD_GET_FLIGHT_LOGS(flight_id := %s::UUID, run_number := %d)", sqlbuild.StringLiteral(m.FlightID.ValueString()), m.RunNumber.ValueInt64())
-			return appendOrderedRowLimitOffset(query, "line_number", m), nil
-		}},
+		}, build: flightLogsQuery},
 		{name: "guides", description: "Lists MotherDuck Guides visible to the current account, optionally filtered by topic or referenced object. Rows in the returned page are sorted by Guide ID.", requiredFunction: "md_list_guides", postProcess: sortRowsByKeys(rowSortKey{field: "id"}), attrs: []string{"topic", "reference_type", "reference_url", "reference_schema", "reference_table", "reference_column", "reference_view", "reference_macro", "reference_uuid", "limit", "offset"}, typedRows: guideSummaryRows(), build: func(m rowsModel) (string, error) {
 			args := map[string]string{}
 			if !m.Topic.IsNull() {
