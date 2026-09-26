@@ -87,7 +87,11 @@ resource "motherduck_database" "analytics" {
   name                    = "analytics"
   snapshot_retention_days = 7
 }
+```
 
+An Iceberg catalog database:
+
+```terraform
 # Register an existing Iceberg REST catalog as a MotherDuck database. The
 # catalog credentials live in a MotherDuck secret, for example a
 # motherduck_secret with type = "iceberg", and the default_schema namespace
