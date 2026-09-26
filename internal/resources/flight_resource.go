@@ -7,12 +7,14 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlfunc"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 )
 
@@ -84,7 +86,7 @@ func (r *flightResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"max_runtime_sec": schema.Int64Attribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Maximum Flight runtime in seconds. `0` disables the runtime limit. When omitted, MotherDuck supplies its current default.",
+				MarkdownDescription: "Maximum Flight runtime in seconds. `0` disables the runtime limit. When omitted at creation, MotherDuck supplies its current default. Removing a configured value keeps the last applied limit, so set the value explicitly to change it.",
 				PlanModifiers:       int64UseStateForUnknown(),
 				Validators:          []validator.Int64{tfvalidators.Int64Range("MotherDuck Flight maximum runtime", 0, 4294967295)},
 			},
@@ -109,6 +111,7 @@ func (r *flightResource) Schema(ctx context.Context, req resource.SchemaRequest,
 }
 
 func (r *flightResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -135,11 +138,23 @@ func (r *flightResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 	plan.ID = types.StringValue(id)
-	r.readFlight(ctx, &plan, &resp.Diagnostics)
+	// Persist the ID before the read-back so a failed or empty MD_GET_FLIGHT
+	// leaves a tainted resource in state instead of an orphaned remote Flight.
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), id)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !r.readFlight(ctx, &plan, &resp.Diagnostics) {
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Unable to read MotherDuck Flight", "Flight was created but could not be read through MD_GET_FLIGHT.")
+		}
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *flightResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	var state flightModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -154,6 +169,7 @@ func (r *flightResource) Read(ctx context.Context, req resource.ReadRequest, res
 }
 
 func (r *flightResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -180,11 +196,19 @@ func (r *flightResource) Update(ctx context.Context, req resource.UpdateRequest,
 		resp.Diagnostics.AddError("Unable to update MotherDuck Flight", err.Error())
 		return
 	}
-	r.readFlight(ctx, &plan, &resp.Diagnostics)
+	// On a failed read-back keep the prior state, which the framework returns
+	// when Update does not set state, rather than writing unknown values.
+	if !r.readFlight(ctx, &plan, &resp.Diagnostics) {
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Unable to read MotherDuck Flight", "Flight was updated but could not be read through MD_GET_FLIGHT.")
+		}
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *flightResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -232,7 +256,7 @@ func (r *flightResource) readFlight(ctx context.Context, model *flightModel, dia
 		return false
 	}
 	model.Name = nullString(name)
-	model.ScheduleCron = nullString(schedule)
+	model.ScheduleCron = clearableStringFromLive(model.ScheduleCron, schedule)
 	model.Status = nullString(status)
 	if currentVersion.Valid {
 		model.CurrentVersion = types.Int64Value(currentVersion.Int64)
@@ -242,7 +266,7 @@ func (r *flightResource) readFlight(ctx context.Context, model *flightModel, dia
 	if currentVersion.Valid {
 		r.readFlightVersion(ctx, model, currentVersion.Int64, diags)
 	}
-	return true
+	return !diags.HasError()
 }
 
 func (r *flightResource) readFlightVersion(ctx context.Context, model *flightModel, version int64, diags *diag.Diagnostics) {

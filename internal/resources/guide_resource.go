@@ -14,6 +14,7 @@ import (
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlfunc"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -225,6 +226,7 @@ func (r *guideResource) ValidateConfig(ctx context.Context, req resource.Validat
 }
 
 func (r *guideResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -267,7 +269,9 @@ func (r *guideResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	query := "SELECT id::VARCHAR FROM MD_CREATE_GUIDE" + sqlbuild.NamedArgs(args)
 	var id string
-	if err := retry.SQL(ctx, func() error { return client.QueryRow(ctx, query).Scan(&id) }); err != nil {
+	// MD_CREATE_GUIDE is not idempotent. A retried create after a timeout that
+	// committed remotely would leave an untracked duplicate Guide.
+	if err := client.QueryRow(ctx, query).Scan(&id); err != nil {
 		resp.Diagnostics.AddError("Unable to create MotherDuck Guide", sensitiveWriteDiagnostic("Guide", err, guideSensitiveValues(ctx, plan.References)))
 		return
 	}
@@ -287,6 +291,7 @@ func (r *guideResource) Create(ctx context.Context, req resource.CreateRequest, 
 }
 
 func (r *guideResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	var state guideModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -300,6 +305,7 @@ func (r *guideResource) Read(ctx context.Context, req resource.ReadRequest, resp
 }
 
 func (r *guideResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -376,6 +382,7 @@ func (r *guideResource) Update(ctx context.Context, req resource.UpdateRequest, 
 }
 
 func (r *guideResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -436,9 +443,9 @@ func (r *guideResource) readGuide(ctx context.Context, model *guideModel, diags 
 		diags.AddError("Unable to read MotherDuck Guide", err.Error())
 		return false
 	}
-	model.Topic = nullString(topic)
+	model.Topic = clearableStringFromLive(model.Topic, topic)
 	model.Title = nullString(title)
-	model.Description = nullString(description)
+	model.Description = clearableStringFromLive(model.Description, description)
 	model.Content = nullString(content)
 	model.ChangeComment = nullString(changeComment)
 	model.ExternalID = nullString(externalID)
