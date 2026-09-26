@@ -28,7 +28,10 @@ type snapshotOrphanBackend struct {
 }
 
 func (c *snapshotOrphanBackend) Available() bool { return true }
-func (c *snapshotOrphanBackend) AttachDatabase(context.Context, string) error {
+func (c *snapshotOrphanBackend) AttachDatabase(_ context.Context, database string) error {
+	if database != "dropped_db" {
+		return nil
+	}
 	return c.attachErr
 }
 func (c *snapshotOrphanBackend) Exec(_ context.Context, query string, _ ...any) error {
@@ -71,8 +74,10 @@ func missingDatabaseError() error {
 	return &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: "Catalog Error: Database dropped_db does not exist"}
 }
 
+func nativeDatabaseRow() scannedRow { return scannedRow{values: []any{"my_db"}} }
+
 func TestSnapshotDeleteClearsNameWhenDatabaseWasDropped(t *testing.T) {
-	client := &snapshotOrphanBackend{attachErr: missingDatabaseError()}
+	client := &snapshotOrphanBackend{attachErr: missingDatabaseError(), rows: []scannedRow{nativeDatabaseRow()}}
 	r := &snapshotResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
 	state := snapshotTestState(t, r)
 	response := resource.DeleteResponse{State: state}
@@ -84,8 +89,40 @@ func TestSnapshotDeleteClearsNameWhenDatabaseWasDropped(t *testing.T) {
 	if len(client.execs) != 1 || client.execs[0] != want {
 		t.Fatalf("expected the snapshot name to be cleared by ID, got %v", client.execs)
 	}
-	if len(client.used) != 0 {
-		t.Fatalf("a dropped database must not be selected with USE, got %v", client.used)
+	// ALTER SNAPSHOT binds to the selected database, which must be native.
+	if len(client.used) != 1 || client.used[0] != "my_db" {
+		t.Fatalf("expected the release to run from a native database, got %v", client.used)
+	}
+}
+
+func TestSnapshotDeleteReportsMissingNativeDatabase(t *testing.T) {
+	client := &snapshotOrphanBackend{attachErr: missingDatabaseError()}
+	r := &snapshotResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	state := snapshotTestState(t, r)
+	response := resource.DeleteResponse{State: state}
+	r.Delete(t.Context(), resource.DeleteRequest{State: state}, &response)
+	if !response.Diagnostics.HasError() || !strings.Contains(response.Diagnostics.Errors()[0].Detail(), "ALTER SNAPSHOT '00000000-0000-0000-0000-000000000042'") {
+		t.Fatalf("expected an error with the release statement, got %v", response.Diagnostics)
+	}
+	if len(client.execs) != 0 {
+		t.Fatalf("no statement may run without a native database, got %v", client.execs)
+	}
+}
+
+func TestSnapshotReadKeepsRetainedSnapshotOfDroppedDatabase(t *testing.T) {
+	client := &snapshotOrphanBackend{attachErr: missingDatabaseError(), rows: []scannedRow{{values: []any{"nightly", "2026-09-18"}}}}
+	r := &snapshotResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	state := snapshotTestState(t, r)
+	response := resource.ReadResponse{State: state}
+	r.Read(t.Context(), resource.ReadRequest{State: state}, &response)
+	if response.Diagnostics.HasError() {
+		t.Fatal(response.Diagnostics)
+	}
+	if response.State.Raw.IsNull() {
+		t.Fatal("a retained snapshot must stay in state so destroy can release it")
+	}
+	if findWarning(response.Diagnostics, "MotherDuck snapshot outlived its database") == nil {
+		t.Fatalf("expected a retained snapshot warning, got %v", response.Diagnostics)
 	}
 }
 
@@ -93,7 +130,7 @@ func TestSnapshotDeleteTreatsMissingSnapshotAsDeleted(t *testing.T) {
 	notFound := &duckdb.Error{Type: duckdb.ErrorTypeInvalidInput, Msg: "Invalid Input Error: Snapshot not found"}
 	for name, attachErr := range map[string]error{"database exists": nil, "database dropped": missingDatabaseError()} {
 		t.Run(name, func(t *testing.T) {
-			client := &snapshotOrphanBackend{attachErr: attachErr, execErr: notFound}
+			client := &snapshotOrphanBackend{attachErr: attachErr, execErr: notFound, rows: []scannedRow{nativeDatabaseRow()}}
 			r := &snapshotResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
 			state := snapshotTestState(t, r)
 			response := resource.DeleteResponse{State: state}
@@ -106,7 +143,7 @@ func TestSnapshotDeleteTreatsMissingSnapshotAsDeleted(t *testing.T) {
 }
 
 func TestSnapshotDeleteReportsOtherUnnameErrors(t *testing.T) {
-	client := &snapshotOrphanBackend{attachErr: missingDatabaseError(), execErr: &duckdb.Error{Type: duckdb.ErrorTypePermission, Msg: "Permission Error: write access denied"}}
+	client := &snapshotOrphanBackend{attachErr: missingDatabaseError(), execErr: &duckdb.Error{Type: duckdb.ErrorTypePermission, Msg: "Permission Error: write access denied"}, rows: []scannedRow{nativeDatabaseRow()}}
 	r := &snapshotResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
 	state := snapshotTestState(t, r)
 	response := resource.DeleteResponse{State: state}
