@@ -12,6 +12,10 @@ updates:
       # Bump these by hand and run a live SQL smoke first. See CONTRIBUTING.md.
       - dependency-name: "github.com/duckdb/duckdb-go/*"
       - dependency-name: "github.com/duckdb/duckdb-go-bindings*"
+      # grpc 1.84.0 reintroduces GO-2026-6443, which 1.83.2 fixes. Remove this
+      # once a fixed 1.84 or later release ships and govulncheck passes.
+      - dependency-name: "google.golang.org/grpc"
+        versions: ["1.84.x"]
 
   - package-ecosystem: github-actions
     directory: /
