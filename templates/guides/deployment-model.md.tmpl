@@ -15,7 +15,7 @@ Unlike a database name, an account selects both ownership and compute. Two
 databases created with the same writer token share that account's read-write
 Duckling. Creating another token for the account does not create another writer.
 
-![An admin provisions accounts and compute. The writer owns warehouse databases, and readers consume published data through their own compute.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/deployment-model.png)
+![Step 1, an admin root provisions service accounts, tokens, and Duckling settings and hands the writer token to a writer root. Step 2, the writer root creates writer-owned databases, schemas, shares, and grants. Step 3, a pipeline loads data through the writer's Duckling. Step 4, the reader attaches the granted share once, and BI and apps query its read pool.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/deployment-model.png)
 
 ## The building blocks
 
@@ -66,6 +66,8 @@ workflow. Creating the definition is separate from running it. See
 [resource scope](resource-scope.md) for the supported ownership choices.
 
 ## Deploy in stages
+
+The numbered steps match the badges in the diagram above.
 
 1. **Bootstrap identities.** An administrator creates service accounts, tokens,
    and compute settings in a restricted Terraform state.

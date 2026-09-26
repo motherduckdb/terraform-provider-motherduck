@@ -170,7 +170,11 @@ notes while retaining the generated schema and checked-in example snippets.
 
 Architecture diagrams have PNG and SVG outputs under `templates/assets/`.
 Edit `scripts/render-docs-diagrams.py` and run it with Python and Pillow to
-regenerate them, then run `make docs`. PNG embeds use absolute raw GitHub URLs
+regenerate them, then run `make docs`. Keep the shared visual grammar: dashed purple
+lines are Terraform provisioning, solid arrows are data or code movement, blue
+lines are read access, every arrow has a short verb, and each diagram has a
+legend for the line styles it uses. Update the embedding guide's alt text
+when a diagram changes. PNG embeds use absolute raw GitHub URLs
 so they work in Registry Markdown without Mermaid support. They become available
 when the assets reach `main`. Check the rendered pages and diagrams before
 publishing. Registry documentation updates require a new provider release.

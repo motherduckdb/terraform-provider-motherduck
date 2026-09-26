@@ -14,6 +14,8 @@ and access controls that those workloads run on.
 or service account has its own compute and owns the databases it creates.
 Shares let other accounts query published data on their own compute.
 
+![Terraform admin and writer roots provision accounts, compute, databases, shares, and grants. A pipeline loads data through the writer's Duckling into its database. A restricted share is granted to a separate reader account, attached once, and queried through that reader's read pool by BI and applications.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/readme-architecture.png)
+
 ## Choose what to build
 
 | Your next step | What you will build |

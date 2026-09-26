@@ -11,7 +11,7 @@ This blueprint centralizes writes through one writer identity while isolating re
 
 ## Architecture
 
-![A central writer publishes a restricted share per tenant to separate readers.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/customer-facing-analytics.png)
+![A pipeline writes Acme and Globex data through one central writer that owns both tenant databases and their restricted shares. Each share is granted to and attached by its own tenant reader account with a separate read pool. The backend authenticates users and routes queries to the matching reader.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/customer-facing-analytics.png)
 
 ## Grant semantics
 

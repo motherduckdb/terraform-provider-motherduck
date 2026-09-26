@@ -11,7 +11,7 @@ Use a layered warehouse when source records arrive more than once, business
 logic needs a clear home, and dashboards should query prepared tables. This
 guide uses an orders feed with source revisions and a physical revenue mart.
 
-![A writer loads raw orders, deduplicates them through a transform view, and refreshes a physical revenue mart. BI uses the writer's read-scaling token.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/layered-warehouse.png)
+![A pipeline loads raw orders into the writer's raw database. The orders_latest view in the transform database deduplicates them, and the pipeline refreshes the daily_revenue table in the marts database. BI queries every layer through the writer's read pool with a read-scaling token.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/layered-warehouse.png)
 
 ## Choose a starting point
 

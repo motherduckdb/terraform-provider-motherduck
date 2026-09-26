@@ -15,7 +15,7 @@ This guide deploys one database and restricted share per customer, plus a reader
 account and read-scaling pool for each. The writer owns all tenant databases.
 The app never needs its token.
 
-![A central writer owns Acme and Globex databases. Each database has a separate restricted share and reader pool. The authenticated backend chooses the matching reader credential.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/customer-facing-analytics.png)
+![A pipeline writes Acme and Globex data through one central writer that owns both tenant databases and their restricted shares. Each share is granted to and attached by its own tenant reader account with a separate read pool. The backend authenticates users and routes queries to the matching reader.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/customer-facing-analytics.png)
 
 ## What the example isolates
 
