@@ -21,6 +21,13 @@ Changing the name renames the snapshot. Refresh tracks the snapshot by its
 replacement. Destroy removes the managed name rather than promising immediate
 physical deletion of retained history.
 
+A named snapshot outlives the database that created it and stays retained until
+its name is cleared. Destroy clears the name by `snapshot_id`, which also works
+after the database was dropped. MotherDuck does not list snapshots of dropped
+databases, so refresh removes such a snapshot from state and warns with the
+`ALTER SNAPSHOT` statement that releases it. Destroy the snapshot before you
+drop or replace its database to keep cleanup inside Terraform.
+
 Import uses `<database>.<snapshot-name>`. The computed `id` is the service
 snapshot ID. Plan retention and recovery around the account's supported snapshot
 features, and test restoration separately.
