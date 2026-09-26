@@ -22,6 +22,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Full history so the tagged commit can be checked against main.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Verify release inputs
@@ -31,6 +33,12 @@ jobs:
         run: |
           if [[ ! -f "release-notes/${VERSION}.md" ]]; then
             echo "Release notes file release-notes/${VERSION}.md is required." >&2
+            exit 1
+          fi
+          # Releases ship reviewed code only. A tag on an unmerged branch
+          # commit could otherwise run a modified workflow with signing keys.
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" refs/remotes/origin/main; then
+            echo "Release tag ${VERSION} points at ${GITHUB_SHA}, which is not on main. Tag a merged main commit." >&2
             exit 1
           fi
 
@@ -49,7 +57,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: 1.16.1
+          terraform_version: 1.16.4
           terraform_wrapper: false
 
       - name: Install shellcheck
@@ -58,7 +66,11 @@ jobs:
             sudo apt-get update && sudo apt-get install -y shellcheck
           fi
 
+      # The build jobs enforce the glibc and macOS floors on the real release
+      # artifacts. This smoke package is built on the newer preflight runner.
       - name: Run release preflight checks
+        env:
+          RELEASE_SKIP_PLATFORM_FLOOR: "1"
         run: make release-preflight-check release-check
 
       # Advisory only for releases: a newly published advisory in an indirect
@@ -74,6 +86,14 @@ jobs:
     needs: preflight
     runs-on: ubuntu-latest
     environment: motherduck-live
+    # Shared with the Live Smoke workflow. Every run that touches the live
+    # account holds this group so the cleanup audit never sees another run's
+    # objects. GitHub keeps one pending entry per group, so a later Live Smoke
+    # run can supersede this job while it waits. Re-run the job if it is
+    # canceled that way.
+    concurrency:
+      group: motherduck-live-account
+      cancel-in-progress: false
     env:
       MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
     steps:
@@ -90,7 +110,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: 1.16.1
+          terraform_version: 1.16.4
           terraform_wrapper: false
 
       - name: Run required SQL contracts
@@ -110,11 +130,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Ubuntu 22.04 keeps the Linux glibc floor at 2.34 (RHEL 9, Amazon
+        # Linux 2023, Debian 12, Ubuntu 22.04). package-release.sh sets the
+        # macOS floor and links the C++ runtime statically, and
+        # test-release-package.sh fails when either floor rises. When GitHub
+        # retires these runners, build Linux in a container with glibc 2.34
+        # or older instead.
         include:
-          - runner: ubuntu-latest
+          - runner: ubuntu-22.04
             goos: linux
             goarch: amd64
-          - runner: ubuntu-24.04-arm
+          - runner: ubuntu-22.04-arm
             goos: linux
             goarch: arm64
           - runner: macos-15-intel
@@ -145,7 +171,7 @@ jobs:
       - name: Setup Terraform for artifact verification
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: 1.16.1
+          terraform_version: 1.16.4
           terraform_wrapper: false
 
       - name: Install and start release artifact
@@ -274,7 +300,9 @@ jobs:
               exit 1
             fi
           done
-          gh release create "${VERSION}" dist/* \
-            --verify-tag \
-            --title "${VERSION}" \
-            --notes-file "${notes_file}"
+          release_flags=(--verify-tag --title "${VERSION}" --notes-file "${notes_file}")
+          # Tags such as v1.2.3-rc.1 are prereleases and must not become Latest.
+          if [[ "${version}" == *-* ]]; then
+            release_flags+=(--prerelease)
+          fi
+          gh release create "${VERSION}" dist/* "${release_flags[@]}"

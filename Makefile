@@ -149,6 +149,7 @@ test-scripts:
 	./scripts/test-live-rest-admin-gates.sh
 	./scripts/test-gates-unit.sh
 	./scripts/test-release-signing-unit.sh
+	./scripts/test-release-platform-floor-unit.sh
 	./scripts/test-live-cleanup-audit-unit.sh
 
 test-integration:

@@ -2,12 +2,22 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib/release-platform-floor.sh
+source "${ROOT_DIR}/scripts/lib/release-platform-floor.sh"
+
+usage="Usage: $0 <provider-zip> <version>"
+if [[ "$#" -ne 2 ]]; then
+  echo "${usage}" >&2
+  exit 2
+fi
+
 jq -e '.version == 1 and .metadata.protocol_versions == ["6.0"]' \
   "${ROOT_DIR}/terraform-registry-manifest.json" >/dev/null
 
 # Install the actual packed artifact, never a freshly rebuilt binary.
-archive="$1"
-version="${2#v}"
+archive="${1:?${usage}}"
+version="${2:?${usage}}"
+version="${version#v}"
 terraform_bin="${TERRAFORM_BIN:-terraform}"
 work_dir="$(mktemp -d)"
 trap 'rm -rf "${work_dir}"' EXIT
@@ -19,6 +29,13 @@ if [[ "$(unzip -Z1 "${archive}")" != "${binary}" ]]; then
 fi
 unzip -q "${archive}" -d "${work_dir}/unpacked"
 test -x "${work_dir}/unpacked/${binary}"
+# Release runners are newer than the oldest supported systems, so a binary
+# that starts here can still fail on an older glibc or macOS.
+if [[ "${RELEASE_SKIP_PLATFORM_FLOOR:-0}" == "1" ]]; then
+  echo "Skipping the release platform floor check because RELEASE_SKIP_PLATFORM_FLOOR=1." >&2
+else
+  check_release_platform_floor "${work_dir}/unpacked/${binary}" "$(go env GOOS)"
+fi
 platform="$(go env GOOS)_$(go env GOARCH)"
 mirror="${work_dir}/mirror/registry.terraform.io/motherduckdb/motherduck"
 mkdir -p "${mirror}" "${work_dir}/config"

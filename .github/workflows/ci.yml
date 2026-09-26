@@ -40,7 +40,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: 1.16.1
+          terraform_version: 1.16.4
           terraform_wrapper: false
 
       - name: Install shellcheck
@@ -70,7 +70,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: 1.16.1
+          terraform_version: 1.16.4
           terraform_wrapper: false
 
       - name: Run hermetic behavior contracts
@@ -90,6 +90,7 @@ jobs:
           - {cli: Terraform, version: 1.15.8}
           - {cli: Terraform, version: 1.15.9}
           - {cli: Terraform, version: 1.16.1}
+          - {cli: Terraform, version: 1.16.4}
           - {cli: OpenTofu, version: 1.12.6}
     steps:
       - name: Checkout
@@ -113,7 +114,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15-intel, macos-15]
+        # Match the release build runners in release.yml. Linux packages are
+        # built on Ubuntu 22.04 so they only need glibc 2.34, and
+        # test-release-package.sh fails when a runner raises that floor.
+        runner: [ubuntu-22.04, ubuntu-22.04-arm, macos-15-intel, macos-15]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -123,7 +127,7 @@ jobs:
           go-version-file: go.mod
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: 1.16.1
+          terraform_version: 1.16.4
           terraform_wrapper: false
       - name: Build, install, and start packaged provider
         run: make release-check
