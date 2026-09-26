@@ -68,7 +68,7 @@ resource "motherduck_flight_run" "heartbeat" {
 
 - `created_at` (String) Flight run creation timestamp reported by MotherDuck.
 - `flight_version` (Number) Flight version used by this run.
-- `id` (String) Stable Terraform ID for this Flight run, derived from the Flight ID and run number.
+- `id` (String) MotherDuck run ID for this Flight run.
 - `run_number` (Number) MotherDuck run number assigned to this Flight run.
 - `status` (String) Latest Flight run status observed by the provider.
 

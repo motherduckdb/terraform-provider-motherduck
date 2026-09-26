@@ -37,7 +37,8 @@ See [authentication](authentication.md) for credential requirements.
 ## Define teams and grants
 
 Copy the [example](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.2.13/examples/access-control/README.md) into a Terraform
-root. Set `teams` in a `.tfvars` file:
+root. Set `teams` in `terraform.tfvars` so later `terraform import` commands
+read it automatically:
 
 ```hcl
 teams = {
@@ -103,6 +104,8 @@ It reports missing and unexpected audiences against an explicit allowlist and
 can fail a plan when they differ, including when an unchanged report still
 contains drift. It does not revoke grants or expand role membership. The example
 requires provider v0.2.10 or later, which includes `motherduck_share_grants`.
+The [role access audit example](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.2.13/examples/role-access-audit/README.md)
+performs the same comparison for role membership.
 
 Include an access audit when you manage roles with Terraform:
 
@@ -154,7 +157,8 @@ managed grants but does not revoke grants Terraform does not own.
 - `access = "organization"` grants access across the organization.
   `access = "unrestricted"` grants access to anyone with the share URL.
 - A share's `include_pattern` selects the tables it exposes. Audiences that need
-  different tables need different shares.
+  different tables need different shares. `include_pattern` is a preview option
+  that requires filtered shares.
 - This provider does not manage SSO, provisioning through an identity provider,
   membership of people in an organization, billing, or PrivateLink.
 

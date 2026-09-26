@@ -53,8 +53,8 @@ make release-check
 
 When updating Go modules, test the DuckDB/MotherDuck path before keeping a `duckdb-go` or `duckdb-go-bindings` bump. Newer embedded DuckDB builds can be published before MotherDuck supports that DuckDB version, so a clean `go test` is not enough. Run at least `MOTHERDUCK_TOKEN=... make test-terraform-versions` or a focused live SQL smoke. For that reason Dependabot is configured in `.github/dependabot.yml` to ignore `github.com/duckdb/duckdb-go/*` and `github.com/duckdb/duckdb-go-bindings*`. Bump those modules manually in a dedicated PR and record the live smoke you ran in the PR description.
 
-ShellCheck is a required local dependency, matching CI. Install it with
-`brew install shellcheck` on macOS or your system package manager. The CLI gate
+ShellCheck and `gpg` are required local dependencies, matching CI. `make test-scripts` and the CLI matrix use `gpg` to verify Terraform and OpenTofu downloads. Install them with
+`brew install shellcheck gnupg` on macOS or your system package manager. The CLI gate
 builds the provider once and runs isolated fixtures. See [testing](docs/guides/testing.md)
 for narrower commands, logs, and the distinction between validation and live coverage.
 
@@ -107,7 +107,7 @@ MOTHERDUCK_TOKEN=... make test-live-required
 
 `make test-unit` uses the race detector, randomized ordering, a five-minute timeout, and coverage summaries. `make test-contract` runs only the `TestContract*` Terraform protocol lifecycles against strict in-memory SQL and REST clients. Coverage is diagnostic. Contracts gate observable state and backend side effects. Credentialed Go tests use the `acceptance` build tag and are only run by explicit live targets.
 
-The hosted environment does not have an organization-admin token. REST administration behavior is covered by hermetic protocol contracts. Admin-only Go acceptance tests require both the `acceptance` and `admin_acceptance` build tags, and admin-only live scripts must be run explicitly in an environment that supplies `MOTHERDUCK_ADMIN_TOKEN`. `make test-terraform-versions` and the hosted exact-main and release gates run SQL-only live coverage.
+Pull requests never receive live credentials. REST administration behavior is covered there by hermetic protocol contracts. Admin-only Go acceptance tests require both the `acceptance` and `admin_acceptance` build tags. On `main` pushes, the hosted `Live admin lifecycle` job runs them with `MOTHERDUCK_ADMIN_TOKEN`, falling back to `MOTHERDUCK_TOKEN` when no separate admin secret is configured. Other admin-only live scripts must be run explicitly in an environment that supplies `MOTHERDUCK_ADMIN_TOKEN`. `make test-terraform-versions` runs SQL-only live coverage unless `MOTHERDUCK_ADMIN_TOKEN` is set. The hosted exact-main and release gates run SQL-only live coverage.
 
 Use focused live smoke tests for changed surfaces instead of running every live fixture on every edit. The broad stable SQL gate is:
 
@@ -115,10 +115,10 @@ Use focused live smoke tests for changed surfaces instead of running every live 
 MOTHERDUCK_TOKEN=... make test-live-sql-stable
 ```
 
-The Terraform compatibility matrix defaults to Terraform `1.5.7`, `1.8.5`, `1.12.2`, `1.15.8`, `1.15.9`, and `1.16.1`. Override locally with `TF_VERSIONS`, for example:
+The Terraform compatibility matrix defaults to Terraform `1.5.7`, `1.8.5`, `1.12.2`, `1.15.8`, `1.15.9`, `1.16.1`, and `1.16.4`. Override locally with `TF_VERSIONS`, for example:
 
 ```bash
-TF_VERSIONS="1.8.5 1.16.1" MOTHERDUCK_TOKEN=... make test-terraform-versions
+TF_VERSIONS="1.8.5 1.16.4" MOTHERDUCK_TOKEN=... make test-terraform-versions
 ```
 
 Live smoke logs and temporary provider mirrors are written under ignored `test-results/` and `tools/`. Treat live logs as account metadata and do not paste raw output into public issues.
@@ -170,7 +170,11 @@ notes while retaining the generated schema and checked-in example snippets.
 
 Architecture diagrams have PNG and SVG outputs under `templates/assets/`.
 Edit `scripts/render-docs-diagrams.py` and run it with Python and Pillow to
-regenerate them, then run `make docs`. PNG embeds use absolute raw GitHub URLs
+regenerate them, then run `make docs`. Keep the shared visual grammar: dashed purple
+lines are Terraform provisioning, solid arrows are data or code movement, blue
+lines are read access, every arrow has a short verb, and each diagram has a
+legend for the line styles it uses. Update the embedding guide's alt text
+when a diagram changes. PNG embeds use absolute raw GitHub URLs
 so they work in Registry Markdown without Mermaid support. They become available
 when the assets reach `main`. Check the rendered pages and diagrams before
 publishing. Registry documentation updates require a new provider release.

@@ -15,7 +15,7 @@ infrastructure and application changes their own review and deployment cycles.
 A useful example is Wikipedia pageviews: a Flight ingests public data and a
 Dive presents it. The Blueprints starter already includes this workload.
 
-![Terraform provisions identities and compute. Blueprints deploys application packages to previews and staging with a staging account, then promotes tagged code to production with a separate account.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/blueprints-promotion.png)
+![Terraform first provisions the staging and production accounts. Pull requests deploy previews and a merge to main deploys staging, both under the staging account. An approved release deploys its exact tag under the separate production account.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/blueprints-promotion.png)
 
 ## Choose one owner for every object
 

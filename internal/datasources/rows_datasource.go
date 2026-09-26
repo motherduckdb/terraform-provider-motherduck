@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"math/big"
 	"sort"
+	"strings"
+
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -16,6 +19,7 @@ import (
 	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlfunc"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 )
 
@@ -197,8 +201,12 @@ func (d *rowsDataSource) queryRows(ctx context.Context, client interface {
 	if d.spec.postProcess == nil {
 		return rowsJSON, true
 	}
+	// Decode numbers as json.Number so post-processing re-encodes each value
+	// verbatim instead of rounding integers above 2^53 through float64.
+	decoder := json.NewDecoder(strings.NewReader(rowsJSON))
+	decoder.UseNumber()
 	var rows []map[string]any
-	if err := json.Unmarshal([]byte(rowsJSON), &rows); err != nil {
+	if err := decoder.Decode(&rows); err != nil {
 		diags.AddError("Unable to decode MotherDuck rows data source", err.Error())
 		return "", false
 	}
@@ -211,14 +219,94 @@ func (d *rowsDataSource) queryRows(ctx context.Context, client interface {
 }
 
 func sortRowsBy(field string) func([]map[string]any) []map[string]any {
+	return sortRowsByKeys(rowSortKey{field: field})
+}
+
+// rowSortKey names one column used to order data source rows. Listings whose
+// column set is not fixed name several candidate columns. Missing columns are
+// skipped, and rows that still tie are ordered by their canonical JSON, so the
+// result never depends on the order the server happened to return.
+type rowSortKey struct {
+	field      string
+	descending bool
+}
+
+func sortRowsByKeys(keys ...rowSortKey) func([]map[string]any) []map[string]any {
 	return func(rows []map[string]any) []map[string]any {
-		sort.SliceStable(rows, func(i, j int) bool {
-			left, _ := rows[i][field].(string)
-			right, _ := rows[j][field].(string)
-			return left < right
+		canonical := make([]string, len(rows))
+		for i, row := range rows {
+			data, _ := json.Marshal(row)
+			canonical[i] = string(data)
+		}
+		order := make([]int, len(rows))
+		for i := range order {
+			order[i] = i
+		}
+		sort.SliceStable(order, func(i, j int) bool {
+			left, right := rows[order[i]], rows[order[j]]
+			for _, sortKey := range keys {
+				leftValue, leftOK := left[sortKey.field]
+				rightValue, rightOK := right[sortKey.field]
+				if !leftOK && !rightOK {
+					continue
+				}
+				if cmp := compareRowValues(leftValue, rightValue); cmp != 0 {
+					if sortKey.descending {
+						return cmp > 0
+					}
+					return cmp < 0
+				}
+			}
+			return canonical[order[i]] < canonical[order[j]]
 		})
-		return rows
+		sorted := make([]map[string]any, len(rows))
+		for i, index := range order {
+			sorted[i] = rows[index]
+		}
+		return sorted
 	}
+}
+
+// compareRowValues orders nulls first, then numbers numerically, then strings,
+// and falls back to the JSON encoding for any other value.
+func compareRowValues(left, right any) int {
+	if left == nil || right == nil {
+		switch {
+		case left == nil && right == nil:
+			return 0
+		case left == nil:
+			return -1
+		default:
+			return 1
+		}
+	}
+	if leftNumber, ok := rowNumber(left); ok {
+		if rightNumber, ok := rowNumber(right); ok {
+			return leftNumber.Cmp(rightNumber)
+		}
+	}
+	leftText, leftIsText := left.(string)
+	rightText, rightIsText := right.(string)
+	if leftIsText && rightIsText {
+		return strings.Compare(leftText, rightText)
+	}
+	leftJSON, _ := json.Marshal(left)
+	rightJSON, _ := json.Marshal(right)
+	return strings.Compare(string(leftJSON), string(rightJSON))
+}
+
+func rowNumber(value any) (*big.Float, bool) {
+	var text string
+	switch number := value.(type) {
+	case json.Number:
+		text = number.String()
+	case float64:
+		return big.NewFloat(number), true
+	default:
+		return nil, false
+	}
+	parsed, ok := new(big.Float).SetPrec(256).SetString(text)
+	return parsed, ok
 }
 
 func sortRoleMemberRows(rows []map[string]any) []map[string]any {
@@ -235,15 +323,8 @@ func sortRoleMemberRows(rows []map[string]any) []map[string]any {
 	return rows
 }
 
-func (d *rowsDataSource) functionAvailable(ctx context.Context, client interface {
-	Exists(context.Context, string, ...any) (bool, error)
-}, diags *diag.Diagnostics) bool {
-	var available bool
-	err := retry.SQL(ctx, func() error {
-		var existsErr error
-		available, existsErr = client.Exists(ctx, "SELECT count(*) FROM duckdb_functions() WHERE lower(function_name) = lower(?)", d.spec.requiredFunction)
-		return existsErr
-	})
+func (d *rowsDataSource) functionAvailable(ctx context.Context, client sqlfunc.Exister, diags *diag.Diagnostics) bool {
+	available, err := sqlfunc.Exists(ctx, client, d.spec.requiredFunction)
 	if err != nil {
 		diags.AddError("Unable to inspect MotherDuck SQL functions", err.Error())
 		return false

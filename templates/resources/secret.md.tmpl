@@ -19,15 +19,17 @@ a complete `CREATE SECRET` statement. Do not include semicolons or repeat
 `TYPE` and `PROVIDER` clauses already modeled by the resource.
 
 Updating the body uses `CREATE OR REPLACE SECRET`. Renaming requires resource
-replacement. Destroy drops the named secret.
+replacement. MotherDuck stores secret names in lowercase, so use lowercase
+names to keep plans and imports readable. Destroy drops the named secret and
+succeeds when it is already gone.
 
 MotherDuck redacts secret values on reads, but the configured values are still
-stored in Terraform state. Here, “write-only” describes the service response,
+stored in Terraform state. Here, "write-only" describes the service response,
 not Terraform write-only arguments. Protect state and saved plans.
 
 Import recovers public metadata, not credential values. Supply the intended
 secret body deliberately before a rotation or update. See
-[authentication and state](../guides/authentication.md).
+[state and lifecycle](../guides/state-and-lifecycle.md).
 
 ## Example Usage
 

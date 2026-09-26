@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -26,14 +27,16 @@ type Config struct {
 }
 
 type Client struct {
-	db *sql.DB
-	mu sync.Mutex
+	db      *sql.DB
+	semOnce sync.Once
+	sem     chan struct{}
 }
 
 type Row struct {
-	row    *sql.Row
-	err    error
-	unlock func()
+	row     *sql.Row
+	err     error
+	release func()
+	once    sync.Once
 }
 
 // RowScanner is the narrow result contract consumed by provider resources and
@@ -42,6 +45,25 @@ type Row struct {
 // implementation.
 type RowScanner interface {
 	Scan(dest ...any) error
+}
+
+// errNULQuery is returned instead of sending a statement that contains a NUL
+// byte. The DuckDB C API truncates statements at the first NUL, so the parser
+// would see a different statement than the caller built. The message omits the
+// statement because the truncated text can contain part of a secret value.
+var errNULQuery = errors.New("SQL statement contains a NUL byte and was not sent")
+
+func checkQuery(query string) error {
+	if strings.IndexByte(query, 0) >= 0 {
+		return errNULQuery
+	}
+	return nil
+}
+
+// sqlSession is the subset of database/sql shared by *sql.DB and *sql.Conn.
+type sqlSession interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
 type contextConnector struct {
@@ -53,24 +75,38 @@ type contextConnector struct {
 // MotherDuck token setting is database initialization state and cannot be set
 // again on a pooled reconnect after an md: database has been attached. A
 // failed initialization remains retryable with the next connection context.
+//
+// Session state such as the current database is per connection. The first
+// connection records its default database after boot, and every later pooled
+// connection selects it again so a replacement connection behaves the same.
 type oneTimeInitializer struct {
-	mu          sync.Mutex
-	initialized bool
-	next        int
-	queries     []string
-	token       string
+	mu              sync.Mutex
+	initialized     bool
+	next            int
+	queries         []string
+	token           string
+	defaultDatabase string
 }
 
 func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContext) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	if i.initialized {
-		return nil
-	}
 	initCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
+	if i.initialized {
+		if i.defaultDatabase == "" {
+			return nil
+		}
+		if _, err := execer.ExecContext(initCtx, "USE "+sqlbuild.QuoteIdentifier(i.defaultDatabase), nil); err != nil {
+			return fmt.Errorf("select default database on new connection: %s", redactToken(err.Error(), i.token))
+		}
+		return nil
+	}
 	for i.next < len(i.queries) {
 		query := i.queries[i.next]
+		if err := checkQuery(query); err != nil {
+			return err
+		}
 		tflog.Debug(initCtx, "running MotherDuck SQL boot query", map[string]any{"query": redactToken(query, i.token)})
 		if _, err := execer.ExecContext(initCtx, query, nil); err != nil {
 			// A canceled ATTACH can complete remotely before reporting an
@@ -87,8 +123,35 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 		}
 		i.next++
 	}
+	if queryer, ok := execer.(driver.QueryerContext); ok {
+		database, err := currentDatabase(initCtx, queryer)
+		if err != nil {
+			return fmt.Errorf("read default database after boot: %s", redactToken(err.Error(), i.token))
+		}
+		i.defaultDatabase = database
+	}
 	i.initialized = true
 	return nil
+}
+
+func currentDatabase(ctx context.Context, queryer driver.QueryerContext) (string, error) {
+	rows, err := queryer.QueryContext(ctx, "SELECT current_database()", nil)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = rows.Close() }()
+	values := make([]driver.Value, len(rows.Columns()))
+	if err := rows.Next(values); err != nil {
+		return "", err
+	}
+	if len(values) != 1 {
+		return "", fmt.Errorf("expected one column, got %d", len(values))
+	}
+	database, ok := values[0].(string)
+	if !ok {
+		return "", fmt.Errorf("unexpected current_database() value %T", values[0])
+	}
+	return database, nil
 }
 
 // Connect supplies each pool connection's current operation context to the
@@ -115,9 +178,11 @@ func (c *contextConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	return conn, nil
 }
 
+// Scan releases the client for the next operation. Releasing is guarded so a
+// second Scan on the same Row cannot release another operation's admission.
 func (r *Row) Scan(dest ...any) error {
-	if r.unlock != nil {
-		defer r.unlock()
+	if r.release != nil {
+		defer r.once.Do(r.release)
 	}
 	if r.err != nil {
 		return r.err
@@ -129,7 +194,8 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(cfg.Token) == "" {
+	token := strings.TrimSpace(cfg.Token)
+	if token == "" {
 		return &Client{}, nil
 	}
 
@@ -142,10 +208,22 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	initialize := &oneTimeInitializer{queries: bootQueries(token, cfg), token: token}
+	connector := &contextConnector{Connector: duckdbConnector, initialize: initialize.run}
+
+	db := sql.OpenDB(connector)
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	return &Client{db: db}, nil
+}
+
+// bootQueries returns the one-time MotherDuck initialization statements for a
+// trimmed token and the configured attach target.
+func bootQueries(token string, cfg Config) []string {
 	queries := []string{
 		"INSTALL motherduck",
 		"LOAD motherduck",
-		"SET motherduck_token = " + sqlbuild.StringLiteral(cfg.Token),
+		"SET motherduck_token = " + sqlbuild.StringLiteral(token),
 	}
 	if cfg.AttachMode != "" {
 		queries = append(queries, "SET motherduck_attach_mode = "+sqlbuild.StringLiteral(cfg.AttachMode))
@@ -158,13 +236,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		// "duckdb" even though the MotherDuck token is configured.
 		queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"))
 	}
-	initialize := &oneTimeInitializer{queries: queries, token: cfg.Token}
-	connector := &contextConnector{Connector: duckdbConnector, initialize: initialize.run}
-
-	db := sql.OpenDB(connector)
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	return &Client{db: db}, nil
+	return queries
 }
 
 func (c *Client) Close() error {
@@ -178,17 +250,45 @@ func (c *Client) Available() bool {
 	return c != nil && c.db != nil
 }
 
+// acquire admits one SQL operation at a time on the shared connection.
+// Waiting observes ctx, so an operation whose timeout expires or that is
+// canceled while queued behind another statement returns promptly.
+func (c *Client) acquire(ctx context.Context) error {
+	c.semOnce.Do(func() { c.sem = make(chan struct{}, 1) })
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case c.sem <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (c *Client) release() {
+	<-c.sem
+}
+
 func (c *Client) Exec(ctx context.Context, query string, args ...any) error {
 	if !c.Available() {
 		return ErrMissingToken
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.execLocked(ctx, query, args...)
+	if err := checkQuery(query); err != nil {
+		return err
+	}
+	if err := c.acquire(ctx); err != nil {
+		return err
+	}
+	defer c.release()
+	return execOn(ctx, c.db, query, args...)
 }
 
-func (c *Client) execLocked(ctx context.Context, query string, args ...any) error {
-	_, err := c.db.ExecContext(ctx, query, args...)
+func execOn(ctx context.Context, session sqlSession, query string, args ...any) error {
+	if err := checkQuery(query); err != nil {
+		return err
+	}
+	_, err := session.ExecContext(ctx, query, args...)
 	return err
 }
 
@@ -208,39 +308,69 @@ func (c *Client) WithDatabaseUse(ctx context.Context, database string, fn func(e
 			return c.Exec(ctx, query, args...)
 		})
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	if err := c.acquire(ctx); err != nil {
+		return err
+	}
+	defer c.release()
 
-	previous, err := c.scalarStringLocked(ctx, "SELECT current_database()")
+	// A dedicated connection lets the scope discard it when the previous
+	// database cannot be restored, so later operations never inherit the
+	// temporary USE target from the pooled connection.
+	conn, err := c.db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	discard := false
+	defer func() {
+		if discard {
+			// Returning driver.ErrBadConn from Raw makes database/sql close
+			// the connection instead of returning it to the pool.
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+		}
+		_ = conn.Close()
+	}()
+
+	previous, err := scalarStringOn(ctx, conn, "SELECT current_database()")
 	if err != nil {
 		return fmt.Errorf("read current database: %w", err)
 	}
-	if err := c.execLocked(ctx, "USE "+sqlbuild.QuoteIdentifier(database)); err != nil {
+	if err := execOn(ctx, conn, "USE "+sqlbuild.QuoteIdentifier(database)); err != nil {
+		discard = true
 		return err
 	}
+	// Discard the connection unless the previous database is restored, which
+	// also covers a panic inside fn.
+	discard = true
 	runErr := fn(func(query string, args ...any) error {
-		return c.execLocked(ctx, query, args...)
+		return execOn(ctx, conn, query, args...)
 	})
 	// Restoration must survive cancellation of the operation that changed USE.
 	restoreCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
-	restoreErr := c.execLocked(restoreCtx, "USE "+sqlbuild.QuoteIdentifier(previous))
+	restoreErr := execOn(restoreCtx, conn, "USE "+sqlbuild.QuoteIdentifier(previous))
 	if restoreErr != nil {
 		return errors.Join(runErr, fmt.Errorf("restore previous database %q: %w", previous, restoreErr))
 	}
+	discard = false
 	return runErr
 }
 
+// QueryRow holds the client's single admission slot until Scan is called on
+// the returned row, so callers must always call Scan. Inside a WithDatabaseUse
+// callback, use the exec function it provides instead of calling the client.
 func (c *Client) QueryRow(ctx context.Context, query string, args ...any) RowScanner {
 	if !c.Available() {
 		return &Row{err: ErrMissingToken}
 	}
-	c.mu.Lock()
+	if err := checkQuery(query); err != nil {
+		return &Row{err: err}
+	}
+	if err := c.acquire(ctx); err != nil {
+		return &Row{err: err}
+	}
 	return &Row{
-		row: c.db.QueryRowContext(ctx, query, args...),
-		unlock: func() {
-			c.mu.Unlock()
-		},
+		row:     c.db.QueryRowContext(ctx, query, args...),
+		release: c.release,
 	}
 }
 
@@ -248,8 +378,13 @@ func (c *Client) QueryRowsJSON(ctx context.Context, query string, args ...any) (
 	if !c.Available() {
 		return "", ErrMissingToken
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	if err := checkQuery(query); err != nil {
+		return "", err
+	}
+	if err := c.acquire(ctx); err != nil {
+		return "", err
+	}
+	defer c.release()
 	rows, err := c.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return "", err
@@ -271,11 +406,13 @@ func (c *Client) QueryRowsJSON(ctx context.Context, query string, args ...any) (
 	out := make([]map[string]any, 0)
 	values := make([]any, len(cols))
 	targets := make([]any, len(cols))
-	typeNames := make([]string, len(cols))
+	valueTypes := make([]*columnType, len(cols))
 	for i := range cols {
+		// Column names are case folded. When two columns fold to the same
+		// name, the later column wins, matching earlier provider releases.
 		cols[i] = strings.ToLower(cols[i])
 		targets[i] = &values[i]
-		typeNames[i] = columnTypes[i].DatabaseTypeName()
+		valueTypes[i] = parseColumnType(columnTypes[i].DatabaseTypeName())
 	}
 	for rows.Next() {
 		if err := rows.Scan(targets...); err != nil {
@@ -283,7 +420,7 @@ func (c *Client) QueryRowsJSON(ctx context.Context, query string, args ...any) (
 		}
 		row := make(map[string]any, len(cols))
 		for i, col := range cols {
-			row[col] = normalizeValue(values[i], typeNames[i])
+			row[col] = normalizeTyped(values[i], valueTypes[i])
 		}
 		out = append(out, row)
 	}
@@ -301,14 +438,19 @@ func (c *Client) ScalarString(ctx context.Context, query string, args ...any) (s
 	if !c.Available() {
 		return "", ErrMissingToken
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.scalarStringLocked(ctx, query, args...)
+	if err := checkQuery(query); err != nil {
+		return "", err
+	}
+	if err := c.acquire(ctx); err != nil {
+		return "", err
+	}
+	defer c.release()
+	return scalarStringOn(ctx, c.db, query, args...)
 }
 
-func (c *Client) scalarStringLocked(ctx context.Context, query string, args ...any) (string, error) {
+func scalarStringOn(ctx context.Context, session sqlSession, query string, args ...any) (string, error) {
 	var value sql.NullString
-	if err := c.db.QueryRowContext(ctx, query, args...).Scan(&value); err != nil {
+	if err := session.QueryRowContext(ctx, query, args...).Scan(&value); err != nil {
 		return "", err
 	}
 	return value.String, nil
@@ -318,8 +460,13 @@ func (c *Client) Exists(ctx context.Context, query string, args ...any) (bool, e
 	if !c.Available() {
 		return false, ErrMissingToken
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	if err := checkQuery(query); err != nil {
+		return false, err
+	}
+	if err := c.acquire(ctx); err != nil {
+		return false, err
+	}
+	defer c.release()
 	var count int
 	if err := c.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
 		return false, err
@@ -327,23 +474,135 @@ func (c *Client) Exists(ctx context.Context, query string, args ...any) (bool, e
 	return count > 0, nil
 }
 
+// normalizeValue converts one scanned DuckDB value into a JSON-friendly value
+// using the column's DuckDB type name.
 func normalizeValue(value any, databaseTypeName string) any {
+	return normalizeTyped(value, parseColumnType(databaseTypeName))
+}
+
+// normalizeTyped converts scanned DuckDB values into JSON-friendly values,
+// recursing through lists, structs, maps, and unions. The column type tells
+// UUID bytes apart from BLOB bytes at any nesting depth.
+func normalizeTyped(value any, t *columnType) any {
 	switch v := value.(type) {
 	case nil:
 		return nil
 	case []byte:
-		if strings.EqualFold(databaseTypeName, "UUID") && len(v) == 16 {
+		if t.is("UUID") && len(v) == 16 {
 			return formatUUIDBytes(v)
 		}
 		return hex.EncodeToString(v)
 	case time.Time:
 		return v.Format(time.RFC3339Nano)
+	case duckdb.UUID:
+		return formatUUIDBytes(v[:])
+	case *duckdb.UUID:
+		if v == nil {
+			return nil
+		}
+		return formatUUIDBytes(v[:])
+	case duckdb.Decimal:
+		if v.Value == nil {
+			return nil
+		}
+		// json.Number keeps the exact decimal text instead of rounding
+		// through float64.
+		return json.Number(v.String())
+	case duckdb.Interval:
+		return formatInterval(v)
+	case duckdb.Union:
+		return duckdb.Union{Tag: v.Tag, Value: normalizeTyped(v.Value, t.field(v.Tag))}
+	case []any:
+		out := make([]any, len(v))
+		for i, item := range v {
+			out[i] = normalizeTyped(item, t.element())
+		}
+		return out
+	case map[string]any:
+		out := make(map[string]any, len(v))
+		for key, item := range v {
+			out[key] = normalizeTyped(item, t.field(key))
+		}
+		return out
+	case duckdb.OrderedMap:
+		var out duckdb.OrderedMap
+		keys, values := v.Keys(), v.Values()
+		for i := range keys {
+			out.Set(comparableKey(normalizeTyped(keys[i], t.mapKey())), normalizeTyped(values[i], t.mapValue()))
+		}
+		return out
+	case duckdb.Map:
+		out := make(map[string]any, len(v))
+		for key, item := range v {
+			out[fmt.Sprint(normalizeTyped(key, t.mapKey()))] = normalizeTyped(item, t.mapValue())
+		}
+		return out
 	default:
 		if _, err := json.Marshal(v); err == nil {
 			return v
 		}
 		return fmt.Sprint(v)
 	}
+}
+
+// comparableKey keeps normalized map keys usable as OrderedMap keys, which
+// are compared with ==.
+func comparableKey(key any) any {
+	if key == nil || reflect.TypeOf(key).Comparable() {
+		return key
+	}
+	return fmt.Sprint(key)
+}
+
+// formatInterval renders an interval the way DuckDB casts INTERVAL to
+// VARCHAR, for example "7 days" or "1 year 2 months 03:04:05.5".
+func formatInterval(v duckdb.Interval) string {
+	var parts []string
+	unit := func(n int64, name string) string {
+		if n == 1 || n == -1 {
+			return fmt.Sprintf("%d %s", n, name)
+		}
+		return fmt.Sprintf("%d %ss", n, name)
+	}
+	if v.Months != 0 {
+		years := v.Months / 12
+		months := v.Months - years*12
+		if years != 0 {
+			parts = append(parts, unit(int64(years), "year"))
+		}
+		if months != 0 {
+			parts = append(parts, unit(int64(months), "month"))
+		}
+	}
+	if v.Days != 0 {
+		parts = append(parts, unit(int64(v.Days), "day"))
+	}
+	if v.Micros != 0 {
+		sign := ""
+		micros := uint64(v.Micros) // #nosec G115 -- only used when v.Micros is positive.
+		if v.Micros < 0 {
+			sign = "-"
+			// Negating in int64 wraps for the minimum value, and the
+			// unsigned conversion of that result is still the exact magnitude.
+			micros = uint64(-v.Micros) // #nosec G115 -- see the comment above.
+		}
+		const microsPerSecond = uint64(time.Second / time.Microsecond)
+		hours := micros / (3600 * microsPerSecond)
+		micros -= hours * 3600 * microsPerSecond
+		minutes := micros / (60 * microsPerSecond)
+		micros -= minutes * 60 * microsPerSecond
+		seconds := micros / microsPerSecond
+		micros -= seconds * microsPerSecond
+		clock := fmt.Sprintf("%s%02d:%02d:%02d", sign, hours, minutes, seconds)
+		if micros != 0 {
+			clock += "." + strings.TrimRight(fmt.Sprintf("%06d", micros), "0")
+		}
+		parts = append(parts, clock)
+	}
+	if len(parts) == 0 {
+		return "00:00:00"
+	}
+	return strings.Join(parts, " ")
 }
 
 func formatUUIDBytes(v []byte) string {

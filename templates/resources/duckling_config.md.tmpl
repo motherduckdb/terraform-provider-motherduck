@@ -20,6 +20,12 @@ Instance-size and pool changes update the configuration in place. The username
 is replacement-only. Pulse does not accept cooldown settings, so omit the
 corresponding cooldown when selecting Pulse.
 
+Cooldowns are optional. When a cooldown is unset, Terraform records the live
+value and keeps it while that instance size stays the same. When the instance
+size changes, MotherDuck applies its default for the new size. Removing a
+configured cooldown keeps the current value, so set the value you want instead
+of deleting the line.
+
 Measure representative queries and concurrency before choosing production
 sizes. The provider validates accepted values, while the service enforces
 availability and account-specific limits.

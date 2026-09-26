@@ -1,6 +1,8 @@
 ---
 page_title: "Provider architecture"
 subcategory: "Contributing"
+description: |-
+  How the provider's SQL and REST clients, resources, and data sources fit together.
 ---
 
 # Provider architecture

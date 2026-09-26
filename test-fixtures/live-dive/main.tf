@@ -78,8 +78,12 @@ output "status_applies_to_version" {
   value = motherduck_dive.smoke.status_applies_to_version
 }
 
-output "dives_rows_json" {
-  value     = data.motherduck_dives.all.rows_json
+# The account-wide listing changes while parallel smoke runs create and delete
+# Dives, so exposing its rows would break the no-op plan check. Keep the data
+# source in every plan and output only a stable decoding check.
+output "dives_listing_ok" {
+  value = can(jsondecode(data.motherduck_dives.all.rows_json))
+  # Derived from sensitive rows_json.
   sensitive = true
 }
 

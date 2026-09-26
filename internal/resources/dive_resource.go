@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlfunc"
 )
 
 type diveResource struct{ baseResource }
@@ -133,6 +134,7 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 }
 
 func (r *diveResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -202,6 +204,7 @@ func (r *diveResource) Create(ctx context.Context, req resource.CreateRequest, r
 }
 
 func (r *diveResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	var state diveModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
@@ -216,6 +219,7 @@ func (r *diveResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 }
 
 func (r *diveResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -262,11 +266,19 @@ func (r *diveResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	if updateStatus && !r.updateDiveStatus(ctx, client, state.ID.ValueString(), plan.Status.ValueString(), &resp.Diagnostics) {
 		return
 	}
-	r.readDive(ctx, &plan, &resp.Diagnostics)
+	// On a failed read-back keep the prior state, which the framework returns
+	// when Update does not set state, rather than writing unknown values.
+	if !r.readDive(ctx, &plan, &resp.Diagnostics) {
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Unable to read MotherDuck Dive", "Dive was updated but could not be read through MD_GET_DIVE.")
+		}
+		return
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *diveResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -314,12 +326,8 @@ func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *di
 	}
 	var title, description, created, updated, ownerName, content, status, statusChangedAt, statusSetBy stdsql.NullString
 	var currentVersion, statusVersion stdsql.NullInt64
-	statusAvailable := false
-	if err := retry.SQL(ctx, func() error {
-		var existsErr error
-		statusAvailable, existsErr = client.Exists(ctx, "SELECT count(*) FROM duckdb_functions() WHERE lower(function_name) = 'md_update_dive_status'")
-		return existsErr
-	}); err != nil {
+	statusAvailable, err := sqlFunctionExists(ctx, client, "md_update_dive_status")
+	if err != nil {
 		diags.AddError("Unable to inspect MotherDuck Dive status support", err.Error())
 		return false
 	}
@@ -330,7 +338,7 @@ func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *di
 		scanTargets = append(scanTargets, &status, &statusChangedAt, &statusSetBy, &statusVersion)
 	}
 	query := "SELECT " + columns + " FROM MD_GET_DIVE(id := " + sqlbuild.StringLiteral(model.ID.ValueString()) + "::UUID)"
-	err := retry.SQL(ctx, func() error {
+	err = retry.SQL(ctx, func() error {
 		return client.QueryRow(ctx, query).Scan(scanTargets...)
 	})
 	if err == stdsql.ErrNoRows || isDiveNotFound(err) {
@@ -341,7 +349,7 @@ func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *di
 		return false
 	}
 	model.Title = nullString(title)
-	model.Description = nullString(description)
+	model.Description = clearableStringFromLive(model.Description, description)
 	if currentVersion.Valid {
 		model.CurrentVersion = types.Int64Value(currentVersion.Int64)
 	}

@@ -2,12 +2,12 @@
 page_title: "motherduck_guides Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Lists MotherDuck Guides visible to the current account, optionally filtered by topic or referenced object.
+  Lists MotherDuck Guides visible to the current account, optionally filtered by topic or referenced object. Rows in the returned page are sorted by Guide ID.
 ---
 
 # motherduck_guides (Data Source)
 
-Lists MotherDuck Guides visible to the current account, optionally filtered by topic or referenced object.
+Lists MotherDuck Guides visible to the current account, optionally filtered by topic or referenced object. Rows in the returned page are sorted by Guide ID.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read

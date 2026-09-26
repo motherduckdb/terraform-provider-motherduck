@@ -73,6 +73,42 @@ func TestViewQueryFromDefinition(t *testing.T) {
 	if got := viewQueryFromDefinition("SELECT 1;"); got != "SELECT 1" {
 		t.Fatalf("plain query = %q, want SELECT 1", got)
 	}
+
+	// Definition strings as DuckDB 1.5.5 reports them in information_schema.views.
+	for definition, want := range map[string]string{
+		`CREATE VIEW s."my as view" AS SELECT 1 AS "a AS b", ' AS ' AS c;`: `SELECT 1 AS "a AS b", ' AS ' AS c`,
+		`CREATE VIEW "q""x AS " AS SELECT 2;`:                              `SELECT 2`,
+		`CREATE VIEW v2 (x) AS SELECT 1;`:                                  `SELECT 1`,
+		"CREATE VIEW v\nAS\nSELECT 3;":                                     `SELECT 3`,
+	} {
+		if got := viewQueryFromDefinition(definition); got != want {
+			t.Errorf("viewQueryFromDefinition(%q) = %q, want %q", definition, got, want)
+		}
+	}
+}
+
+func TestViewCreateDoesNotReplaceExistingView(t *testing.T) {
+	for _, tc := range []struct {
+		replace bool
+		want    string
+	}{
+		{replace: false, want: `CREATE VIEW "analytics"."main"."v" AS SELECT 1`},
+		{replace: true, want: `CREATE OR REPLACE VIEW "analytics"."main"."v" AS SELECT 1`},
+	} {
+		client := &recordingSQLClient{}
+		r := &viewResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+		plan := viewModel{
+			Database: types.StringValue("analytics"),
+			Schema:   types.StringValue("main"),
+			Name:     types.StringValue("v"),
+			Query:    types.StringValue("SELECT 1"),
+		}
+		var diags diag.Diagnostics
+		r.writeView(context.Background(), modelGetter{model: plan}, discardSetter{}, &fakePrivateState{}, tc.replace, &diags)
+		if len(client.execs) == 0 || client.execs[0] != tc.want {
+			t.Fatalf("replace=%v execs = %q, want first %q", tc.replace, client.execs, tc.want)
+		}
+	}
 }
 
 func TestViewApplyRejectsMultiStatementQuery(t *testing.T) {
@@ -86,7 +122,7 @@ func TestViewApplyRejectsMultiStatementQuery(t *testing.T) {
 		Query: types.StringValue("SELECT 1; DROP DATABASE prod"),
 	}
 	var diags diag.Diagnostics
-	r.createOrReplaceView(context.Background(), modelGetter{model: plan}, discardSetter{}, &fakePrivateState{}, &diags)
+	r.writeView(context.Background(), modelGetter{model: plan}, discardSetter{}, &fakePrivateState{}, false, &diags)
 	if !diags.HasError() {
 		t.Fatal("expected apply-time validation error")
 	}

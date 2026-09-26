@@ -36,7 +36,7 @@ terraform {
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = ">= 0.1.0"
+      version = ">= 0.1.0, < 1.0.0"
     }
   }
 }

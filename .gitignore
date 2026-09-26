@@ -23,3 +23,13 @@ __pycache__/
 
 /tools/cookbook/
 /tools/pulumi-cli/
+
+# Saved plans and local overrides can contain sensitive values.
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

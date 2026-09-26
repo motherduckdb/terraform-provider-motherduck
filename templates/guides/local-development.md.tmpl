@@ -1,6 +1,8 @@
 ---
 page_title: "Run a local provider build"
 subcategory: "Contributing"
+description: |-
+  Build the provider from source and run it with Terraform development overrides.
 ---
 
 # Run a local provider build
@@ -31,10 +33,9 @@ provider_installation {
 
 Set `TF_CLI_CONFIG_FILE` to that file for your development shell. Terraform
 prints a development-override warning. This is expected. In a module containing
-only this provider, run `terraform validate`, `plan`, and `apply` directly.
-`terraform init` still resolves provider versions against the Registry and can
-fail before initial publication despite the override. Initialize other providers
-and remote modules separately when needed.
+only this provider, skip `terraform init` and run `terraform validate`, `plan`,
+and `apply` directly. Initialize other providers and remote modules separately
+when needed.
 
 The tests use filesystem mirrors instead of development overrides so they can
 exercise `terraform init` without requiring Registry publication.

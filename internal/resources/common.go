@@ -17,6 +17,7 @@ import (
 	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlfunc"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -97,15 +98,8 @@ func (r *baseResource) sql(ctx context.Context, resp *diag.Diagnostics) provider
 	return client
 }
 
-func (r *baseResource) sqlFunctionAvailable(ctx context.Context, client interface {
-	Exists(context.Context, string, ...any) (bool, error)
-}, diags *diag.Diagnostics, functionName string, resourceName string) bool {
-	var available bool
-	err := retry.SQL(ctx, func() error {
-		var existsErr error
-		available, existsErr = client.Exists(ctx, "SELECT count(*) FROM duckdb_functions() WHERE lower(function_name) = lower(?)", functionName)
-		return existsErr
-	})
+func (r *baseResource) sqlFunctionAvailable(ctx context.Context, client sqlfunc.Exister, diags *diag.Diagnostics, functionName string, resourceName string) bool {
+	available, err := sqlFunctionExists(ctx, client, functionName)
 	if err != nil {
 		diags.AddError("Unable to inspect MotherDuck SQL functions", err.Error())
 		return false
@@ -118,6 +112,26 @@ func (r *baseResource) sqlFunctionAvailable(ctx context.Context, client interfac
 		return false
 	}
 	return true
+}
+
+// sqlFunctionExists probes for a SQL function. Operations that install
+// sqlfunc.WithCache on their context probe each function once.
+func sqlFunctionExists(ctx context.Context, client sqlfunc.Exister, functionName string) (bool, error) {
+	return sqlfunc.Exists(ctx, client, functionName)
+}
+
+// clearableStringFromLive maps an optional string that is cleared by writing
+// an empty string. The server can report a cleared value as NULL or as an
+// empty string, so both read back as the configured spelling: an empty string
+// when the configuration uses one and null otherwise.
+func clearableStringFromLive(current types.String, live stdsql.NullString) types.String {
+	if live.Valid && live.String != "" {
+		return types.StringValue(live.String)
+	}
+	if !current.IsNull() && !current.IsUnknown() && current.ValueString() == "" {
+		return types.StringValue("")
+	}
+	return types.StringNull()
 }
 
 func showRows(ctx context.Context, client interface {
@@ -363,7 +377,10 @@ func roleGranteeTypeValidators() []validator.String {
 }
 
 func restUsernameValidators() []validator.String {
-	return []validator.String{tfvalidators.StringLength("MotherDuck REST username", 1, 255)}
+	return []validator.String{
+		tfvalidators.StringLength("MotherDuck REST username", 1, 255),
+		tfvalidators.RESTPathSegment("MotherDuck REST username"),
+	}
 }
 
 func accessTokenNameValidators() []validator.String {

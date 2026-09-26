@@ -4,6 +4,7 @@ import (
 	"context"
 	stdsql "database/sql"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -49,8 +50,9 @@ func TestSQLStopsAfterFourAttempts(t *testing.T) {
 
 func TestSQLDoesNotRetryTerminalErrors(t *testing.T) {
 	tests := map[string]error{
-		"no rows": stdsql.ErrNoRows,
-		"parser":  errors.New("Parser Error: syntax error"),
+		"no rows":         stdsql.ErrNoRows,
+		"wrapped no rows": fmt.Errorf("read from unavailable replica: %w", stdsql.ErrNoRows),
+		"parser":          errors.New("Parser Error: syntax error"),
 		"missing catalog": &duckdb.Error{
 			Type: duckdb.ErrorTypeCatalog,
 			Msg:  "Catalog Error: table does not exist because the service is unavailable",

@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -69,7 +68,7 @@ func (p *motherduckProvider) Schema(ctx context.Context, req provider.SchemaRequ
 			},
 			"api_base_url": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "MotherDuck REST API base URL. Must be an absolute HTTP or HTTPS URL with a host. Defaults to `https://api.motherduck.com`.",
+				MarkdownDescription: "MotherDuck REST API base URL. Must be an absolute HTTPS URL with a host, or HTTP for a loopback host, without credentials, a query string, or a fragment. Can also be set with the `MOTHERDUCK_API_BASE_URL` environment variable. Defaults to `https://api.motherduck.com`.",
 				Validators:          []validator.String{apiBaseURLValidator{}},
 			},
 			"database": schema.StringAttribute{
@@ -104,6 +103,10 @@ func (p *motherduckProvider) Configure(ctx context.Context, req provider.Configu
 	token := stringValue(cfg.Token, os.Getenv("MOTHERDUCK_TOKEN"))
 	adminToken := stringValue(cfg.AdminToken, os.Getenv("MOTHERDUCK_ADMIN_TOKEN"))
 	apiBaseURL := stringValue(cfg.APIBaseURL, os.Getenv("MOTHERDUCK_API_BASE_URL"))
+	apiBaseURLSource := "`api_base_url`"
+	if cfg.APIBaseURL.IsNull() {
+		apiBaseURLSource = "`MOTHERDUCK_API_BASE_URL`"
+	}
 	if strings.TrimSpace(apiBaseURL) == "" {
 		apiBaseURL = mdrest.DefaultBaseURL
 	}
@@ -112,19 +115,36 @@ func (p *motherduckProvider) Configure(ctx context.Context, req provider.Configu
 	customUserAgent := userAgent(p.version, stringValue(cfg.CustomUserAgent, ""))
 	requestTimeout := int64Value(cfg.RequestTimeout, 30)
 
-	if cfg.Token.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(path.Root("token"), "Unknown MotherDuck token", "The provider cannot configure SQL resources with an unknown token.")
+	// Every argument must be known when the provider is configured. Falling
+	// back to an environment variable or default for an unknown value would
+	// silently send requests, and the admin token, to a different target.
+	unknowns := []struct {
+		attribute string
+		unknown   bool
+		summary   string
+		detail    string
+	}{
+		{"token", cfg.Token.IsUnknown(), "Unknown MotherDuck token", "The provider cannot configure SQL resources with an unknown token."},
+		{"admin_token", cfg.AdminToken.IsUnknown(), "Unknown MotherDuck admin token", "The provider cannot configure REST resources with an unknown admin token."},
+		{"api_base_url", cfg.APIBaseURL.IsUnknown(), "Unknown MotherDuck API base URL", "The provider cannot configure REST requests with an unknown `api_base_url`. Use a value that is known at plan time."},
+		{"database", cfg.Database.IsUnknown(), "Unknown MotherDuck database", "The provider cannot configure SQL resources with an unknown `database`. Use a value that is known at plan time."},
+		{"attach_mode", cfg.AttachMode.IsUnknown(), "Unknown MotherDuck attach mode", "The provider cannot configure SQL resources with an unknown `attach_mode`. Use a value that is known at plan time."},
+		{"custom_user_agent", cfg.CustomUserAgent.IsUnknown(), "Unknown MotherDuck custom user agent", "The provider cannot configure SQL and REST requests with an unknown `custom_user_agent`. Use a value that is known at plan time."},
+		{"request_timeout_seconds", cfg.RequestTimeout.IsUnknown(), "Unknown MotherDuck REST request timeout", "The provider cannot configure REST requests with an unknown timeout."},
 	}
-	if cfg.AdminToken.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(path.Root("admin_token"), "Unknown MotherDuck admin token", "The provider cannot configure REST resources with an unknown admin token.")
-	}
-	if cfg.RequestTimeout.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(path.Root("request_timeout_seconds"), "Unknown MotherDuck REST request timeout", "The provider cannot configure REST requests with an unknown timeout.")
+	for _, item := range unknowns {
+		if item.unknown {
+			resp.Diagnostics.AddAttributeError(path.Root(item.attribute), item.summary, item.detail)
+		}
 	}
 	if attachMode == "single" && strings.TrimSpace(database) == "" {
 		resp.Diagnostics.AddAttributeError(path.Root("database"), "MotherDuck database required", "`attach_mode = \"single\"` requires `database` so the provider can attach the intended MotherDuck database.")
 	}
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := mdrest.ValidateBaseURL(apiBaseURL); err != nil {
+		resp.Diagnostics.AddError("Invalid MotherDuck API base URL", apiBaseURLSource+" "+err.Error()+".")
 		return
 	}
 
@@ -190,11 +210,11 @@ func int64Value(value types.Int64, fallback int64) int64 {
 type apiBaseURLValidator struct{}
 
 func (apiBaseURLValidator) Description(context.Context) string {
-	return "must be an absolute HTTP or HTTPS URL with a host"
+	return "must be an absolute HTTPS URL with a host, or an HTTP URL for a loopback host"
 }
 
 func (apiBaseURLValidator) MarkdownDescription(context.Context) string {
-	return "must be an absolute HTTP or HTTPS URL with a host"
+	return "must be an absolute HTTPS URL with a host, or an HTTP URL for a loopback host"
 }
 
 type attachModeValidator struct{}
@@ -252,38 +272,11 @@ func (apiBaseURLValidator) ValidateString(ctx context.Context, req validator.Str
 		)
 		return
 	}
-	parsed, err := url.Parse(value)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+	if err := mdrest.ValidateBaseURL(value); err != nil {
 		resp.Diagnostics.AddAttributeError(
 			req.Path,
 			"Invalid MotherDuck API base URL",
-			"`api_base_url` must be an absolute HTTP or HTTPS URL with a host, such as `https://api.motherduck.com`.",
-		)
-		return
-	}
-	switch strings.ToLower(parsed.Scheme) {
-	case "http", "https":
-	default:
-		resp.Diagnostics.AddAttributeError(
-			req.Path,
-			"Invalid MotherDuck API base URL",
-			"`api_base_url` must use the `http` or `https` scheme.",
-		)
-		return
-	}
-	if parsed.User != nil {
-		resp.Diagnostics.AddAttributeError(
-			req.Path,
-			"Invalid MotherDuck API base URL",
-			"`api_base_url` must not include username or password credentials.",
-		)
-		return
-	}
-	if parsed.RawQuery != "" || parsed.Fragment != "" {
-		resp.Diagnostics.AddAttributeError(
-			req.Path,
-			"Invalid MotherDuck API base URL",
-			"`api_base_url` must not include a query string or fragment.",
+			"`api_base_url` "+err.Error()+".",
 		)
 	}
 }

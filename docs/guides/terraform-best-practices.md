@@ -1,13 +1,15 @@
 ---
-page_title: "Terraform Best Practices"
+page_title: "Terraform best practices"
 subcategory: "Operations"
+description: |-
+  Provider requirements, credentials, state boundaries, and module design for MotherDuck roots.
 ---
 
-# Terraform Best Practices
+# Terraform best practices
 
 This guide describes how to use the MotherDuck provider in production Terraform code. It focuses on module shape, state safety, credential handling, and predictable lifecycle management.
 
-## Provider Requirements
+## Provider requirements
 
 Every root module and reusable child module should declare the provider source and a version constraint. For reusable modules, prefer a minimum provider constraint and let the root module choose the exact provider version.
 
@@ -59,7 +61,7 @@ The provider validates `api_base_url` and `attach_mode` during `terraform valida
 
 Access token resources expose the newly created token once. Treat the resulting Terraform state as sensitive infrastructure data. Store state only in an encrypted backend with tightly scoped access.
 
-## State Boundaries
+## State boundaries
 
 Keep durable desired state in Terraform and keep operational actions out unless their state behavior is explicit.
 
@@ -78,7 +80,7 @@ Poor Terraform fits:
 - short-lived credentials that should not be persisted as durable resources.
 - manual tenant data loads, backfills, and incident operations.
 
-## Module Design
+## Module design
 
 Prefer small modules with a clear ownership boundary:
 
@@ -114,7 +116,7 @@ Keep generated names short enough for surrounding tools and logs. When a tenant 
 
 SQL object names may contain spaces, and table column names may contain spaces or embedded double quotes. The provider quotes those identifiers when issuing MotherDuck SQL. Prefer lowercase snake_case names for reusable modules anyway. They are easier to read in plans, pass through shell commands, and import later. Literal dots are not allowed in SQL resource names because Terraform import IDs use dots to separate database, schema, and object parts.
 
-## Catalog Data Sources
+## Catalog data sources
 
 Account-wide catalog data sources can return many rows in organizations with many databases or incoming shares. Scope them when possible before passing `rows_json` through reusable modules, outputs, or remote state. `motherduck_databases`, `motherduck_owned_shares`, `motherduck_shared_with_me`, and `motherduck_secrets` support a `name` filter for that reason. Use `motherduck_owned_share` when you need one owned share by name with typed attributes. Use broad catalog reads for audits and diagnostics, not as routine module inputs.
 
@@ -122,7 +124,7 @@ Treat `rows_json` as infrastructure metadata. It can include object names, owner
 
 Row-style catalog data sources expose MotherDuck catalog values as returned by SQL. For example, `motherduck_owned_shares.rows_json` returns share options such as `ORGANIZATION`, `DISCOVERABLE`, and `MANUAL`, while the `motherduck_share` resource normalizes option attributes to lowercase Terraform values.
 
-## Sensitive Outputs
+## Sensitive outputs
 
 Only output generated access tokens when the caller needs to pass them to a secret manager. Mark those outputs sensitive.
 
@@ -135,11 +137,11 @@ output "reader_token" {
 
 Do not print sensitive outputs with `terraform output -raw` in CI logs.
 
-## SQL Function Availability
+## SQL function availability
 
 Dive and Flight SQL resources and data sources are enabled by default. Function availability can still vary by account, plan, region, and client version. The provider checks required SQL functions before resource operations and fails with an explicit availability diagnostic when a surface is not exposed.
 
-## Lifecycle Behavior
+## Lifecycle behavior
 
 Treat identity and create-only arguments as replacements. For example, changing a service account username, an access token name, token type, TTL, a database name or DuckLake path, a table column map, or a share definition should create a replacement resource instead of mutating the existing object. Service account usernames must start with an ASCII letter and contain only ASCII letters, digits, and underscores. Omit access-token `token_type` when you want the provider default of `read_write`.
 
@@ -157,7 +159,7 @@ Row-style data source pagination values must be nonnegative. Use `limit = 0` onl
 
 MotherDuck Pulse Duckling instances do not support cooldown seconds. Omit `read_write_cooldown_seconds` and `read_scaling_cooldown_seconds` when either corresponding instance size is `pulse`.
 
-Snapshot resources manage snapshot names, not immediate physical deletion of retained snapshot bytes. Destroying a `motherduck_snapshot` removes the configured name and MotherDuck retention controls when unnamed snapshot data ages out. If a snapshot is unnamed outside Terraform, the next apply restores the configured named resource. MotherDuck may attach the name back to the same underlying `snapshot_id` while the unnamed snapshot remains retained.
+Snapshot resources manage snapshot names, not immediate physical deletion of retained snapshot bytes. Destroying a `motherduck_snapshot` removes the name. MotherDuck retention controls when the unnamed snapshot data ages out. If a snapshot is unnamed outside Terraform, the next apply restores the configured named resource. MotherDuck may attach the name back to the same underlying `snapshot_id` while the unnamed snapshot remains retained.
 
 Creating shares and snapshots depends on catalog metadata being visible immediately after SQL execution. The provider retries transient MotherDuck catalog errors such as timeouts or temporary unavailability and keeps Terraform state values known if a post-create read still fails. If an apply fails because MotherDuck cannot return share or snapshot metadata, rerun `terraform apply` after the transient clears so Terraform can refresh the created object before making further changes.
 
@@ -192,7 +194,7 @@ terraform import motherduck_table.events analytics.core.events
 terraform import motherduck_view.daily analytics.core.daily
 terraform import motherduck_secret.s3_loader tenant_s3_loader
 terraform import motherduck_share.analytics analytics_share
-terraform import motherduck_share_grant.customer analytics_share/svc_reader_tenant
+terraform import motherduck_share_grant.customer analytics_share/user/svc_reader_tenant
 terraform import motherduck_snapshot.monthly analytics.monthly_snapshot
 ```
 
@@ -219,7 +221,7 @@ For table columns, DuckDB type aliases are accepted. The provider compares confi
 The `columns` map does not preserve declaration order. Use explicit column lists
 in `INSERT` statements so values reach the intended columns.
 
-## Validation Workflow
+## Validation workflow
 
 Use ordinary Terraform validation in root modules and reusable modules:
 
@@ -234,12 +236,3 @@ terraform apply tfplan
 For reusable modules, also validate a small fixture that exercises default inputs and at least one realistic tenant or database configuration. Keep module outputs narrow and mark generated tokens, share URLs, and row-style catalog JSON outputs as sensitive.
 
 Provider contributors should use the repository targets described in [Contributing](https://github.com/motherduckdb/terraform-provider-motherduck/blob/main/CONTRIBUTING.md) instead of copying provider-development commands into customer modules.
-
-```bash
-make pre-push-check
-make docs
-make test-integration
-make test-acceptance
-make test-terraform-versions
-MOTHERDUCK_TOKEN=... make test-terraform-versions-lifecycle
-```

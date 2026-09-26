@@ -48,7 +48,7 @@ protected. See [authentication](authentication.md).
 The tenant modules expose sensitive `share_urls`, `reader_setup_tokens` and
 `reader_tokens`. Attach each share with its reader's setup token before querying
 with its read-scaling token. The one-hour setup credential can be recreated by a
-later apply after expiration, so the bootstrap root remains privileged.
+later apply after expiration, so the data-plane root remains privileged.
 
 Create an overlapping generation, transfer it to consumers and verify their
 connections before retiring the previous credential:

@@ -14,6 +14,8 @@ and access controls that those workloads run on.
 or service account has its own compute and owns the databases it creates.
 Shares let other accounts query published data on their own compute.
 
+![Terraform admin and writer roots provision accounts, compute, databases, shares, and grants. A pipeline loads data through the writer's Duckling into its database. A restricted share is granted to a separate reader account, attached once, and queried through that reader's read pool by BI and applications.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/readme-architecture.png)
+
 ## Choose what to build
 
 | Your next step | What you will build |
@@ -76,6 +78,7 @@ deployment workflow.
 | --- | --- |
 | `MOTHERDUCK_TOKEN` | SQL resources, including databases, shares, roles, and catalog reads |
 | `MOTHERDUCK_ADMIN_TOKEN` | REST administration, including service accounts, tokens, and compute settings |
+| `MOTHERDUCK_API_BASE_URL` | Optional REST API base URL override. Provider `api_base_url` takes precedence |
 
 Supply only the credentials required by that Terraform root. A SQL token and an
 organization admin token are separate credentials. Bootstrap identities first,
@@ -100,7 +103,9 @@ See [state and imports](guides/state-and-lifecycle.md),
 ## Compatibility and support
 
 Terraform 1.5 or later is supported. Ephemeral resources require Terraform 1.10
-or later. Release packages are available for Linux and macOS on amd64 and arm64.
+or later. Release packages support Linux with glibc 2.34 or newer (for example RHEL 9,
+Amazon Linux 2023, Debian 12, and Ubuntu 22.04) and macOS 13 or newer, on amd64
+and arm64.
 Windows is not a supported release target.
 
 Service features still depend on your MotherDuck account, permissions, and

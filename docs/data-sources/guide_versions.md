@@ -2,12 +2,12 @@
 page_title: "motherduck_guide_versions Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Lists version history for one MotherDuck Guide without returning content.
+  Lists version history for one MotherDuck Guide without returning content. Rows in the returned page are sorted newest version first.
 ---
 
 # motherduck_guide_versions (Data Source)
 
-Lists version history for one MotherDuck Guide without returning content.
+Lists version history for one MotherDuck Guide without returning content. Rows in the returned page are sorted newest version first.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read

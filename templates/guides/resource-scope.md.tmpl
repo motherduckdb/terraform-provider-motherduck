@@ -1,6 +1,8 @@
 ---
 page_title: "Resource scope and migration"
 subcategory: "Operations"
+description: |-
+  Which MotherDuck objects belong in Terraform and how to move ownership elsewhere.
 ---
 
 # Resource scope and migration
@@ -23,9 +25,9 @@ membership through MotherDuck's supported organization administration workflow.
 | Flight-run resource | Deprecated. Use CLI/SQL or a deployment pipeline to execute runs |
 | Catalog data sources | Read-only integration with objects managed by either workflow. Availability depends on the service |
 
-Experimental resources remain registered for compatibility. This label is not a
-promise that breaking changes will occur without notice. Any migration or removal
-must be documented. It also does not change the service's own availability status.
+Experimental resources can change in a minor release. Breaking changes and
+removals are announced in release notes. The label does not change the
+service's own availability status.
 
 ## CLI and code deployment
 
@@ -73,8 +75,8 @@ service interface. Establish the new deployment owner and retain the remote ID.
 Remove Terraform ownership without destroying the remote object, then remove
 the resource configuration and review a plan before applying.
 
-On Terraform versions supporting `removed` blocks, use `lifecycle { destroy =
-false }`. On older supported versions, use `terraform state rm RESOURCE_ADDRESS`
+On Terraform 1.7 or later, use a `removed` block with `lifecycle { destroy =
+false }`. On Terraform 1.5 and 1.6, use `terraform state rm RESOURCE_ADDRESS`
 with a locked, backed-up state. These operations do not deploy the replacement
 workflow for you. Verify that the next Terraform plan proposes neither
 recreation nor deletion before proceeding.

@@ -1,13 +1,15 @@
 ---
-page_title: "CI and Release"
+page_title: "CI and release"
 subcategory: "Contributing"
+description: |-
+  How pull-request, live, and tag-driven release workflows gate this provider.
 ---
 
-# CI and Release
+# CI and release
 
 This repository uses separate workflows for pull-request checks, live MotherDuck smoke tests, and tag-driven releases.
 
-## Pull Request And Push CI
+## Pull request and push CI
 
 `.github/workflows/ci.yml` runs on pull requests, pushes to `main`, and manual dispatch.
 
@@ -42,9 +44,10 @@ The Terraform compatibility job repeats the offline Terraform checks against sup
 - `1.15.8`
 - `1.15.9`
 - `1.16.1`
+- `1.16.4`
 
-Every matrix job runs `make test-cli-versions` with a checksum-verified CLI
-download. OpenTofu `1.12.6` is included alongside Terraform. Each job checks examples, invalid imports, invalid-configuration diagnostics, and missing-credential diagnostics against one freshly built local provider, without making live MotherDuck calls.
+Every matrix job runs `make test-cli-versions` with a CLI whose checksum file is
+verified against the HashiCorp or OpenTofu release signing key. OpenTofu `1.12.6` is included alongside Terraform. Each job checks examples, invalid imports, invalid-configuration diagnostics, and missing-credential diagnostics against one freshly built local provider, without making live MotherDuck calls.
 
 The live-smoke workflow also runs the provider against OpenTofu. The default OpenTofu version is `1.12.6`. Override it with the `opentofu_versions` manual workflow input or `TOFU_VERSIONS` locally.
 
@@ -71,12 +74,17 @@ Rotate them from the approved secret-manager entry and run the live workflow on
 `main` to verify the replacement. Environment deployment rules must remain
 restricted to `main` and release tags.
 
-Missing `MOTHERDUCK_TOKEN` fails the job instead of producing a successful skip. The exact-`main` job uses Terraform `1.16.1` and runs `make test-live-required` for SQL, import, no-op-plan, destroy, and cleanup behavior. REST administration behavior is gated hermetically in pull requests. The separate admin job receives an admin token only on `main` pushes or an
+Missing `MOTHERDUCK_TOKEN` fails the job instead of producing a successful skip. The exact-`main` job uses Terraform `1.16.4` and runs `make test-live-required` for SQL, import, no-op-plan, destroy, and cleanup behavior. REST administration behavior is gated hermetically in pull requests. The separate admin job receives an admin token only on `main` pushes or an
 explicit manual `run_admin_lifecycle` request on `main`. It creates disposable
 accounts, rotates tokens, repairs revoked role grants, verifies writer/reader
 isolation, and checks cleanup. Pull-request code never receives either token.
 
-The weekly matrix runs read-only checks on every supported Terraform version and OpenTofu `1.12.6`. SQL lifecycle checks run on Terraform `1.5.7`, Terraform `1.16.1`, and OpenTofu `1.12.6`. The blueprint lifecycle runs on Terraform `1.16.1`. Manual inputs can request lifecycle coverage for every selected version.
+The weekly matrix runs read-only checks on every supported Terraform version and OpenTofu `1.12.6`. SQL lifecycle checks run on Terraform `1.5.7`, Terraform `1.16.4`, and OpenTofu `1.12.6`. The blueprint lifecycle runs on Terraform `1.16.4`.
+
+Live Smoke and the release live contracts share the `motherduck-live-account`
+concurrency group, so only one workflow uses the live account at a time.
+GitHub keeps one pending run per group. A release job waiting behind Live Smoke
+can be superseded and must be re-run. Manual inputs can request lifecycle coverage for every selected version.
 
 The SQL lifecycle matrix runs the database drop-with-objects smoke plus the Guide, Dive, Flight, Dive-and-Flight blueprint, and share-grant drift smokes. Each preview-surface smoke exits successfully with a skip when the account does not expose the required `MD_*` functions, so a green matrix is not proof of coverage. Set the matching `MD_TF_ACC_REQUIRE_*` variable to turn a skip into a failure.
 
@@ -114,18 +122,18 @@ Signing is the only release step that needs credentials beyond the live test
 token. The publisher key and its passphrase are held as secrets on the protected
 `motherduck-release` environment. `GPG_FINGERPRINT` pins the expected key.
 
-Initial release targets:
+Release targets:
 
 - `linux_amd64`
 - `linux_arm64`
 - `darwin_amd64`
 - `darwin_arm64`
 
-The provider embeds DuckDB through CGO, so release packages are built on native operating system runners instead of cross-compiled with a generic release tool. `scripts/package-release.sh` is a deliberate small packaging path for those native builds: it builds the provider binary with CGO enabled, names the binary according to Terraform Registry conventions, and zips one platform package per runner.
+The provider embeds DuckDB through CGO, so release packages are built on native operating system runners instead of cross-compiled with a generic release tool. Linux packages are built on Ubuntu 22.04 with a static C++ runtime and must not need newer than glibc 2.34. macOS packages target macOS 13. `test-release-package.sh` fails when a package raises either floor. `scripts/package-release.sh` is a deliberate small packaging path for those native builds: it builds the provider binary with CGO enabled, names the binary according to Terraform Registry conventions, and zips one platform package per runner.
 
 Add a target only after proving its native runner can build `scripts/package-release.sh` and Terraform can initialize the produced provider binary. Windows packages are intentionally not published until there is a tested native Windows CGO build path.
 
-## Local Release Checks
+## Local release checks
 
 Run the release package and signing checks before pushing release workflow changes:
 

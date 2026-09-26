@@ -2,12 +2,12 @@
 page_title: "motherduck_flight_versions Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Lists versions for one MotherDuck Flight.
+  Lists versions for one MotherDuck Flight. Rows in the returned page are sorted newest version first.
 ---
 
 # motherduck_flight_versions (Data Source)
 
-Lists versions for one MotherDuck Flight.
+Lists versions for one MotherDuck Flight. Rows in the returned page are sorted newest version first.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read

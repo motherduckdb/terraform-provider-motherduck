@@ -63,7 +63,7 @@ resource "motherduck_database" "test" {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("motherduck_database.test", "id", "contract_database"),
-					resource.TestCheckResourceAttr("motherduck_database.test", "database_type", "motherduck"),
+					resource.TestCheckResourceAttr("motherduck_database.test", "database_type", "default"),
 				),
 			},
 			{
@@ -475,6 +475,16 @@ func (c *contractSQL) Exec(_ context.Context, query string, args ...any) error {
 			return errors.New("duplicate share create")
 		}
 		c.ownedShare = contractShareRow("RESTRICTED", "HIDDEN", "MANUAL")
+	case `ALTER SHARE "contract_share" SET INCLUDE_PATTERN 'main.*'`:
+		if c.ownedShare == nil {
+			return errors.New("share does not exist")
+		}
+		c.ownedShare[5] = `["main.*"]`
+	case `ALTER SHARE "contract_share" RESET INCLUDE_PATTERN`:
+		if c.ownedShare == nil {
+			return errors.New("share does not exist")
+		}
+		c.ownedShare[5] = nil
 	case `DROP SHARE IF EXISTS "contract_share"`:
 		c.ownedShare = nil
 	case "USE memory":
@@ -517,7 +527,7 @@ func (c *contractSQL) QueryRow(_ context.Context, query string, args ...any) mds
 			"2026-09-01T00:00:00Z",
 			false,
 			nil,
-			"MOTHERDUCK",
+			"DEFAULT",
 		}}
 	case strings.Contains(query, "MD_INFORMATION_SCHEMA.OWNED_SHARES"):
 		if len(args) != 1 || args[0] != "contract_share" {

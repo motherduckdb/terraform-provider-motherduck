@@ -1,17 +1,19 @@
 ---
-page_title: "Testing The Provider"
+page_title: "Test the provider"
 subcategory: "Contributing"
+description: |-
+  Offline, contract, and live test layers and the commands that run them.
 ---
 
-# Testing The Provider
+# Test the provider
 
 This guide summarizes the test layers for users and contributors. The full contributor workflow lives in [Contributing](https://github.com/motherduckdb/terraform-provider-motherduck/blob/main/CONTRIBUTING.md).
 
-See the [fixture guide](../../test-fixtures/README.md) for fixture ownership and
+See the [fixture guide](https://github.com/motherduckdb/terraform-provider-motherduck/blob/main/test-fixtures/README.md) for fixture ownership and
 [testing patterns](testing-patterns.md) for independent SQL checks,
 update/import cycles, and the comparison with other database providers.
 
-## Offline Checks
+## Offline checks
 
 Offline checks do not require MotherDuck credentials:
 
@@ -93,17 +95,19 @@ performance changes. Do not use noisy wall-clock thresholds as ordinary PR gates
 Live checks use credentials from environment variables:
 
 - `MOTHERDUCK_TOKEN`: SQL and DuckDB-backed resources and data sources.
-- `MOTHERDUCK_ADMIN_TOKEN`: optional organization-admin coverage for REST-backed administration resources and data sources. Hosted gates do not have this credential.
+- `MOTHERDUCK_ADMIN_TOKEN`: optional organization-admin coverage for REST-backed administration resources and data sources. Pull-request gates never receive it. Only the hosted `Live admin lifecycle` job on `main` uses an admin credential.
 
 Admin-only live smoke scripts fail when the token authenticates but lacks organization-admin permissions. The Terraform version matrix remains SQL-only in that case, and the permission-diagnostics smoke uses the same response to test the provider's 403 diagnostic.
 
 Run the required SQL lifecycle gate:
 
 ```bash
+MOTHERDUCK_TOKEN=... make test-integration
+MOTHERDUCK_TOKEN=... make test-acceptance
 MOTHERDUCK_TOKEN=... make test-live-required
 ```
 
-All three targets require `MOTHERDUCK_TOKEN` and fail when it is missing. `test-integration` runs the Go SQL-client integration tests, `test-acceptance` runs Terraform provider lifecycles, and `test-live-required` runs both followed by a cleanup audit. REST administration behavior is required in the hermetic protocol suite. Admin-only Go acceptance tests additionally require the `admin_acceptance` build tag and remain optional because the hosted environment has no organization-admin token.
+All three targets require `MOTHERDUCK_TOKEN` and fail when it is missing. `test-integration` runs the Go SQL-client integration tests, `test-acceptance` runs Terraform provider lifecycles, and `test-live-required` runs both followed by a cleanup audit. REST administration behavior is required in the hermetic protocol suite. Admin-only Go acceptance tests additionally require the `admin_acceptance` build tag. They are optional locally and run in hosted CI only in the `Live admin lifecycle` job on `main`.
 
 Run the broad stable SQL smoke before release candidates or larger SQL lifecycle changes:
 
@@ -196,13 +200,13 @@ Private per-apply JSON reports contain resource identities and planned actions,
 not credential values. They are saved under `test-results/lifecycle-cycles-*`.
 Unavailable catalog capabilities still produce a nonzero aggregate result.
 
-## Terraform Version Matrix
+## Terraform version matrix
 
 Run the offline matrix without credentials before changing CLI setup or fixtures:
 
 ```bash
 make test-cli-versions
-TF_VERSIONS="1.5.7 1.16.1" TOFU_VERSIONS="1.12.6" make test-cli-versions
+TF_VERSIONS="1.5.7 1.16.4" TOFU_VERSIONS="1.12.6" make test-cli-versions
 ```
 
 It checksum-verifies CLI downloads and runs the same `test-cli` suites on each
@@ -215,10 +219,10 @@ The live compatibility matrix additionally reads MotherDuck catalogs:
 MOTHERDUCK_TOKEN=... make test-terraform-versions
 ```
 
-The default matrix runs Terraform `1.5.7`, `1.8.5`, `1.12.2`, `1.15.8`, `1.15.9`, and `1.16.1`, plus OpenTofu `1.12.6`. Override either matrix locally with spaces or commas:
+The default matrix runs Terraform `1.5.7`, `1.8.5`, `1.12.2`, `1.15.8`, `1.15.9`, `1.16.1`, and `1.16.4`, plus OpenTofu `1.12.6`. Override either matrix locally with spaces or commas:
 
 ```bash
-TF_VERSIONS="1.8.5 1.16.1" MOTHERDUCK_TOKEN=... make test-terraform-versions
+TF_VERSIONS="1.8.5 1.16.4" MOTHERDUCK_TOKEN=... make test-terraform-versions
 TOFU_VERSIONS="1.12.6" MOTHERDUCK_TOKEN=... make test-terraform-versions
 ```
 
@@ -246,7 +250,7 @@ The SQL lifecycle matrix runs the database drop-with-objects smoke and the Guide
 
 Both lifecycle matrices create durable MotherDuck objects while they run and clean them up on exit.
 
-## Output And Cleanup
+## Output and cleanup
 
 The CLI suite prints one result per group and saves detailed logs under
 `test-results/cli-<run-id>/`. Failures print the failed group's log. Live smoke
@@ -262,14 +266,14 @@ fixture retains state for diagnosis. It is not evidence that cleanup succeeded. 
 
 After interrupted live runs, audit common `tf_` leftovers:
 
+```bash
+MOTHERDUCK_TOKEN=... make test-live-cleanup-audit
+```
+
 Each catalog read uses a fresh connection. Ordinary reads retain the two-minute
 timeout, while the slower snapshot catalog has a five-minute budget. Reusing one
 connection across all four reads caused repeated CI timeouts. Missing results,
 extra results, and query failures fail the audit and identify the affected check.
-
-```bash
-MOTHERDUCK_TOKEN=... make test-live-cleanup-audit
-```
 
 To remove those common leftovers after an interrupted run:
 

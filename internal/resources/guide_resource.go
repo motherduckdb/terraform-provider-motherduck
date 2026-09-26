@@ -11,9 +11,11 @@ import (
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
 
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/guideref"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlfunc"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -225,6 +227,7 @@ func (r *guideResource) ValidateConfig(ctx context.Context, req resource.Validat
 }
 
 func (r *guideResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -267,7 +270,9 @@ func (r *guideResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	query := "SELECT id::VARCHAR FROM MD_CREATE_GUIDE" + sqlbuild.NamedArgs(args)
 	var id string
-	if err := retry.SQL(ctx, func() error { return client.QueryRow(ctx, query).Scan(&id) }); err != nil {
+	// MD_CREATE_GUIDE is not idempotent. A retried create after a timeout that
+	// committed remotely would leave an untracked duplicate Guide.
+	if err := client.QueryRow(ctx, query).Scan(&id); err != nil {
 		resp.Diagnostics.AddError("Unable to create MotherDuck Guide", sensitiveWriteDiagnostic("Guide", err, guideSensitiveValues(ctx, plan.References)))
 		return
 	}
@@ -279,27 +284,35 @@ func (r *guideResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if roleAccess && !r.setGuideAccess(ctx, client, plan.ID, plan.Access, plan.RoleNames, &resp.Diagnostics) {
 		return
 	}
-	if !r.readGuide(ctx, &plan, &resp.Diagnostics) && !resp.Diagnostics.HasError() {
-		resp.Diagnostics.AddError("Unable to read MotherDuck Guide", "Guide was created but could not be read through MD_GET_GUIDE.")
+	if !r.readGuide(ctx, &plan, &resp.Diagnostics) {
+		// Return before saving the plan so unknown computed values never reach
+		// state. Create keeps the saved ID and Update keeps the prior state.
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Unable to read MotherDuck Guide", "Guide was created but could not be read through MD_GET_GUIDE.")
+		}
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *guideResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	var state guideModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if !r.readGuide(ctx, &state, &resp.Diagnostics) && !resp.Diagnostics.HasError() {
-		resp.State.RemoveResource(ctx)
+	if !r.readGuide(ctx, &state, &resp.Diagnostics) {
+		if !resp.Diagnostics.HasError() {
+			resp.State.RemoveResource(ctx)
+		}
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 func (r *guideResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -368,14 +381,19 @@ func (r *guideResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	if !r.readGuide(ctx, &plan, &resp.Diagnostics) && !resp.Diagnostics.HasError() {
-		resp.Diagnostics.AddError("Unable to read MotherDuck Guide", "Guide was updated but could not be read through MD_GET_GUIDE.")
+	if !r.readGuide(ctx, &plan, &resp.Diagnostics) {
+		// Return before saving the plan so unknown computed values never reach
+		// state. Create keeps the saved ID and Update keeps the prior state.
+		if !resp.Diagnostics.HasError() {
+			resp.Diagnostics.AddError("Unable to read MotherDuck Guide", "Guide was updated but could not be read through MD_GET_GUIDE.")
+		}
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *guideResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -436,9 +454,9 @@ func (r *guideResource) readGuide(ctx context.Context, model *guideModel, diags 
 		diags.AddError("Unable to read MotherDuck Guide", err.Error())
 		return false
 	}
-	model.Topic = nullString(topic)
+	model.Topic = clearableStringFromLive(model.Topic, topic)
 	model.Title = nullString(title)
-	model.Description = nullString(description)
+	model.Description = clearableStringFromLive(model.Description, description)
 	model.Content = nullString(content)
 	model.ChangeComment = nullString(changeComment)
 	model.ExternalID = nullString(externalID)
@@ -693,18 +711,7 @@ func guideReferencesArg(ctx context.Context, value types.List, diags *diag.Diagn
 		if !validateGuideReference(reference, i, diags) {
 			continue
 		}
-		fields := []string{
-			"'type': " + guideReferenceString(reference.Type, "VARCHAR"),
-			"'url': " + guideReferenceString(reference.URL, "VARCHAR"),
-			"'schema': " + guideReferenceString(reference.Schema, "VARCHAR"),
-			"'table': " + guideReferenceString(reference.Table, "VARCHAR"),
-			"'column': " + guideReferenceString(reference.Column, "VARCHAR"),
-			"'view': " + guideReferenceString(reference.View, "VARCHAR"),
-			"'macro': " + guideReferenceString(reference.Macro, "VARCHAR"),
-			"'uuid': " + guideReferenceString(reference.UUID, "UUID"),
-			"'description': " + guideReferenceString(reference.Description, "VARCHAR"),
-		}
-		parts = append(parts, "{"+strings.Join(fields, ", ")+"}")
+		parts = append(parts, guideref.StructLiteral(reference.ref(), reference.Description))
 	}
 	if diags.HasError() {
 		return "", false
@@ -712,53 +719,34 @@ func guideReferencesArg(ctx context.Context, value types.List, diags *diag.Diagn
 	return "[" + strings.Join(parts, ", ") + "]", true
 }
 
-func guideReferenceString(value types.String, sqlType string) string {
-	if value.IsNull() || value.IsUnknown() {
-		return "NULL::" + sqlType
+func (m guideReferenceModel) ref() guideref.Reference {
+	return guideref.Reference{
+		Type: m.Type, URL: m.URL, Schema: m.Schema, Table: m.Table,
+		Column: m.Column, View: m.View, Macro: m.Macro, UUID: m.UUID,
 	}
-	literal := sqlbuild.StringLiteral(value.ValueString())
-	if sqlType == "UUID" {
-		return literal + "::UUID"
-	}
-	return literal
 }
 
 func validateGuideReference(reference guideReferenceModel, index int, diags *diag.Diagnostics) bool {
 	refType := reference.Type.ValueString()
 	prefix := fmt.Sprintf("Guide reference %d", index)
-	if refType == "catalog" {
-		if reference.URL.IsNull() || !strings.HasPrefix(reference.URL.ValueString(), "md:") {
-			diags.AddError("Invalid MotherDuck Guide reference", prefix+" is a catalog reference and requires a `url` beginning with `md:`.")
-			return false
-		}
-		narrowings := 0
-		for _, value := range []types.String{reference.Table, reference.View, reference.Macro} {
-			if !value.IsNull() && value.ValueString() != "" {
-				narrowings++
-			}
-		}
-		if narrowings > 1 {
-			diags.AddError("Invalid MotherDuck Guide reference", prefix+" may set at most one of `table`, `view`, or `macro`.")
-			return false
-		}
-		if !reference.Column.IsNull() && reference.Table.IsNull() {
-			diags.AddError("Invalid MotherDuck Guide reference", prefix+" sets `column` without `table`.")
-			return false
-		}
-		if narrowings > 0 && reference.Schema.IsNull() {
-			diags.AddError("Invalid MotherDuck Guide reference", prefix+" requires `schema` when narrowing to a table, view, or macro.")
-			return false
-		}
+	var detail string
+	switch guideref.Validate(reference.ref()) {
+	case guideref.Valid:
 		return true
+	case guideref.MissingURL:
+		detail = prefix + " is a catalog reference and requires a `url` beginning with `md:`."
+	case guideref.MultipleNarrowings:
+		detail = prefix + " may set at most one of `table`, `view`, or `macro`."
+	case guideref.ColumnWithoutTable:
+		detail = prefix + " sets `column` without `table`."
+	case guideref.MissingSchema:
+		detail = prefix + " requires `schema` when narrowing to a table, view, or macro."
+	case guideref.MissingUUID:
+		detail = prefix + " is a " + refType + " reference and requires `uuid`."
+	default:
+		detail = prefix + " has unsupported type " + refType + "."
 	}
-	if refType == "dive" || refType == "flight" || refType == "guide" {
-		if reference.UUID.IsNull() {
-			diags.AddError("Invalid MotherDuck Guide reference", prefix+" is a "+refType+" reference and requires `uuid`.")
-			return false
-		}
-		return true
-	}
-	diags.AddError("Invalid MotherDuck Guide reference", prefix+" has unsupported type "+refType+".")
+	diags.AddError("Invalid MotherDuck Guide reference", detail)
 	return false
 }
 

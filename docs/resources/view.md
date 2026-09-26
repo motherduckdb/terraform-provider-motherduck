@@ -8,7 +8,8 @@ description: |-
 # motherduck_view (Resource)
 
 Manage a SQL view over existing data. Changes to the query update the view in
-place. Moving or renaming it requires replacement.
+place. Moving or renaming it requires replacement. Creation fails when a view
+with the same name already exists. Import it instead of overwriting it.
 
 ## Writing the query
 

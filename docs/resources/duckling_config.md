@@ -20,6 +20,12 @@ Instance-size and pool changes update the configuration in place. The username
 is replacement-only. Pulse does not accept cooldown settings, so omit the
 corresponding cooldown when selecting Pulse.
 
+Cooldowns are optional. When a cooldown is unset, Terraform records the live
+value and keeps it while that instance size stays the same. When the instance
+size changes, MotherDuck applies its default for the new size. Removing a
+configured cooldown keeps the current value, so set the value you want instead
+of deleting the line.
+
 Measure representative queries and concurrency before choosing production
 sizes. The provider validates accepted values, while the service enforces
 availability and account-specific limits.
@@ -63,8 +69,8 @@ resource "motherduck_service_account" "app" {
 
 ### Optional
 
-- `read_scaling_cooldown_seconds` (Number) Optional read-scaling cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds.
-- `read_write_cooldown_seconds` (Number) Optional read-write cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds.
+- `read_scaling_cooldown_seconds` (Number) Optional read-scaling cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds. When unset, Terraform does not manage the cooldown: it records the live value, keeps it while the instance size stays the same, and lets MotherDuck apply its default when the instance size changes. Removing a configured value keeps the current cooldown. Set a value to change it.
+- `read_write_cooldown_seconds` (Number) Optional read-write cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds. When unset, Terraform does not manage the cooldown: it records the live value, keeps it while the instance size stays the same, and lets MotherDuck apply its default when the instance size changes. Removing a configured value keeps the current cooldown. Set a value to change it.
 
 ### Read-Only
 

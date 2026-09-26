@@ -4,6 +4,7 @@ import (
 	"context"
 	stdsql "database/sql"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -97,7 +98,7 @@ func validateViewQuery(query string, diags *diag.Diagnostics) {
 }
 
 func (r *viewResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	r.createOrReplaceView(ctx, req.Plan, &resp.State, resp.Private, &resp.Diagnostics)
+	r.writeView(ctx, req.Plan, &resp.State, resp.Private, false, &resp.Diagnostics)
 }
 
 func (r *viewResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -138,7 +139,7 @@ func (r *viewResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 }
 
 func (r *viewResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	r.createOrReplaceView(ctx, req.Plan, &resp.State, resp.Private, &resp.Diagnostics)
+	r.writeView(ctx, req.Plan, &resp.State, resp.Private, true, &resp.Diagnostics)
 }
 
 func (r *viewResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -149,11 +150,10 @@ func (r *viewResource) ImportState(ctx context.Context, req resource.ImportState
 	importThreePartID(ctx, req.ID, resp)
 }
 
-func (r *viewResource) createOrReplaceView(ctx context.Context, getter interface {
-	Get(context.Context, any) diag.Diagnostics
-}, setter interface {
-	Set(context.Context, any) diag.Diagnostics
-}, private privateState, diags *diag.Diagnostics) {
+// writeView creates the view, or replaces it when replace is true. Create uses
+// plain CREATE VIEW so an existing view that Terraform does not manage is
+// reported as a conflict instead of being silently overwritten.
+func (r *viewResource) writeView(ctx context.Context, getter stateGetter, setter stateSetter, private privateState, replace bool, diags *diag.Diagnostics) {
 	client := r.sql(ctx, diags)
 	if client == nil {
 		return
@@ -172,7 +172,11 @@ func (r *viewResource) createOrReplaceView(ctx context.Context, getter interface
 		diags.AddError("Unable to attach MotherDuck database", err.Error())
 		return
 	}
-	query := "CREATE OR REPLACE VIEW " + sqlbuild.QuoteQualifiedIdentifier(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString()) + " AS " + plan.Query.ValueString()
+	createKeyword := "CREATE VIEW "
+	if replace {
+		createKeyword = "CREATE OR REPLACE VIEW "
+	}
+	query := createKeyword + sqlbuild.QuoteQualifiedIdentifier(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString()) + " AS " + plan.Query.ValueString()
 	if err := client.Exec(ctx, query); err != nil {
 		diags.AddError("Unable to create MotherDuck view", err.Error())
 		return
@@ -204,7 +208,7 @@ func readViewServerDefinition(ctx context.Context, client providerctx.SQLClient,
 	if err != nil && isNotFoundFor(err, database, schemaName, name) {
 		return "", false
 	}
-	if err == stdsql.ErrNoRows {
+	if errors.Is(err, stdsql.ErrNoRows) {
 		return "", false
 	}
 	if err != nil {
@@ -246,15 +250,63 @@ func loadViewServerDefinition(ctx context.Context, private privateState, diags *
 	return definition, true
 }
 
+// viewQueryFromDefinition extracts the query body from a DuckDB view
+// definition such as `CREATE VIEW s."v" AS SELECT 1;`. The AS keyword that
+// introduces the query is the first one outside quoted identifiers, string
+// literals, and parentheses, so view names such as "my as view" and column
+// alias lists such as `v (x) AS SELECT 1` are skipped. A column alias list is
+// not part of the managed query and is dropped.
 func viewQueryFromDefinition(definition string) string {
 	body := strings.TrimSpace(definition)
-	upperBody := strings.ToUpper(body)
-	if strings.HasPrefix(upperBody, "CREATE ") {
-		idx := strings.Index(upperBody, " AS ")
-		if idx >= 0 {
-			body = strings.TrimSpace(body[idx+len(" AS "):])
+	if strings.HasPrefix(strings.ToUpper(body), "CREATE ") {
+		if idx := viewDefinitionQueryStart(body); idx >= 0 {
+			body = strings.TrimSpace(body[idx:])
 		}
 	}
 	body = strings.TrimSpace(strings.TrimSuffix(body, ";"))
 	return body
+}
+
+// viewDefinitionQueryStart returns the offset just after the top-level AS
+// keyword in a CREATE VIEW definition, or -1 when there is none.
+func viewDefinitionQueryStart(definition string) int {
+	var quote byte
+	depth := 0
+	for i := 0; i < len(definition); i++ {
+		ch := definition[i]
+		if quote != 0 {
+			if ch == quote {
+				if i+1 < len(definition) && definition[i+1] == quote {
+					i++
+					continue
+				}
+				quote = 0
+			}
+			continue
+		}
+		switch ch {
+		case '"', '\'':
+			quote = ch
+			continue
+		case '(':
+			depth++
+			continue
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+		if depth != 0 || i == 0 || i+3 > len(definition) {
+			continue
+		}
+		if isSQLSpace(definition[i-1]) && strings.EqualFold(definition[i:i+2], "AS") && isSQLSpace(definition[i+2]) {
+			return i + 3
+		}
+	}
+	return -1
+}
+
+func isSQLSpace(ch byte) bool {
+	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
 }

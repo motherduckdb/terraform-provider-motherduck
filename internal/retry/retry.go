@@ -27,7 +27,7 @@ func sql(ctx context.Context, delay time.Duration, operation func() error) error
 			return err
 		}
 		err = operation()
-		if err == nil || err == stdsql.ErrNoRows || isCatalogNotFound(err) || !isTransientMotherDuckError(err) || attempt == sqlMaxAttempts-1 {
+		if err == nil || errors.Is(err, stdsql.ErrNoRows) || isCatalogNotFound(err) || !isTransientMotherDuckError(err) || attempt == sqlMaxAttempts-1 {
 			return err
 		}
 		if err := Sleep(ctx, delay); err != nil {

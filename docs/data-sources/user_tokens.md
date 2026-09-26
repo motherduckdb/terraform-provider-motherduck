@@ -2,12 +2,12 @@
 page_title: "motherduck_user_tokens Data Source - motherduck"
 subcategory: "Identity and compute"
 description: |-
-  Lists access token metadata for a MotherDuck user or service account.
+  Lists access token metadata for a MotherDuck user or service account, sorted by token ID.
 ---
 
 # motherduck_user_tokens (Data Source)
 
-Lists access token metadata for a MotherDuck user or service account.
+Lists access token metadata for a MotherDuck user or service account, sorted by token ID.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -31,27 +32,39 @@ type Client struct {
 	httpClient *http.Client
 }
 
-type Option func(*Client)
+// options collects Option values before the client is built, so the result
+// does not depend on the order options are passed in.
+type options struct {
+	httpClient *http.Client
+	timeout    time.Duration
+	userAgent  string
+}
 
+type Option func(*options)
+
+// WithHTTPClient uses a copy of httpClient for requests. The caller's client
+// is never modified.
 func WithHTTPClient(httpClient *http.Client) Option {
-	return func(c *Client) {
+	return func(o *options) {
 		if httpClient != nil {
-			c.httpClient = httpClient
+			o.httpClient = httpClient
 		}
 	}
 }
 
+// WithTimeout sets the per-request timeout. It applies whether it is passed
+// before or after WithHTTPClient.
 func WithTimeout(timeout time.Duration) Option {
-	return func(c *Client) {
+	return func(o *options) {
 		if timeout > 0 {
-			c.httpClient.Timeout = timeout
+			o.timeout = timeout
 		}
 	}
 }
 
 func WithUserAgent(userAgent string) Option {
-	return func(c *Client) {
-		c.userAgent = strings.TrimSpace(userAgent)
+	return func(o *options) {
+		o.userAgent = strings.TrimSpace(userAgent)
 	}
 }
 
@@ -59,32 +72,34 @@ func New(baseURL, token string, opts ...Option) (*Client, error) {
 	if strings.TrimSpace(baseURL) == "" {
 		baseURL = DefaultBaseURL
 	}
+	if err := ValidateBaseURL(baseURL); err != nil {
+		return nil, fmt.Errorf("base URL %s", err)
+	}
 	parsed, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, err
 	}
-	if parsed.Scheme == "" || parsed.Host == "" {
-		return nil, fmt.Errorf("base URL must be an absolute HTTP or HTTPS URL with a host")
+	var o options
+	for _, opt := range opts {
+		opt(&o)
 	}
-	switch strings.ToLower(parsed.Scheme) {
-	case "http", "https":
-	default:
-		return nil, fmt.Errorf("base URL must use http or https, got %q", parsed.Scheme)
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	if o.httpClient != nil {
+		copied := *o.httpClient
+		httpClient = &copied
 	}
-	client := &Client{
+	if o.timeout > 0 {
+		httpClient.Timeout = o.timeout
+	}
+	return &Client{
 		baseURL: strings.TrimRight(parsed.String(), "/"),
 		// Trim once here: a token sourced from a file often carries a trailing
 		// newline, which would otherwise surface as an opaque
 		// "invalid header field value" error on every request.
-		token: strings.TrimSpace(token),
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-	}
-	for _, opt := range opts {
-		opt(client)
-	}
-	return client, nil
+		token:      strings.TrimSpace(token),
+		userAgent:  o.userAgent,
+		httpClient: httpClient,
+	}, nil
 }
 
 func (c *Client) Available() bool {
@@ -181,6 +196,9 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	if !c.Available() {
 		return ErrMissingAdminToken
 	}
+	if err := validateRequestPath(path); err != nil {
+		return err
+	}
 
 	var reader io.Reader
 	if body != nil {
@@ -251,13 +269,13 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	return nil
 }
 
+const maxAttempts = 4
+
 func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*http.Response, error) {
-	attempts := 1
-	if retryableMethod(req.Method) {
-		attempts = 4
-	}
+	idempotent := retryableMethod(req.Method)
 	var lastErr error
-	for attempt := 0; attempt < attempts; attempt++ {
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		final := attempt == maxAttempts-1
 		retryReq := req.Clone(ctx)
 		if req.GetBody != nil {
 			var err error
@@ -268,21 +286,21 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*http.Resp
 		}
 		res, err := c.httpClient.Do(retryReq)
 		if err != nil {
+			// A transport error can arrive after the server processed the
+			// request, so only idempotent methods are retried.
 			lastErr = err
-			if !retryableMethod(req.Method) {
+			if !idempotent || final {
 				return nil, err
 			}
-			if attempt < attempts-1 {
-				if sleepErr := retry.Sleep(ctx, retryDelay(attempt+1)); sleepErr != nil {
-					return nil, sleepErr
-				}
+			if sleepErr := retry.Sleep(ctx, jitter(retryDelay(attempt+1))); sleepErr != nil {
+				return nil, sleepErr
 			}
 			continue
 		}
-		if !retryableStatus(res.StatusCode) || attempt == attempts-1 {
+		if final || !retryableStatus(req.Method, res.StatusCode) {
 			return res, nil
 		}
-		delay := retryDelay(attempt + 1)
+		delay := jitter(retryDelay(attempt + 1))
 		if retryAfter := retryAfterDelay(res.Header.Get("Retry-After")); retryAfter > 0 {
 			delay = retryAfter
 		}
@@ -304,8 +322,17 @@ func retryableMethod(method string) bool {
 	}
 }
 
-func retryableStatus(statusCode int) bool {
-	return statusCode == http.StatusTooManyRequests || statusCode == http.StatusBadGateway || statusCode == http.StatusServiceUnavailable || statusCode == http.StatusGatewayTimeout
+// retryableStatus reports whether a response status should be retried for a
+// method. POST is never retried because MotherDuck does not document that a
+// 429 or gateway error means the create was not processed, and a replayed
+// create could mint a duplicate token or service account.
+func retryableStatus(method string, statusCode int) bool {
+	switch statusCode {
+	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return retryableMethod(method)
+	default:
+		return false
+	}
 }
 
 func retryDelay(attempt int) time.Duration {
@@ -313,6 +340,16 @@ func retryDelay(attempt int) time.Duration {
 		attempt = 1
 	}
 	return time.Duration(250*(1<<(attempt-1))) * time.Millisecond
+}
+
+// jitter spreads retries across the upper half of the backoff window so
+// concurrent Terraform operations do not retry in lockstep.
+func jitter(delay time.Duration) time.Duration {
+	if delay <= 1 {
+		return delay
+	}
+	half := delay / 2
+	return half + rand.N(delay-half+1) // #nosec G404 -- retry jitter needs no cryptographic randomness.
 }
 
 func retryAfterDelay(value string) time.Duration {

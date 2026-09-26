@@ -18,7 +18,7 @@ fi
 OS="$(go env GOOS)"
 ARCH="$(go env GOARCH)"
 
-TF_VERSIONS="${TF_VERSIONS-1.5.7 1.8.5 1.12.2 1.15.8 1.15.9 1.16.1}"
+TF_VERSIONS="${TF_VERSIONS-1.5.7 1.8.5 1.12.2 1.15.8 1.15.9 1.16.1 1.16.4}"
 TOFU_VERSIONS="${TOFU_VERSIONS-1.12.6}"
 TF_VERSION_LIST=()
 while IFS= read -r version; do
@@ -138,7 +138,7 @@ run_cli_smoke() {
 run_terraform_version() {
   local version="$1"
   local terraform_bin="${ROOT_DIR}/tools/terraform/${version}/terraform"
-  local terraform_verified_marker="${terraform_bin}.checksum-verified"
+  local terraform_verified_marker="${terraform_bin}.release-verified"
   if [[ ! -x "${terraform_bin}" || ! -f "${terraform_verified_marker}" ]]; then
     local archive="terraform_${version}_${OS}_${ARCH}.zip"
     local archive_path="${ROOT_DIR}/tools/terraform/${version}/${archive}"
@@ -146,7 +146,10 @@ run_terraform_version() {
     download_verified_archive \
       "${release_url}/${archive}" \
       "${release_url}/terraform_${version}_SHA256SUMS" \
-      "${archive_path}"
+      "${archive_path}" \
+      "${release_url}/terraform_${version}_SHA256SUMS.sig" \
+      "${ROOT_DIR}/scripts/keys/hashicorp-security.asc" \
+      "${HASHICORP_RELEASE_KEY_FINGERPRINT}"
     unzip -q -o "${archive_path}" -d "$(dirname "${terraform_bin}")"
     if [[ ! -x "${terraform_bin}" ]]; then
       echo "Terraform ${version} archive did not install an executable at ${terraform_bin}" >&2
@@ -160,7 +163,7 @@ run_terraform_version() {
 run_opentofu_version() {
   local version="$1"
   local tofu_bin="${ROOT_DIR}/tools/opentofu/${version}/tofu"
-  local tofu_verified_marker="${tofu_bin}.checksum-verified"
+  local tofu_verified_marker="${tofu_bin}.release-verified"
   if [[ ! -x "${tofu_bin}" || ! -f "${tofu_verified_marker}" ]]; then
     local archive="tofu_${version}_${OS}_${ARCH}.zip"
     local archive_path="${ROOT_DIR}/tools/opentofu/${version}/${archive}"
@@ -168,7 +171,10 @@ run_opentofu_version() {
     download_verified_archive \
       "${release_url}/${archive}" \
       "${release_url}/tofu_${version}_SHA256SUMS" \
-      "${archive_path}"
+      "${archive_path}" \
+      "${release_url}/tofu_${version}_SHA256SUMS.gpgsig" \
+      "${ROOT_DIR}/scripts/keys/opentofu.asc" \
+      "${OPENTOFU_RELEASE_KEY_FINGERPRINT}"
     unzip -q -o "${archive_path}" -d "$(dirname "${tofu_bin}")"
     if [[ ! -x "${tofu_bin}" ]]; then
       echo "OpenTofu ${version} archive did not install an executable at ${tofu_bin}" >&2

@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	stdsql "database/sql"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -147,21 +148,25 @@ func (r *secretResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	query := "DROP SECRET " + sqlbuild.QuoteIdentifier(state.Name.ValueString()) + " FROM motherduck"
-	if err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) }); err != nil && !isNotFound(err) {
+	query := "DROP SECRET IF EXISTS " + sqlbuild.QuoteIdentifier(state.Name.ValueString()) + " FROM motherduck"
+	if err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) }); err != nil && !isSecretAlreadyDropped(err) {
 		resp.Diagnostics.AddError("Unable to drop MotherDuck secret", err.Error())
 	}
+}
+
+// isSecretAlreadyDropped treats a missing secret as deleted. DuckDB reports a
+// missing secret as invalid input ("Failed to remove non-existent secret"),
+// not as a catalog error, and some storage backends report it even with IF
+// EXISTS.
+func isSecretAlreadyDropped(err error) bool {
+	return isNotFound(err) || strings.Contains(strings.ToLower(err.Error()), "non-existent")
 }
 
 func (r *secretResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	importSingleSQLIdentifier(ctx, req.ID, path.Root("name"), resp)
 }
 
-func (r *secretResource) createSecret(ctx context.Context, getter interface {
-	Get(context.Context, any) diag.Diagnostics
-}, setter interface {
-	Set(context.Context, any) diag.Diagnostics
-}, replace bool, diags *diag.Diagnostics) {
+func (r *secretResource) createSecret(ctx context.Context, getter stateGetter, setter stateSetter, replace bool, diags *diag.Diagnostics) {
 	client := r.sql(ctx, diags)
 	if client == nil {
 		return
@@ -213,13 +218,29 @@ func (r *secretResource) createSecret(ctx context.Context, getter interface {
 		diags.AddError("Unable to create MotherDuck secret", secretWriteDiagnostic(err))
 		return
 	}
-	plan.ID = types.StringValue(plan.Name.ValueString())
+	// Save the created identity before the catalog readback so a readback
+	// failure leaves a tainted resource that Terraform can destroy instead of
+	// an untracked remote secret.
+	prepareSecretCreateState(&plan)
+	diags.Append(setter.Set(ctx, &plan)...)
+	if diags.HasError() {
+		return
+	}
 	found := r.readSecret(ctx, &plan, diags)
 	if !found && !diags.HasError() {
 		diags.AddError("Unable to read MotherDuck secret", "Secret was created but was not visible in duckdb_secrets().")
 		return
 	}
 	diags.Append(setter.Set(ctx, &plan)...)
+}
+
+// prepareSecretCreateState replaces unknown computed values with nulls so the
+// state saved before readback is fully known.
+func prepareSecretCreateState(model *secretModel) {
+	model.ID = types.StringValue(model.Name.ValueString())
+	model.SecretProvider = knownString(model.SecretProvider)
+	model.Storage = knownString(model.Storage)
+	model.Scope = knownString(model.Scope)
 }
 
 func (r *secretResource) readSecret(ctx context.Context, model *secretModel, diags *diag.Diagnostics) bool {
@@ -229,9 +250,12 @@ func (r *secretResource) readSecret(ctx context.Context, model *secretModel, dia
 	}
 	var secretType, provider, storage, scope stdsql.NullString
 	err := retry.SQL(ctx, func() error {
-		return client.QueryRow(ctx, `SELECT type, provider, storage, scope::VARCHAR FROM duckdb_secrets() WHERE name = ? AND storage = 'motherduck'`, model.Name.ValueString()).Scan(&secretType, &provider, &storage, &scope)
+		// DuckDB stores secret names in lowercase, even when the CREATE SECRET
+		// name is quoted, so match case-insensitively and keep the configured
+		// spelling in state.
+		return client.QueryRow(ctx, `SELECT type, provider, storage, scope::VARCHAR FROM duckdb_secrets() WHERE lower(name) = lower(?) AND storage = 'motherduck'`, model.Name.ValueString()).Scan(&secretType, &provider, &storage, &scope)
 	})
-	if err == stdsql.ErrNoRows {
+	if errors.Is(err, stdsql.ErrNoRows) {
 		return false
 	}
 	if err != nil {

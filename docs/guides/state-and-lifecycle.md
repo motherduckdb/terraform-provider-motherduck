@@ -1,6 +1,8 @@
 ---
 page_title: "State, imports, and lifecycle"
 subcategory: "Operations"
+description: |-
+  Imports, replacement behavior, drift, and protecting data in Terraform state.
 ---
 
 # State, imports, and lifecycle
@@ -66,7 +68,7 @@ It protects against planned destruction while the resource block remains in
 configuration. It does not prevent manual deletion or protect an object after
 its configuration is removed.
 
-Schema destruction is restrictive by default. Enable `cascade` only when
+Schema destruction is restrictive by default. Set `cascade_on_delete = true` only when
 Terraform is intended to own destruction of all contained objects. Snapshot
 destruction removes the name from the snapshot. It does not promise immediate
 physical deletion of retained historical data.

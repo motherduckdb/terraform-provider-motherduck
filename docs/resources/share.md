@@ -23,9 +23,10 @@ Consumers attach using the share's URL. An already connected consumer can run
 `REFRESH DATABASES` to read the published update. Automatic publication also has
 replication delay. See [updating shares](https://motherduck.com/docs/key-tasks/sharing-data/updating-shares/).
 
-Name, source database, access mode, visibility, and update mode are replacement-only. Include patterns update in place with `ALTER SHARE`.
+Name, source database, access mode, visibility, and update mode are replacement-only. `include_pattern` updates in place with `ALTER SHARE`. It is a preview option that requires filtered shares.
 
-Access, visibility, and update mode are optional and computed. If omitted, Terraform discovers and records live values during refresh and import. Explicit values are enforced. Drift on them plans replacement. Removing an explicit value adopts the live value instead of resetting it.
+Access, visibility, and update mode are optional and computed. If omitted, Terraform discovers and records live values during refresh and import. Explicit values are enforced. Drift on them plans replacement. Removing an explicit value adopts the live value instead of resetting it, and
+omitted options never force replacement when another attribute changes.
 
 The computed `url` is sensitive. Treat share URLs as access-bearing metadata, especially for unrestricted shares. Terraform still stores sensitive values in state, so use an encrypted backend with restricted access and pass URLs through sensitive outputs or a secret manager.
 

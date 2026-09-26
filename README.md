@@ -8,7 +8,7 @@ infrastructure you can review, reproduce, and manage in Terraform.
 [Examples](examples/README.md) ·
 [Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases)
 
-[![Terraform provisions MotherDuck resources. A pipeline writes through the writer account to its database. Shares publish read-only data to a separate reader account and read pool for BI and applications.](docs/assets/readme-architecture.png)](docs/guides/deployment-model.md)
+[![Terraform admin and writer roots provision accounts, compute, databases, shares, and grants. A pipeline loads data through the writer's Duckling into its database. A restricted share is granted to a separate reader account, attached once, and queried through that reader's read pool by BI and applications.](docs/assets/readme-architecture.png)](docs/guides/deployment-model.md)
 
 ## Start with a workload
 
@@ -35,7 +35,7 @@ terraform {
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = "~> 0.2.3"
+      version = "~> 0.2.13"
     }
   }
 }
@@ -99,7 +99,8 @@ Table column changes replace tables. Protect important data before adopting
 these examples. Token and secret values can be stored in state even when marked
 sensitive, so use an encrypted backend with restricted access and locking.
 
-Terraform 1.5+ is supported, with Linux and macOS packages for amd64 and arm64.
+Terraform 1.5+ is supported, with packages for Linux (glibc 2.34 or newer) and
+macOS 13 or newer on amd64 and arm64.
 Ephemeral resources require Terraform 1.10+. See the
 [tested Terraform and OpenTofu matrix](docs/guides/ci-and-release.md).
 

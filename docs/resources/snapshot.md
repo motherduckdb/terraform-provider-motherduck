@@ -16,7 +16,8 @@ Terraform creates the snapshot when it creates the resource. A no-change apply
 does not refresh it to newer data. If the snapshot must follow a load, finish
 and verify that load before creating the snapshot.
 
-Changing the name renames the snapshot. Changing its database requires
+Changing the name renames the snapshot. Refresh tracks the snapshot by its
+`snapshot_id`, so a rename outside Terraform plans an in-place rename back. Changing its database requires
 replacement. Destroy removes the managed name rather than promising immediate
 physical deletion of retained history.
 

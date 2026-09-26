@@ -3,7 +3,9 @@ package resources
 import (
 	"context"
 	stdsql "database/sql"
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,8 +14,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlfunc"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 )
 
@@ -50,7 +54,7 @@ func (r *flightRunResource) Schema(ctx context.Context, req resource.SchemaReque
 			"id": schema.StringAttribute{
 				Computed:            true,
 				PlanModifiers:       stringUseStateForUnknown(),
-				MarkdownDescription: "Stable Terraform ID for this Flight run, derived from the Flight ID and run number.",
+				MarkdownDescription: "MotherDuck run ID for this Flight run.",
 			},
 			"flight_id": schema.StringAttribute{
 				Required:            true,
@@ -105,6 +109,7 @@ func (r *flightRunResource) Schema(ctx context.Context, req resource.SchemaReque
 }
 
 func (r *flightRunResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -260,6 +265,7 @@ func int64ValueOrDefault(value types.Int64, defaultValue int64) int64 {
 }
 
 func (r *flightRunResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return
@@ -272,14 +278,148 @@ func (r *flightRunResource) Read(ctx context.Context, req resource.ReadRequest, 
 	if !r.sqlFunctionAvailable(ctx, client, &resp.Diagnostics, "md_list_flight_runs", "motherduck_flight_run") {
 		return
 	}
-	if found := r.readFlightRunStatus(ctx, &state, &resp.Diagnostics); !found && !resp.Diagnostics.HasError() {
+	found := r.readFlightRunStatus(ctx, &state, &resp.Diagnostics)
+	if !found && !resp.Diagnostics.HasError() {
+		// MD_LIST_FLIGHT_RUNS returns one page of the newest runs by default.
+		// A scheduled Flight can push an older run out of that page, so walk
+		// the listing before treating the run as gone.
+		found = r.findFlightRunInListing(ctx, client, &state, &resp.Diagnostics)
+	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !found {
+		// Removing the run from state makes the next apply start a new
+		// production run. Only do that when the parent Flight is gone too.
+		exists, known := r.flightExists(ctx, client, state.FlightID.ValueString(), &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if !known || exists {
+			resp.Diagnostics.AddWarning(
+				"MotherDuck Flight run not listed",
+				fmt.Sprintf("Flight run %d was not returned by MD_LIST_FLIGHT_RUNS for Flight %s. Terraform kept the last known run state instead of starting a new run.", state.RunNumber.ValueInt64(), state.FlightID.ValueString()),
+			)
+			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+			return
+		}
 		resp.State.RemoveResource(ctx)
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+const (
+	flightRunListPageSize = 50
+	// Twenty pages cover the latest 1,000 runs and bound refresh cost when a
+	// purged run is absent while its Flight still exists.
+	flightRunListMaxPages = 20
+)
+
+type flightRunListRow struct {
+	RunID         string          `json:"run_id"`
+	Status        string          `json:"status"`
+	RunNumber     json.RawMessage `json:"run_number"`
+	FlightVersion json.RawMessage `json:"flight_version"`
+	CreatedAt     string          `json:"created_at"`
+}
+
+// findFlightRunInListing pages through MD_LIST_FLIGHT_RUNS, which lists runs
+// newest first, until it finds the run, passes older run numbers, or reaches
+// the end of the listing.
+func (r *flightRunResource) findFlightRunInListing(ctx context.Context, client interface {
+	QueryRowsJSON(context.Context, string, ...any) (string, error)
+}, model *flightRunModel, diags *diag.Diagnostics) bool {
+	target := model.RunNumber.ValueInt64()
+	previousFirstRunID := ""
+	for page := 0; page < flightRunListMaxPages; page++ {
+		query := fmt.Sprintf(
+			`SELECT run_id::VARCHAR AS run_id, status, run_number, flight_version, created_at::VARCHAR AS created_at FROM MD_LIST_FLIGHT_RUNS(flight_id := %s::UUID, "LIMIT" := %d, "OFFSET" := %d)`,
+			sqlbuild.StringLiteral(model.FlightID.ValueString()),
+			flightRunListPageSize,
+			page*flightRunListPageSize,
+		)
+		var raw string
+		err := retry.SQL(ctx, func() error {
+			var queryErr error
+			raw, queryErr = client.QueryRowsJSON(ctx, query)
+			return queryErr
+		})
+		if isNotFound(err) {
+			return false
+		}
+		if err != nil {
+			diags.AddError("Unable to list MotherDuck Flight runs", err.Error())
+			return false
+		}
+		var rows []flightRunListRow
+		if err := json.Unmarshal([]byte(raw), &rows); err != nil {
+			diags.AddError("Unable to parse MotherDuck Flight runs", err.Error())
+			return false
+		}
+		if len(rows) == 0 || rows[0].RunID == previousFirstRunID {
+			return false
+		}
+		previousFirstRunID = rows[0].RunID
+		olderSeen := false
+		for _, row := range rows {
+			runNumber, ok := jsonInt64(row.RunNumber)
+			if !ok {
+				diags.AddError("Unable to parse MotherDuck Flight runs", "MD_LIST_FLIGHT_RUNS returned a run without an integer run_number.")
+				return false
+			}
+			if runNumber == target {
+				version, _ := jsonInt64(row.FlightVersion)
+				model.ID = types.StringValue(row.RunID)
+				model.Status = types.StringValue(row.Status)
+				model.RunNumber = types.Int64Value(runNumber)
+				model.FlightVersion = types.Int64Value(version)
+				model.CreatedAt = types.StringValue(row.CreatedAt)
+				return true
+			}
+			if runNumber < target {
+				olderSeen = true
+			}
+		}
+		if olderSeen || len(rows) < flightRunListPageSize {
+			return false
+		}
+	}
+	return false
+}
+
+// flightExists reports whether the parent Flight exists. known is false when
+// the session cannot answer, so callers stay on the cautious path.
+func (r *flightRunResource) flightExists(ctx context.Context, client providerctx.SQLClient, flightID string, diags *diag.Diagnostics) (exists bool, known bool) {
+	available, err := sqlFunctionExists(ctx, client, "md_get_flight")
+	if err != nil {
+		diags.AddError("Unable to inspect MotherDuck SQL functions", err.Error())
+		return false, false
+	}
+	if !available {
+		return false, false
+	}
+	var id string
+	query := "SELECT flight_id::VARCHAR FROM MD_GET_FLIGHT(flight_id := " + sqlbuild.StringLiteral(flightID) + "::UUID)"
+	err = retry.SQL(ctx, func() error { return client.QueryRow(ctx, query).Scan(&id) })
+	if err == stdsql.ErrNoRows || isNotFound(err) {
+		return false, true
+	}
+	if err != nil {
+		diags.AddError("Unable to read MotherDuck Flight", err.Error())
+		return false, false
+	}
+	return true, true
+}
+
+func jsonInt64(raw json.RawMessage) (int64, bool) {
+	text := strings.Trim(strings.TrimSpace(string(raw)), `"`)
+	value, err := strconv.ParseInt(text, 10, 64)
+	return value, err == nil
+}
+
 func (r *flightRunResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	var plan, state flightRunModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -295,6 +435,7 @@ func (r *flightRunResource) Update(ctx context.Context, req resource.UpdateReque
 }
 
 func (r *flightRunResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	ctx = sqlfunc.WithCache(ctx)
 	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
 		return

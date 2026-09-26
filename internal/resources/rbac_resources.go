@@ -157,7 +157,9 @@ func (r *roleResource) readRole(ctx context.Context, model *roleModel, diags *di
 	}
 	rows, err := showRows(ctx, client, "SHOW ALL ROLES")
 	if err != nil {
-		if isNotFound(err) {
+		// SHOW ALL ROLES lists every role, so only a not-found error that names
+		// this role means it is gone. Anything else must keep the state.
+		if isNotFoundFor(err, model.Name.ValueString()) {
 			return false
 		}
 		if mdsql.IsUnsupportedCommand(err) {
@@ -381,7 +383,7 @@ func (r *roleGrantResource) readRoleGrant(ctx context.Context, model *roleGrantM
 	query := showRolesToStatement(model.GranteeType.ValueString(), model.GranteeName.ValueString())
 	rows, err := showRows(ctx, client, query)
 	if err != nil {
-		if isNotFound(err) {
+		if isNotFoundFor(err, model.GranteeName.ValueString()) {
 			return false
 		}
 		if mdsql.IsUnsupportedCommand(err) {

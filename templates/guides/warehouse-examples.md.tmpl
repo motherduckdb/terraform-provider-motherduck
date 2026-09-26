@@ -11,15 +11,15 @@ Use a layered warehouse when source records arrive more than once, business
 logic needs a clear home, and dashboards should query prepared tables. This
 guide uses an orders feed with source revisions and a physical revenue mart.
 
-![A writer loads raw orders, deduplicates them through a transform view, and refreshes a physical revenue mart. BI uses the writer's read-scaling token.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/layered-warehouse.png)
+![A pipeline loads raw orders into the writer's raw database. The orders_latest view in the transform database deduplicates them, and the pipeline refreshes the daily_revenue table in the marts database. BI queries every layer through the writer's read pool with a read-scaling token.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/layered-warehouse.png)
 
 ## Choose a starting point
 
 | Example | Layout | Use it for |
 | --- | --- | --- |
-| [Simple](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/warehouses/simple) | One database, raw table, analytics view | A small feed with one row per order |
-| [Layered](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/warehouses/layered) | Three databases, two tables, one view | Revised source records and a separately refreshed mart |
-| [Bootstrap](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/warehouses/bootstrap) | Dev/prod writers, tokens, compute settings | Dedicated ownership for either layout |
+| [Simple](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/warehouses/simple) | One database, raw table, analytics view | A small feed with one row per order |
+| [Layered](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/warehouses/layered) | Three databases, two tables, one view | Revised source records and a separately refreshed mart |
+| [Bootstrap](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.2.13/examples/warehouses/bootstrap) | Dev/prod writers, tokens, compute settings | Dedicated ownership for either layout |
 
 The steps below use the layered root. Follow [environment setup](environments.md)
 first and inject the selected writer's token as `MOTHERDUCK_TOKEN`. The warehouse

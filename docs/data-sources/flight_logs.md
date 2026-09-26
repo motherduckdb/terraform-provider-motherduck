@@ -2,12 +2,12 @@
 page_title: "motherduck_flight_logs Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Reads line-oriented logs for one MotherDuck Flight run, in the order returned by MotherDuck.
+  Reads line-oriented logs for one MotherDuck Flight run, in the order returned by MotherDuck. Set limit and offset to read a window of lines ordered by line number.
 ---
 
 # motherduck_flight_logs (Data Source)
 
-Reads line-oriented logs for one MotherDuck Flight run, in the order returned by MotherDuck.
+Reads line-oriented logs for one MotherDuck Flight run, in the order returned by MotherDuck. Set `limit` and `offset` to read a window of lines ordered by line number.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read
@@ -29,6 +29,11 @@ data "motherduck_flight_logs" "daily_load" {
 
 - `flight_id` (String) Flight ID. Must be a UUID with no leading or trailing whitespace.
 - `run_number` (Number) MotherDuck Flight run number.
+
+### Optional
+
+- `limit` (Number) Maximum number of rows to return when the underlying MotherDuck catalog function supports limits.
+- `offset` (Number) Number of rows to skip when the underlying MotherDuck catalog function supports offsets.
 
 ### Read-Only
 

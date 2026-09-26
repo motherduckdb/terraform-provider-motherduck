@@ -3,6 +3,7 @@ package datasources
 import (
 	"context"
 	"encoding/json"
+	"sort"
 
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/diveembed"
@@ -82,7 +83,7 @@ func (d *userTokensDataSource) Metadata(ctx context.Context, req datasource.Meta
 
 func (d *userTokensDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Lists access token metadata for a MotherDuck user or service account.",
+		MarkdownDescription: "Lists access token metadata for a MotherDuck user or service account, sorted by token ID.",
 		Attributes: map[string]schema.Attribute{
 			"username": schema.StringAttribute{
 				Required:            true,
@@ -146,7 +147,8 @@ func (d *userTokensDataSource) Read(ctx context.Context, req datasource.ReadRequ
 		resp.Diagnostics.AddError("Unable to list MotherDuck user tokens", err.Error())
 		return
 	}
-	payload, err := json.Marshal(tokenMetadataOnly(tokens))
+	tokens = tokenMetadataOnly(tokens)
+	payload, err := json.Marshal(tokens)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to encode token metadata", err.Error())
 		return
@@ -159,12 +161,15 @@ func (d *userTokensDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
+// tokenMetadataOnly returns a copy without secrets, sorted by token ID so the
+// listing does not depend on the order the API returns tokens in.
 func tokenMetadataOnly(tokens []mdrest.Token) []mdrest.Token {
 	metadata := make([]mdrest.Token, len(tokens))
 	copy(metadata, tokens)
 	for i := range metadata {
 		metadata[i].Token = ""
 	}
+	sort.SliceStable(metadata, func(i, j int) bool { return metadata[i].ID < metadata[j].ID })
 	return metadata
 }
 
