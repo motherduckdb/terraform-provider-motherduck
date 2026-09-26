@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -88,19 +89,21 @@ type ServiceAccount struct {
 }
 
 type CreateTokenRequest struct {
-	Name      string `json:"name"`
-	TTL       *int64 `json:"ttl,omitempty"`
-	TokenType string `json:"token_type,omitempty"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	TTL         *int64 `json:"ttl,omitempty"`
+	TokenType   string `json:"token_type,omitempty"`
 }
 
 type Token struct {
-	Token     string `json:"token,omitempty"`
-	ID        string `json:"id"`
-	Name      string `json:"name,omitempty"`
-	ExpireAt  string `json:"expire_at,omitempty"`
-	CreatedTS string `json:"created_ts"`
-	ReadOnly  bool   `json:"read_only"`
-	TokenType string `json:"token_type"`
+	Token       string `json:"token,omitempty"`
+	ID          string `json:"id"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	ExpireAt    string `json:"expire_at,omitempty"`
+	CreatedTS   string `json:"created_ts"`
+	ReadOnly    bool   `json:"read_only"`
+	TokenType   string `json:"token_type"`
 }
 
 type ListTokensResponse struct {
@@ -171,9 +174,23 @@ type Duckling struct {
 	Status string `json:"status"`
 }
 
+// EmbedSessionRequest is the body of POST /v1/dives/{dive_id}/embed-session.
+// MotherDuck treats session_hint as a deprecated alias for session_name, so the
+// provider only sends session_name.
 type EmbedSessionRequest struct {
-	Username    string `json:"username"`
-	SessionHint string `json:"session_hint,omitempty"`
+	Username          string                  `json:"username"`
+	SessionName       string                  `json:"session_name,omitempty"`
+	Version           *int64                  `json:"version,omitempty"`
+	RequiredResources *[]EmbedSessionResource `json:"required_resources,omitempty"`
+	InitialState      json.RawMessage         `json:"initial_state,omitempty"`
+}
+
+// EmbedSessionResource overrides one database or share the Dive renders
+// against. A pointer slice in EmbedSessionRequest keeps an explicitly empty
+// list on the wire, which is distinct from omitting the override.
+type EmbedSessionResource struct {
+	URL   string  `json:"url"`
+	Alias *string `json:"alias,omitempty"`
 }
 
 type EmbedSessionResponse struct {

@@ -64,3 +64,38 @@ func TestExistsDoesNotCacheErrors(t *testing.T) {
 		t.Fatalf("Exists() after error = %v, %v", available, err)
 	}
 }
+
+type parameterExister struct {
+	calls int
+	args  []any
+}
+
+func (c *parameterExister) Exists(_ context.Context, query string, args ...any) (bool, error) {
+	c.calls++
+	if query != parameterProbeQuery {
+		return false, errors.New("unexpected probe")
+	}
+	c.args = args
+	return true, nil
+}
+
+func TestParameterExistsProbesFunctionAndParameter(t *testing.T) {
+	client := &parameterExister{}
+	ctx := WithCache(t.Context())
+	for range 2 {
+		available, err := ParameterExists(ctx, client, "MD_SET_GUIDE_ACCESS", "role_names")
+		if err != nil || !available {
+			t.Fatalf("ParameterExists() = %v, %v", available, err)
+		}
+	}
+	if client.calls != 1 {
+		t.Fatalf("probe calls = %d, want 1 within one operation", client.calls)
+	}
+	if len(client.args) != 2 || client.args[0] != "MD_SET_GUIDE_ACCESS" || client.args[1] != "role_names" {
+		t.Fatalf("probe args = %v", client.args)
+	}
+	counting := &countingExister{available: true}
+	if _, err := Exists(ctx, counting, "md_set_guide_access"); err != nil || counting.calls != 1 {
+		t.Fatalf("a function probe must not reuse a parameter probe result: calls=%d err=%v", counting.calls, err)
+	}
+}

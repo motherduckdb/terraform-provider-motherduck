@@ -2,12 +2,12 @@
 page_title: "motherduck_flight_logs Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Reads line-oriented logs for one MotherDuck Flight run, in the order returned by MotherDuck. Set limit and offset to read a window of lines ordered by line number.
+  Reads line-oriented logs for one MotherDuck Flight run, in ascending line order. Without limit, MotherDuck returns only the most recent 1,000 lines. Set limit to read a window of lines from the start of the log, add offset to skip lines, and set order = "desc" to count the window from the end of the log instead. MotherDuck applies the window on the server, so large logs are not transferred in full. An offset without limit skips lines within the most recent 1,000.
 ---
 
 # motherduck_flight_logs (Data Source)
 
-Reads line-oriented logs for one MotherDuck Flight run, in the order returned by MotherDuck. Set `limit` and `offset` to read a window of lines ordered by line number.
+Reads line-oriented logs for one MotherDuck Flight run, in ascending line order. Without `limit`, MotherDuck returns only the most recent 1,000 lines. Set `limit` to read a window of lines from the start of the log, add `offset` to skip lines, and set `order = "desc"` to count the window from the end of the log instead. MotherDuck applies the window on the server, so large logs are not transferred in full. An `offset` without `limit` skips lines within the most recent 1,000.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read
@@ -16,9 +16,12 @@ them. See [authentication](../guides/authentication.md).
 ## Example Usage
 
 ```terraform
+# Read the most recent 200 lines of a Flight run log.
 data "motherduck_flight_logs" "daily_load" {
   flight_id  = "11111111-1111-4111-8111-111111111111"
   run_number = 1
+  limit      = 200
+  order      = "desc"
 }
 ```
 
@@ -34,6 +37,7 @@ data "motherduck_flight_logs" "daily_load" {
 
 - `limit` (Number) Maximum number of rows to return when the underlying MotherDuck catalog function supports limits.
 - `offset` (Number) Number of rows to skip when the underlying MotherDuck catalog function supports offsets.
+- `order` (String) Which end of the Flight run log `limit` counts from. `asc`, the default, reads from the first line. `desc` reads the most recent lines. Lines are always returned in ascending line order. Applies only when `limit` is set.
 
 ### Read-Only
 

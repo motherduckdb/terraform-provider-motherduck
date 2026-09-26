@@ -38,7 +38,7 @@ data "motherduck_role_members" "analytics_readers" {
 
 Read-Only:
 
-- `email` (String) User email when the member is a user.
+- `email` (String) User email when the member is a user. Null for service accounts and role members.
 - `granted_at` (String) Grant creation timestamp.
 - `is_service_account` (String) Whether the user member is a service account.
 - `member_name` (String) User or role principal name.
