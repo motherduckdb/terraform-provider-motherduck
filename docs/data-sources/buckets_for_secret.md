@@ -2,12 +2,12 @@
 page_title: "motherduck_buckets_for_secret Data Source - motherduck"
 subcategory: "Catalog and storage"
 description: |-
-  Lists object-storage buckets accessible through a MotherDuck secret. Rows are sorted by bucket name. Set limit and offset to page through large listings.
+  Lists object-storage buckets accessible through a MotherDuck secret. Rows are sorted by bucket name. Set limit and offset to page through large listings. Paging orders the listing by all of its columns, so pages are stable, and rows within each page are then sorted.
 ---
 
 # motherduck_buckets_for_secret (Data Source)
 
-Lists object-storage buckets accessible through a MotherDuck secret. Rows are sorted by bucket name. Set `limit` and `offset` to page through large listings.
+Lists object-storage buckets accessible through a MotherDuck secret. Rows are sorted by bucket name. Set `limit` and `offset` to page through large listings. Paging orders the listing by all of its columns, so pages are stable, and rows within each page are then sorted.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read

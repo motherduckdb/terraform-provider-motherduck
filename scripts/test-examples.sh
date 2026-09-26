@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${ROOT_DIR}/scripts/lib/terraform-test.sh"
 isolate_offline_test_environment
 
-PROVIDER_VERSION="${PROVIDER_VERSION:-0.2.3}"
+PROVIDER_VERSION="${PROVIDER_VERSION:-0.2.13}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d%H%M%S)_$$}"
 TERRAFORM_BIN="${TERRAFORM_BIN:-terraform}"
 
@@ -243,7 +243,8 @@ terraform {
 }
 HCL
   else
-    perl -0pi -e "s/version = \">= 0\\.(?:1\\.0|2\\.10)\"/version = \"= ${PROVIDER_VERSION}\"/" "${work_dir}"/*.tf
+    # Pin whatever constraint follows the MotherDuck source to the local build.
+    perl -0pi -e "s/(source\\s*=\\s*\"motherduckdb\\/motherduck\"\\s*\\n\\s*version\\s*=\\s*)\"[^\"]*\"/\\1\"= ${PROVIDER_VERSION}\"/g" "${work_dir}"/*.tf
   fi
   write_plan_vars "${relative_dir}" "${work_dir}"
 
