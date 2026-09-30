@@ -67,36 +67,35 @@ func redactSensitiveValues(message string, sensitive []string) string {
 // diveSensitiveValues returns the share URLs configured in Dive
 // required_resources so they can be redacted from write diagnostics.
 func diveSensitiveValues(ctx context.Context, list types.List) []string {
-	if list.IsNull() || list.IsUnknown() {
-		return nil
-	}
-	var resources []diveRequiredResourceModel
-	if list.ElementsAs(ctx, &resources, false).HasError() {
-		return nil
-	}
-	values := make([]string, 0, len(resources))
-	for _, resource := range resources {
-		if !resource.URL.IsNull() && !resource.URL.IsUnknown() {
-			values = append(values, resource.URL.ValueString())
-		}
-	}
-	return values
+	return sensitiveListURLs(ctx, list, func(resource diveRequiredResourceModel) types.String {
+		return resource.URL
+	})
 }
 
 // guideSensitiveValues returns the catalog URLs configured in Guide
 // references so they can be redacted from write diagnostics.
 func guideSensitiveValues(ctx context.Context, list types.List) []string {
+	return sensitiveListURLs(ctx, list, func(reference guideReferenceModel) types.String {
+		return reference.URL
+	})
+}
+
+// sensitiveListURLs collects known URLs in list order. Decode the complete
+// caller model before collecting values so a conversion error in any field
+// still returns nil rather than a partial set of sensitive values.
+func sensitiveListURLs[T any](ctx context.Context, list types.List, url func(T) types.String) []string {
 	if list.IsNull() || list.IsUnknown() {
 		return nil
 	}
-	var references []guideReferenceModel
-	if list.ElementsAs(ctx, &references, false).HasError() {
+	var elements []T
+	if list.ElementsAs(ctx, &elements, false).HasError() {
 		return nil
 	}
-	values := make([]string, 0, len(references))
-	for _, reference := range references {
-		if !reference.URL.IsNull() && !reference.URL.IsUnknown() {
-			values = append(values, reference.URL.ValueString())
+	values := make([]string, 0, len(elements))
+	for _, element := range elements {
+		value := url(element)
+		if !value.IsNull() && !value.IsUnknown() {
+			values = append(values, value.ValueString())
 		}
 	}
 	return values
