@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -122,6 +123,217 @@ func TestGuideSensitiveValuesCollectsURLs(t *testing.T) {
 	}
 	if guideSensitiveValues(ctx, types.ListNull(objType)) != nil {
 		t.Fatal("null list should yield no values")
+	}
+	if guideSensitiveValues(ctx, types.ListUnknown(objType)) != nil {
+		t.Fatal("unknown list should yield no values")
+	}
+}
+
+func TestDiveSensitiveValuesCharacterizesTerraformValues(t *testing.T) {
+	ctx := context.Background()
+	objType := diveRequiredResourceObjectType()
+	object := func(alias, url attr.Value) attr.Value {
+		t.Helper()
+		return types.ObjectValueMust(objType.AttrTypes, map[string]attr.Value{"alias": alias, "url": url})
+	}
+	list := func(elements ...attr.Value) types.List {
+		t.Helper()
+		return types.ListValueMust(objType, elements)
+	}
+
+	tests := []struct {
+		name string
+		list types.List
+		want []string
+		nil  bool
+	}{
+		{name: "known empty", list: list(), want: []string{}},
+		{
+			name: "known URLs preserve order and duplicates",
+			list: list(
+				object(types.StringValue("first"), types.StringValue("")),
+				object(types.StringValue("second"), types.StringValue("  ")),
+				object(types.StringValue("third"), types.StringValue("https://host/resource")),
+				object(types.StringValue("fourth"), types.StringValue("https://host/resource")),
+			),
+			want: []string{"", "  ", "https://host/resource", "https://host/resource"},
+		},
+		{
+			name: "URL null and unknown are skipped",
+			list: list(
+				object(types.StringValue("null"), types.StringNull()),
+				object(types.StringValue("unknown"), types.StringUnknown()),
+				object(types.StringValue("known"), types.StringValue("md:_share/known")),
+			),
+			want: []string{"md:_share/known"},
+		},
+		{
+			name: "non URL null and unknown are ignored",
+			list: list(
+				object(types.StringNull(), types.StringValue("md:_share/null-alias")),
+				object(types.StringUnknown(), types.StringValue("md:_share/unknown-alias")),
+			),
+			want: []string{"md:_share/null-alias", "md:_share/unknown-alias"},
+		},
+		{name: "null object", list: list(object(types.StringValue("known"), types.StringValue("md:_share/known")), types.ObjectNull(objType.AttrTypes)), nil: true},
+		{name: "unknown object", list: list(object(types.StringValue("known"), types.StringValue("md:_share/known")), types.ObjectUnknown(objType.AttrTypes)), nil: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := diveSensitiveValues(ctx, test.list)
+			if test.nil {
+				if got != nil {
+					t.Fatalf("diveSensitiveValues = %#v, want nil", got)
+				}
+				return
+			}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("diveSensitiveValues = %#v, want %#v", got, test.want)
+			}
+		})
+	}
+
+	incompatibleType := types.ObjectType{AttrTypes: map[string]attr.Type{"alias": types.Int64Type, "url": types.StringType}}
+	incompatible := types.ListValueMust(incompatibleType, []attr.Value{
+		types.ObjectValueMust(incompatibleType.AttrTypes, map[string]attr.Value{
+			"alias": types.Int64Value(42),
+			"url":   types.StringValue("md:_share/known"),
+		}),
+	})
+	if got := diveSensitiveValues(ctx, incompatible); got != nil {
+		t.Fatalf("diveSensitiveValues incompatible object = %#v, want nil", got)
+	}
+}
+
+func TestGuideSensitiveValuesCharacterizesTerraformValues(t *testing.T) {
+	ctx := context.Background()
+	attrTypes := guideReferenceAttrTypes()
+	objType := types.ObjectType{AttrTypes: attrTypes}
+	object := func(url, field attr.Value) attr.Value {
+		t.Helper()
+		values := make(map[string]attr.Value, len(attrTypes))
+		for name := range attrTypes {
+			values[name] = types.StringNull()
+		}
+		values["url"] = url
+		values["type"] = field
+		return types.ObjectValueMust(attrTypes, values)
+	}
+	list := func(elements ...attr.Value) types.List {
+		t.Helper()
+		return types.ListValueMust(objType, elements)
+	}
+
+	tests := []struct {
+		name string
+		list types.List
+		want []string
+		nil  bool
+	}{
+		{name: "known empty", list: list(), want: []string{}},
+		{
+			name: "known URLs preserve order and duplicates",
+			list: list(
+				object(types.StringValue(""), types.StringNull()),
+				object(types.StringValue("  "), types.StringUnknown()),
+				object(types.StringValue("https://host/resource"), types.StringValue("catalog")),
+				object(types.StringValue("https://host/resource"), types.StringValue("catalog")),
+			),
+			want: []string{"", "  ", "https://host/resource", "https://host/resource"},
+		},
+		{
+			name: "URL null and unknown are skipped",
+			list: list(
+				object(types.StringNull(), types.StringValue("catalog")),
+				object(types.StringUnknown(), types.StringValue("catalog")),
+				object(types.StringValue("md:_share/known"), types.StringValue("catalog")),
+			),
+			want: []string{"md:_share/known"},
+		},
+		{
+			name: "non URL null and unknown are ignored",
+			list: list(
+				object(types.StringValue("md:_share/null-fields"), types.StringNull()),
+				object(types.StringValue("md:_share/unknown-fields"), types.StringUnknown()),
+			),
+			want: []string{"md:_share/null-fields", "md:_share/unknown-fields"},
+		},
+		{name: "null object", list: list(object(types.StringValue("md:_share/known"), types.StringValue("catalog")), types.ObjectNull(objType.AttrTypes)), nil: true},
+		{name: "unknown object", list: list(object(types.StringValue("md:_share/known"), types.StringValue("catalog")), types.ObjectUnknown(objType.AttrTypes)), nil: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := guideSensitiveValues(ctx, test.list)
+			if test.nil {
+				if got != nil {
+					t.Fatalf("guideSensitiveValues = %#v, want nil", got)
+				}
+				return
+			}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("guideSensitiveValues = %#v, want %#v", got, test.want)
+			}
+		})
+	}
+
+	incompatibleTypes := guideReferenceAttrTypes()
+	incompatibleTypes["type"] = types.Int64Type
+	incompatible := types.ListValueMust(types.ObjectType{AttrTypes: incompatibleTypes}, []attr.Value{
+		types.ObjectValueMust(incompatibleTypes, func() map[string]attr.Value {
+			values := make(map[string]attr.Value, len(incompatibleTypes))
+			for name := range incompatibleTypes {
+				values[name] = types.StringNull()
+			}
+			values["type"] = types.Int64Value(42)
+			values["url"] = types.StringValue("md:_share/known")
+			return values
+		}()),
+	})
+	if got := guideSensitiveValues(ctx, incompatible); got != nil {
+		t.Fatalf("guideSensitiveValues incompatible object = %#v, want nil", got)
+	}
+}
+
+func TestSensitiveWriteDiagnosticRedactsExtractedURLs(t *testing.T) {
+	short := "https://host/resource"
+	long := short + "?token=secret"
+	apostrophe := "md:_share/it's/abc"
+	message := "driver failure: " + long + " and " + short + " and " + apostrophe + " and md:_share/it''s/abc"
+
+	t.Run("dive", func(t *testing.T) {
+		objType := diveRequiredResourceObjectType()
+		list := types.ListValueMust(objType, []attr.Value{
+			types.ObjectValueMust(objType.AttrTypes, map[string]attr.Value{"alias": types.StringValue("a"), "url": types.StringValue(short)}),
+			types.ObjectValueMust(objType.AttrTypes, map[string]attr.Value{"alias": types.StringValue("b"), "url": types.StringValue(long)}),
+			types.ObjectValueMust(objType.AttrTypes, map[string]attr.Value{"alias": types.StringValue("c"), "url": types.StringValue(apostrophe)}),
+		})
+		assertRedactedExtractedURLs(t, message, diveSensitiveValues(context.Background(), list))
+	})
+
+	t.Run("guide", func(t *testing.T) {
+		attrTypes := guideReferenceAttrTypes()
+		objType := types.ObjectType{AttrTypes: attrTypes}
+		object := func(url string) attr.Value {
+			values := make(map[string]attr.Value, len(attrTypes))
+			for name := range attrTypes {
+				values[name] = types.StringNull()
+			}
+			values["url"] = types.StringValue(url)
+			return types.ObjectValueMust(attrTypes, values)
+		}
+		list := types.ListValueMust(objType, []attr.Value{object(short), object(long), object(apostrophe)})
+		assertRedactedExtractedURLs(t, message, guideSensitiveValues(context.Background(), list))
+	})
+}
+
+func assertRedactedExtractedURLs(t *testing.T, message string, sensitive []string) {
+	t.Helper()
+	got := sensitiveWriteDiagnostic("Guide", errors.New(message), sensitive)
+	want := "driver failure: [redacted] and [redacted] and [redacted] and [redacted]"
+	if got != want {
+		t.Fatalf("diagnostic = %q, want %q", got, want)
 	}
 }
 
