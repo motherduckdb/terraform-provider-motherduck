@@ -155,12 +155,18 @@ type pageInfo struct {
 	Cursor        string `json:"cursor,omitempty"`
 }
 
+// nextCursor gives top-level aliases priority over nested pagination aliases.
+// firstNonEmpty skips blank aliases without changing the selected cursor.
+func (p pageInfo) nextCursor(topCursor, topPageToken string) string {
+	return firstNonEmpty(topCursor, topPageToken, p.NextCursor, p.NextPageToken, p.Cursor)
+}
+
 func (r ListTokensResponse) nextCursor() string {
-	return firstNonEmpty(r.NextCursor, r.NextPageToken, r.Pagination.NextCursor, r.Pagination.NextPageToken, r.Pagination.Cursor)
+	return r.Pagination.nextCursor(r.NextCursor, r.NextPageToken)
 }
 
 func (r ActiveAccountsResponse) nextCursor() string {
-	return firstNonEmpty(r.NextCursor, r.NextPageToken, r.Pagination.NextCursor, r.Pagination.NextPageToken, r.Pagination.Cursor)
+	return r.Pagination.nextCursor(r.NextCursor, r.NextPageToken)
 }
 
 type ActiveAccount struct {
