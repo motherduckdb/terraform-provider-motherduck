@@ -90,29 +90,44 @@ func parseColumnType(name string) *columnType {
 	return t
 }
 
+// columnTypeNesting tracks the shared lexical rules for type-name scans.
+// Keep unmatched closing delimiters as negative depth so malformed shapes
+// retain their existing fallback behavior.
+type columnTypeNesting struct {
+	depth  int
+	quoted bool
+}
+
+func (n *columnTypeNesting) advance(c byte) {
+	switch {
+	case n.quoted:
+		if c == '"' {
+			n.quoted = false
+		}
+	case c == '"':
+		n.quoted = true
+	case c == '(' || c == '[':
+		n.depth++
+	case c == ')' || c == ']':
+		n.depth--
+	}
+}
+
 // lastTopLevelIndex returns the index of the last target byte outside
 // parentheses, brackets, and double-quoted identifiers, or -1.
 func lastTopLevelIndex(s string, target byte) int {
-	depth := 0
-	quoted := false
+	var nesting columnTypeNesting
 	last := -1
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		switch {
-		case quoted:
-			if c == '"' {
-				quoted = false
-			}
-		case c == '"':
-			quoted = true
-		case c == target && depth == 0:
+		if !nesting.quoted && c != '"' && c == target && nesting.depth == 0 {
 			last = i
-			depth++
-		case c == '(' || c == '[':
-			depth++
-		case c == ')' || c == ']':
-			depth--
+			// A matched target opens a level. The array-suffix caller uses
+			// '[' and must consume it before the shared nesting transition.
+			nesting.depth++
+			continue
 		}
+		nesting.advance(c)
 	}
 	return last
 }
@@ -121,26 +136,15 @@ func lastTopLevelIndex(s string, target byte) int {
 // double-quoted identifiers.
 func splitTopLevel(s string) []string {
 	var parts []string
-	depth := 0
-	quoted := false
+	var nesting columnTypeNesting
 	start := 0
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		switch {
-		case quoted:
-			if c == '"' {
-				quoted = false
-			}
-		case c == '"':
-			quoted = true
-		case c == '(' || c == '[':
-			depth++
-		case c == ')' || c == ']':
-			depth--
-		case c == ',' && depth == 0:
+		if c == ',' && !nesting.quoted && nesting.depth == 0 {
 			parts = append(parts, strings.TrimSpace(s[start:i]))
 			start = i + 1
 		}
+		nesting.advance(c)
 	}
 	return append(parts, strings.TrimSpace(s[start:]))
 }
