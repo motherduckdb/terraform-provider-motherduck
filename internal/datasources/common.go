@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
-	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 
@@ -39,15 +38,8 @@ func (d *baseDataSource) rest(diags *diag.Diagnostics) *mdrest.Client {
 }
 
 func (d *baseDataSource) sql(ctx context.Context, diags *diag.Diagnostics) providerctx.SQLClient {
-	if d.provider == nil {
-		diags.AddError("MotherDuck token required", mdsql.ErrMissingToken.Error())
-		return nil
-	}
-	client, err := d.provider.SQLClient(ctx)
-	if err != nil || client == nil || !client.Available() {
-		if err == nil {
-			err = mdsql.ErrMissingToken
-		}
+	client, err := d.provider.AvailableSQLClient(ctx)
+	if err != nil {
 		diags.AddError("MotherDuck token required", err.Error())
 		return nil
 	}

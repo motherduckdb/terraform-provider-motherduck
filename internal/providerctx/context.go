@@ -61,3 +61,18 @@ func (c *Context) SQLClient(ctx context.Context) (SQLClient, error) {
 	c.SQL = client
 	return c.SQL, nil
 }
+
+// AvailableSQLClient returns the initialized SQL client when it can serve SQL
+// operations. A nil or unavailable client is treated like a missing token at
+// the provider boundary, while initialization errors retain their original
+// meaning.
+func (c *Context) AvailableSQLClient(ctx context.Context) (SQLClient, error) {
+	client, err := c.SQLClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil || !client.Available() {
+		return nil, mdsql.ErrMissingToken
+	}
+	return client, nil
+}
