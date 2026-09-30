@@ -14,7 +14,6 @@ import (
 	duckdb "github.com/duckdb/duckdb-go/v2"
 	resourceTimeouts "github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
-	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlfunc"
@@ -83,15 +82,8 @@ func (r *baseResource) rest(resp *diag.Diagnostics) *mdrest.Client {
 }
 
 func (r *baseResource) sql(ctx context.Context, resp *diag.Diagnostics) providerctx.SQLClient {
-	if r.provider == nil {
-		resp.AddError("MotherDuck token required", mdsql.ErrMissingToken.Error())
-		return nil
-	}
-	client, err := r.provider.SQLClient(ctx)
-	if err != nil || client == nil || !client.Available() {
-		if err == nil {
-			err = mdsql.ErrMissingToken
-		}
+	client, err := r.provider.AvailableSQLClient(ctx)
+	if err != nil {
 		resp.AddError("MotherDuck token required", err.Error())
 		return nil
 	}
