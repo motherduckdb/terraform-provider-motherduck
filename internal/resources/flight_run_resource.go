@@ -144,11 +144,7 @@ func (r *flightRunResource) Create(ctx context.Context, req resource.CreateReque
 		resp.Diagnostics.AddError("Unable to run MotherDuck Flight", err.Error())
 		return
 	}
-	plan.ID = types.StringValue(runID)
-	plan.Status = types.StringValue(status)
-	plan.RunNumber = types.Int64Value(runNumber)
-	plan.FlightVersion = types.Int64Value(version)
-	plan.CreatedAt = types.StringValue(created)
+	plan.setMetadata(runID, status, runNumber, version, created)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -250,6 +246,16 @@ func (r *flightRunResource) flightRunLookup(ctx context.Context, client sqlfunc.
 
 const flightRunColumns = "run_id::VARCHAR, status, run_number, flight_version, created_at::VARCHAR"
 
+// setMetadata applies a successful remote result without changing the run's
+// configured inputs or normalizing the server's status and timestamp strings.
+func (m *flightRunModel) setMetadata(runID, status string, runNumber, version int64, created string) {
+	m.ID = types.StringValue(runID)
+	m.Status = types.StringValue(status)
+	m.RunNumber = types.Int64Value(runNumber)
+	m.FlightVersion = types.Int64Value(version)
+	m.CreatedAt = types.StringValue(created)
+}
+
 func (r *flightRunResource) readFlightRunStatus(ctx context.Context, model *flightRunModel, lookup flightRunLookup, diags *diag.Diagnostics) bool {
 	client := r.sql(ctx, diags)
 	if client == nil {
@@ -279,11 +285,7 @@ func (r *flightRunResource) readFlightRunStatus(ctx context.Context, model *flig
 		diags.AddError("Unable to read MotherDuck Flight run", err.Error())
 		return false
 	}
-	model.ID = types.StringValue(runID)
-	model.Status = types.StringValue(status)
-	model.RunNumber = types.Int64Value(runNumber)
-	model.FlightVersion = types.Int64Value(version)
-	model.CreatedAt = types.StringValue(created)
+	model.setMetadata(runID, status, runNumber, version, created)
 	return true
 }
 
@@ -430,11 +432,7 @@ func (r *flightRunResource) findFlightRunInListing(ctx context.Context, client i
 			}
 			if runNumber == target {
 				version, _ := jsonInt64(row.FlightVersion)
-				model.ID = types.StringValue(row.RunID)
-				model.Status = types.StringValue(row.Status)
-				model.RunNumber = types.Int64Value(runNumber)
-				model.FlightVersion = types.Int64Value(version)
-				model.CreatedAt = types.StringValue(row.CreatedAt)
+				model.setMetadata(row.RunID, row.Status, runNumber, version, row.CreatedAt)
 				return true
 			}
 			if runNumber < target {

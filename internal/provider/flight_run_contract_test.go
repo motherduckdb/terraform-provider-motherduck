@@ -61,6 +61,13 @@ resource "motherduck_flight_run" "test" {
 `
 	updated := strings.ReplaceAll(strings.ReplaceAll(config, "= 10", "= 20"), "= 600", "= 900")
 	updated = strings.Replace(updated, "timeout_seconds = 900", "timeout_seconds = 900\nwait_for_status = \"succeeded\"", 1)
+	metadataCheck := resource.ComposeAggregateTestCheckFunc(
+		resource.TestCheckResourceAttr("motherduck_flight_run.test", "id", "11111111-1111-4111-8111-111111111112"),
+		resource.TestCheckResourceAttr("motherduck_flight_run.test", "status", "SUCCEEDED"),
+		resource.TestCheckResourceAttr("motherduck_flight_run.test", "run_number", "1"),
+		resource.TestCheckResourceAttr("motherduck_flight_run.test", "flight_version", "1"),
+		resource.TestCheckResourceAttr("motherduck_flight_run.test", "created_at", "2026-09-06T00:00:00Z"),
+	)
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: contractProviderFactories(client),
 		CheckDestroy: func(*terraform.State) error {
@@ -70,13 +77,13 @@ resource "motherduck_flight_run" "test" {
 			return nil
 		},
 		Steps: []resource.TestStep{
-			{Config: config},
+			{Config: config, Check: metadataCheck},
 			{Config: updated,
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_flight_run.test", plancheck.ResourceActionUpdate)},
 					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
-				Check: resource.TestCheckResourceAttr("motherduck_flight_run.test", "run_number", "1"),
+				Check: metadataCheck,
 			},
 		},
 	})
