@@ -211,8 +211,11 @@ func (r *snapshotResource) Delete(ctx context.Context, req resource.DeleteReques
 	if client == nil {
 		return
 	}
-	if state.ID.IsNull() || state.ID.ValueString() == "" {
-		return
+	if state.ID.IsNull() || state.ID.IsUnknown() || state.ID.ValueString() == "" {
+		// Creation can succeed before the catalog ID is available in state.
+		if !r.readSnapshotByName(ctx, client, &state, &resp.Diagnostics) {
+			return
+		}
 	}
 	unname := snapshotUnnameSQL(state.ID.ValueString())
 	var err error
@@ -395,6 +398,10 @@ func (r *snapshotResource) readSnapshotByName(ctx context.Context, client provid
 			"Ambiguous MotherDuck snapshot",
 			fmt.Sprintf("Found %d snapshots named %q for database %q. Rename or remove duplicates before managing this snapshot with Terraform.", matches, model.Name.ValueString(), model.Database.ValueString()),
 		)
+		return false
+	}
+	if !id.Valid || id.String == "" {
+		diags.AddError("Unable to read MotherDuck snapshot", "The snapshot catalog returned an empty snapshot ID. Terraform kept the database and name for recovery.")
 		return false
 	}
 	model.ID = nullString(id)
