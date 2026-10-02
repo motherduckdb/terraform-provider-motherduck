@@ -7,6 +7,7 @@ Terraform 1.5 or later is supported. Ephemeral resources require Terraform 1.10.
 | Goal | Start here | Credentials | Result and next step |
 | --- | --- | --- | --- |
 | Learn the first warehouse | [Simple warehouse](warehouses/simple/README.md) | SQL writer | Five resources and sample revenue, then [dbt](cookbook-pipeline/README.md) |
+| Register an external Iceberg catalog | [Secret lookup and catalog registration](data-sources/motherduck_secret/data-source.tf) | SQL writer with an existing MotherDuck-managed secret | Fail planning if the separately owned secret is absent, then register the catalog |
 | Separate dev and prod | [Warehouse bootstrap](warehouses/bootstrap/README.md) and [layered warehouse](warehouses/layered/README.md) | Admin for identities, matching writer for data | Separate owners/states, then ingestion and modeling |
 | Run dlt and dbt over provisioned infrastructure | [Cookbook pipeline](cookbook-pipeline/README.md) | Existing SQL writer | Repeatable ingest and tested runtime-owned models |
 | Serve tenant usage analytics | [Customer-facing analytics](customer-facing-analytics/README.md) and [backend](customer-facing-analytics/backend/README.md) | Writer plus admin, reader tokens only in backend | Tenant-isolated data and authenticated queries |
