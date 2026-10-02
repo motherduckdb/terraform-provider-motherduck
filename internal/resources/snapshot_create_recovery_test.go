@@ -50,6 +50,7 @@ func (r snapshotIdentityRow) Scan(dest ...any) error {
 
 func TestSnapshotDeleteWithoutIDRejectsUnsafeLookup(t *testing.T) {
 	for name, client := range map[string]*snapshotCreateBackend{
+		"unlisted":  {readError: sql.ErrNoRows},
 		"denied":    {readError: errors.New("permission denied")},
 		"null ID":   {},
 		"blank ID":  {readID: ""},
@@ -73,6 +74,25 @@ func TestSnapshotDeleteWithoutIDRejectsUnsafeLookup(t *testing.T) {
 				t.Fatalf("unsafe lookup must preserve state without writes: diagnostics=%v writes=%v", deleted.Diagnostics, client.execs)
 			}
 		})
+	}
+}
+
+func TestSnapshotReadWithoutIDKeepsUnlistedState(t *testing.T) {
+	client := &snapshotCreateBackend{snapshotOrphanBackend: &snapshotOrphanBackend{}, readError: sql.ErrNoRows}
+	r := &snapshotResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	state := snapshotTestState(t, r)
+	var model snapshotModel
+	if d := state.Get(t.Context(), &model); d.HasError() {
+		t.Fatal(d)
+	}
+	model.ID = types.StringNull()
+	if d := state.Set(t.Context(), &model); d.HasError() {
+		t.Fatal(d)
+	}
+	read := resource.ReadResponse{State: state}
+	r.Read(t.Context(), resource.ReadRequest{State: state}, &read)
+	if !read.Diagnostics.HasError() || read.State.Raw.IsNull() {
+		t.Fatalf("missing metadata cannot prove the snapshot name was cleared: %v", read.Diagnostics)
 	}
 }
 
