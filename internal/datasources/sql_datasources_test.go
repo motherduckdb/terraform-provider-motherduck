@@ -63,6 +63,7 @@ func TestSQLDataSourceSchemasHaveDescriptions(t *testing.T) {
 		NewLiveDucklingSizeDataSource(),
 		NewOwnedShareDataSource(),
 		NewDatabaseDataSource(),
+		NewSecretDataSource(),
 	} {
 		var resp datasource.SchemaResponse
 		ds.Schema(t.Context(), datasource.SchemaRequest{}, &resp)
@@ -80,6 +81,20 @@ func TestSQLDataSourceSchemasHaveDescriptions(t *testing.T) {
 			t.Fatalf("row data source %q has an empty schema description", spec.name)
 		}
 		assertDataSourceAttributeDescriptions(t, resp.Schema.Attributes)
+	}
+}
+
+func TestSecretDataSourceExposesMetadataOnly(t *testing.T) {
+	var resp datasource.SchemaResponse
+	NewSecretDataSource().Schema(t.Context(), datasource.SchemaRequest{}, &resp)
+	want := map[string]bool{"name": true, "type": true, "secret_provider": true, "persistent": true, "scope": true}
+	if len(resp.Schema.Attributes) != len(want) {
+		t.Fatalf("secret data source attributes = %#v, want metadata only", resp.Schema.Attributes)
+	}
+	for name := range resp.Schema.Attributes {
+		if !want[name] {
+			t.Fatalf("unexpected secret data source attribute %q", name)
+		}
 	}
 }
 
