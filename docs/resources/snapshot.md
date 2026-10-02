@@ -21,6 +21,10 @@ Changing the name renames the snapshot. Refresh tracks the snapshot by its
 replacement. Destroy removes the managed name rather than promising immediate
 physical deletion of retained history.
 
+If creation succeeds but catalog readback fails, Terraform keeps the database
+and snapshot name for recovery. Destroy resolves a missing snapshot ID from
+that name before clearing it. Failed or ambiguous lookups stop cleanup.
+
 A named snapshot outlives the database that created it and stays retained and
 billed until its name is cleared. When its database is dropped outside
 Terraform, refresh keeps the snapshot in state with a warning, and destroy
