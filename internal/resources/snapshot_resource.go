@@ -126,6 +126,11 @@ func (r *snapshotResource) Read(ctx context.Context, req resource.ReadRequest, r
 		resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 		return
 	}
+	if status == snapshotUnlisted && (priorID.IsNull() || priorID.IsUnknown() || priorID.ValueString() == "") {
+		resp.Diagnostics.AddError("Unable to resolve MotherDuck snapshot", "The snapshot ID is missing and its metadata is not listed. Terraform kept the database and name because an unlisted snapshot may still be retained. Retry when catalog reads recover, or confirm the remote name was cleared before removing the resource from state.")
+		resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+		return
+	}
 	if status != snapshotFound && !resp.Diagnostics.HasError() {
 		if status == snapshotUnlisted && !priorID.IsNull() && !priorID.IsUnknown() && priorID.ValueString() != "" {
 			resp.Diagnostics.Append(snapshotUnlistedWarning(state.Database.ValueString(), priorID.ValueString()))
@@ -214,6 +219,9 @@ func (r *snapshotResource) Delete(ctx context.Context, req resource.DeleteReques
 	if state.ID.IsNull() || state.ID.IsUnknown() || state.ID.ValueString() == "" {
 		// Creation can succeed before the catalog ID is available in state.
 		if !r.readSnapshotByName(ctx, client, &state, &resp.Diagnostics) {
+			if !resp.Diagnostics.HasError() {
+				resp.Diagnostics.AddError("Unable to unname MotherDuck snapshot", "The snapshot ID could not be recovered from its database and name. Terraform kept the resource in state because an unlisted snapshot may still retain its name. Retry when catalog reads recover, or confirm the remote name was cleared before removing the resource from state.")
+			}
 			return
 		}
 	}

@@ -4,6 +4,7 @@ package resources
 
 import (
 	"context"
+	stdsql "database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -21,11 +22,15 @@ import (
 
 type snapshotLiveReadbackFailure struct {
 	providerctx.SQLClient
-	failRead bool
+	failRead  bool
+	readError error
 }
 
 func (c *snapshotLiveReadbackFailure) QueryRow(ctx context.Context, query string, args ...any) mdsql.RowScanner {
 	if c.failRead && strings.Contains(query, "MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS") {
+		if c.readError != nil {
+			return errRowScanner{err: c.readError}
+		}
 		return errRowScanner{err: errors.New("injected snapshot catalog readback failure")}
 	}
 	return c.SQLClient.QueryRow(ctx, query, args...)
@@ -101,6 +106,20 @@ func TestLiveSnapshotFailedCreateDestroyWithoutRefresh(t *testing.T) {
 	query := `SELECT count(*)::VARCHAR FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE database_name = ? AND snapshot_name = ?`
 	if err := probe.QueryRow(ctx, query, database, name).Scan(&count); err != nil || count != "1" {
 		t.Fatalf("independent create audit count=%q err=%v", count, err)
+	}
+	backend.readError = stdsql.ErrNoRows
+	refreshed := resource.ReadResponse{State: created.State}
+	r.Read(ctx, resource.ReadRequest{State: created.State}, &refreshed)
+	if !refreshed.Diagnostics.HasError() || refreshed.State.Raw.IsNull() {
+		t.Fatal("unlisted metadata lost cleanup state")
+	}
+	unresolved := resource.DeleteResponse{State: created.State}
+	r.Delete(ctx, resource.DeleteRequest{State: created.State}, &unresolved)
+	if !unresolved.Diagnostics.HasError() || unresolved.State.Raw.IsNull() {
+		t.Fatal("unlisted metadata silently completed destroy")
+	}
+	if err := probe.QueryRow(ctx, query, database, name).Scan(&count); err != nil || count != "1" {
+		t.Fatalf("independent unresolved audit count=%q err=%v", count, err)
 	}
 	backend.failRead = false
 	deleted := resource.DeleteResponse{State: created.State}

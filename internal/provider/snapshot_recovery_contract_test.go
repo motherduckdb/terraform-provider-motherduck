@@ -218,6 +218,32 @@ func TestContractSnapshotFailedCreateDestroyWithoutRefresh(t *testing.T) {
 			if err != nil || saved.IsNull() || !saved.IsFullyKnown() {
 				t.Fatalf("failed creation lost known cleanup state: %v", err)
 			}
+			refreshed, err := server.ReadResource(ctx, &tfprotov6.ReadResourceRequest{TypeName: "motherduck_snapshot", CurrentState: created.NewState})
+			if err != nil {
+				t.Fatal(err)
+			}
+			failed = false
+			for _, d := range refreshed.Diagnostics {
+				failed = failed || d.Severity == tfprotov6.DiagnosticSeverityError
+			}
+			retained, err := refreshed.NewState.Unmarshal(typ)
+			if !failed || err != nil || retained.IsNull() {
+				t.Fatalf("unresolved refresh must preserve cleanup state: failed=%t err=%v", failed, err)
+			}
+			unresolved, err := server.ApplyResourceChange(ctx, &tfprotov6.ApplyResourceChangeRequest{
+				TypeName: "motherduck_snapshot", PriorState: created.NewState, PlannedState: &nullValue, Config: &nullValue,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			failed = false
+			for _, d := range unresolved.Diagnostics {
+				failed = failed || d.Severity == tfprotov6.DiagnosticSeverityError
+			}
+			retained, err = unresolved.NewState.Unmarshal(typ)
+			if !failed || err != nil || retained.IsNull() || !client.named || client.unnames != 0 {
+				t.Fatalf("unresolved identity must preserve state and name: failed=%t err=%v named=%t unnames=%d", failed, err, client.named, client.unnames)
+			}
 			client.failRead = false
 			deleted, err := server.ApplyResourceChange(ctx, &tfprotov6.ApplyResourceChangeRequest{
 				TypeName: "motherduck_snapshot", PriorState: created.NewState, PlannedState: &nullValue, Config: &nullValue,

@@ -23,7 +23,11 @@ physical deletion of retained history.
 
 If creation succeeds but catalog readback fails, Terraform keeps the database
 and snapshot name for recovery. Destroy resolves a missing snapshot ID from
-that name before clearing it. Failed or ambiguous lookups stop cleanup.
+that name before clearing it. Failed, empty or ambiguous recovery lookups keep
+the resource in state and stop cleanup. Refresh also keeps missing-ID state
+when metadata is unlisted because the snapshot name may still be retained.
+Retry after catalog reads recover. If you confirm that the remote name was
+already cleared, remove the resource from state explicitly.
 
 A named snapshot outlives the database that created it and stays retained and
 billed until its name is cleared. When its database is dropped outside
