@@ -63,6 +63,32 @@ func TestFlightContentBytesValidator(t *testing.T) {
 	}
 }
 
+func TestFlightInstanceTypeValidator(t *testing.T) {
+	cases := []struct {
+		value   types.String
+		wantErr bool
+	}{
+		{types.StringValue("F4"), false},
+		{types.StringValue("F8"), false},
+		{types.StringValue("F16"), false},
+		{types.StringValue("F32"), false},
+		// MotherDuck compares size names case-sensitively.
+		{types.StringValue("f16"), true},
+		{types.StringValue("F64"), true},
+		{types.StringValue("basic.medium"), true},
+		{types.StringValue(""), true},
+		{types.StringNull(), false},
+		{types.StringUnknown(), false},
+	}
+	for _, tc := range cases {
+		resp := validator.StringResponse{}
+		flightInstanceTypeValidator{}.ValidateString(t.Context(), validator.StringRequest{Path: path.Root("instance_type"), ConfigValue: tc.value}, &resp)
+		if resp.Diagnostics.HasError() != tc.wantErr {
+			t.Fatalf("instance_type %v diagnostics = %v, want error %t", tc.value, resp.Diagnostics, tc.wantErr)
+		}
+	}
+}
+
 func TestFlightSchemaDocumentsPlanRuntimeRulesAndScheduleState(t *testing.T) {
 	s := resourceSchema(t, NewFlightResource())
 	runtime := s.Attributes["max_runtime_sec"].(schema.Int64Attribute).MarkdownDescription
@@ -97,7 +123,7 @@ func TestReadFlightReadsScheduleStatusAndOwner(t *testing.T) {
 	client := &scriptedAppSQL{queryRow: func(query string) mdsql.RowScanner {
 		switch {
 		case strings.Contains(query, "MD_GET_FLIGHT_VERSION"):
-			return scannedRow{values: []any{"print(1)", nil, nil, nil, nil, int64(900)}}
+			return scannedRow{values: []any{"print(1)", nil, nil, nil, nil, int64(900), "F16"}}
 		case strings.Contains(query, "MD_GET_FLIGHT("):
 			if !strings.Contains(query, "schedule_status") || !strings.Contains(query, "owner_name") {
 				return scannedRow{err: fmt.Errorf("query does not read schedule_status and owner_name: %q", query)}
@@ -116,10 +142,13 @@ func TestReadFlightReadsScheduleStatusAndOwner(t *testing.T) {
 	if model.ScheduleStatus.ValueString() != "DISABLED" || model.OwnerName.ValueString() != "analyst" {
 		t.Fatalf("schedule_status = %s, owner_name = %s", model.ScheduleStatus, model.OwnerName)
 	}
+	if model.InstanceType.ValueString() != "F16" {
+		t.Fatalf("instance_type = %s, want the size reported by MD_GET_FLIGHT_VERSION", model.InstanceType)
+	}
 
 	client.queryRow = func(query string) mdsql.RowScanner {
 		if strings.Contains(query, "MD_GET_FLIGHT_VERSION") {
-			return scannedRow{values: []any{"print(1)", nil, nil, nil, nil, int64(900)}}
+			return scannedRow{values: []any{"print(1)", nil, nil, nil, nil, int64(900), "F16"}}
 		}
 		return scannedRow{values: []any{"flight", nil, nil, "ACTIVE", int64(1), "c", "u", "analyst"}}
 	}

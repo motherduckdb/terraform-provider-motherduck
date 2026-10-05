@@ -22,6 +22,12 @@ variable "run_flight" {
   default = false
 }
 
+# Null applies the plan default size. F4 is offered on every plan.
+variable "instance_type" {
+  type    = string
+  default = null
+}
+
 locals {
   suffix      = replace(var.run_id, "-", "_")
   flight_name = "tf_flight_${local.suffix}"
@@ -30,6 +36,7 @@ locals {
 resource "motherduck_flight" "smoke" {
   name            = local.flight_name
   max_runtime_sec = 300
+  instance_type   = var.instance_type
 
   config = {
     SOURCE_LABEL = var.source_label
@@ -87,6 +94,10 @@ output "current_version" {
 
 output "max_runtime_sec" {
   value = motherduck_flight.smoke.max_runtime_sec
+}
+
+output "instance_type" {
+  value = motherduck_flight.smoke.instance_type
 }
 
 # The account-wide listing changes while parallel smoke runs create and delete

@@ -4,6 +4,7 @@ import (
 	"context"
 	stdsql "database/sql"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -30,6 +31,7 @@ type flightModel struct {
 	AccessTokenName   types.String `tfsdk:"access_token_name"`
 	FlightSecretNames types.List   `tfsdk:"flight_secret_names"`
 	MaxRuntimeSec     types.Int64  `tfsdk:"max_runtime_sec"`
+	InstanceType      types.String `tfsdk:"instance_type"`
 	ScheduleStatus    types.String `tfsdk:"schedule_status"`
 	OwnerName         types.String `tfsdk:"owner_name"`
 	Status            types.String `tfsdk:"status"`
@@ -93,6 +95,13 @@ func (r *flightResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				MarkdownDescription: "Maximum Flight runtime in seconds. MotherDuck enforces a per-plan cap: 3,600 seconds (1 hour) on the Lite and Free plans, 28,800 seconds (8 hours) during a free trial, and no cap on the Business plan. On a capped plan, a value above the cap or `0` is rejected. On the Business plan, `0` removes the runtime limit. When omitted at creation, MotherDuck applies the plan default: 8 hours on the Business plan and during a free trial, and 1 hour on the Lite and Free plans. Removing a configured value keeps the last applied limit, so set the value explicitly to change it.",
 				PlanModifiers:       int64UseStateForUnknown(),
 				Validators:          []validator.Int64{tfvalidators.Int64Range("MotherDuck Flight maximum runtime", 0, 4294967295)},
+			},
+			"instance_type": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Runner size for Flight runs: `F4`, `F16`, or `F32`, with 4, 16, or 32 GB of memory. Each plan offers a subset: `F4`, `F16`, and `F32` on the Business plan, `F4` and `F16` on the Lite plan and during a free trial, and `F4` on the Free plan. MotherDuck rejects a size the plan does not offer. When omitted at creation, MotherDuck applies the plan default: `F16` on the Business and Lite plans and during a free trial, and `F4` on the Free plan. Removing a configured value keeps the last applied size, so set the value explicitly to change it. A change creates a new Flight version.",
+				PlanModifiers:       stringUseStateForUnknown(),
+				Validators:          []validator.String{flightInstanceTypeValidator{}},
 			},
 			"schedule_status": schema.StringAttribute{
 				Computed:            true,
@@ -288,15 +297,15 @@ func (r *flightResource) readFlightVersion(ctx context.Context, model *flightMod
 	if client == nil {
 		return
 	}
-	var sourceCode, requirements, accessTokenName, secretNamesJSON, configJSON stdsql.NullString
+	var sourceCode, requirements, accessTokenName, secretNamesJSON, configJSON, instanceType stdsql.NullString
 	var maxRuntimeSec stdsql.NullInt64
 	query := fmt.Sprintf(
-		"SELECT source_code, requirements_txt, access_token_name, to_json(flight_secret_names)::VARCHAR, to_json(config)::VARCHAR, max_runtime_sec FROM MD_GET_FLIGHT_VERSION(flight_id := %s::UUID, version_number := %d)",
+		"SELECT source_code, requirements_txt, access_token_name, to_json(flight_secret_names)::VARCHAR, to_json(config)::VARCHAR, max_runtime_sec, instance_type FROM MD_GET_FLIGHT_VERSION(flight_id := %s::UUID, version_number := %d)",
 		sqlbuild.StringLiteral(model.ID.ValueString()),
 		version,
 	)
 	if err := retry.SQL(ctx, func() error {
-		return client.QueryRow(ctx, query).Scan(&sourceCode, &requirements, &accessTokenName, &secretNamesJSON, &configJSON, &maxRuntimeSec)
+		return client.QueryRow(ctx, query).Scan(&sourceCode, &requirements, &accessTokenName, &secretNamesJSON, &configJSON, &maxRuntimeSec, &instanceType)
 	}); err != nil {
 		diags.AddError("Unable to read MotherDuck Flight version", err.Error())
 		return
@@ -311,6 +320,7 @@ func (r *flightResource) readFlightVersion(ctx context.Context, model *flightMod
 	} else {
 		model.MaxRuntimeSec = types.Int64Null()
 	}
+	model.InstanceType = nullString(instanceType)
 }
 
 func flightConfigMapValidators() []validator.Map {
@@ -408,6 +418,31 @@ func (v flightContentBytesValidator) ValidateString(ctx context.Context, req val
 	}
 }
 
+// flightInstanceTypes lists every size name MotherDuck accepts, smallest to
+// largest. MotherDuck rejects other names, and each plan offers a subset, which
+// only MotherDuck can check. F8 is a known name that no plan currently offers.
+var flightInstanceTypes = []string{"F4", "F8", "F16", "F32"}
+
+type flightInstanceTypeValidator struct{}
+
+func (v flightInstanceTypeValidator) Description(ctx context.Context) string {
+	return "must be one of " + strings.Join(flightInstanceTypes, ", ")
+}
+
+func (v flightInstanceTypeValidator) MarkdownDescription(ctx context.Context) string {
+	return "must be one of `" + strings.Join(flightInstanceTypes, "`, `") + "`"
+}
+
+func (v flightInstanceTypeValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if slices.Contains(flightInstanceTypes, req.ConfigValue.ValueString()) {
+		return
+	}
+	resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck Flight instance type", fmt.Sprintf("Flight instance_type %q is not a MotherDuck instance size. Use one of %s. Sizes are case-sensitive.", req.ConfigValue.ValueString(), strings.Join(flightInstanceTypes, ", ")))
+}
+
 func flightCreateArgs(ctx context.Context, model *flightModel, diags *diag.Diagnostics) (map[string]string, bool) {
 	args := map[string]string{}
 	args["name"] = sqlbuild.StringLiteral(model.Name.ValueString())
@@ -433,6 +468,9 @@ func flightCreateArgs(ctx context.Context, model *flightModel, diags *diag.Diagn
 	}
 	if !model.MaxRuntimeSec.IsNull() && !model.MaxRuntimeSec.IsUnknown() {
 		args["max_runtime_sec"] = fmt.Sprintf("%d", model.MaxRuntimeSec.ValueInt64())
+	}
+	if !model.InstanceType.IsNull() && !model.InstanceType.IsUnknown() {
+		args["instance_type"] = sqlbuild.StringLiteral(model.InstanceType.ValueString())
 	}
 	return args, !diags.HasError()
 }
@@ -475,6 +513,9 @@ func flightUpdateArgs(ctx context.Context, plan, state *flightModel, diags *diag
 	}
 	if !plan.MaxRuntimeSec.Equal(state.MaxRuntimeSec) && !plan.MaxRuntimeSec.IsUnknown() {
 		args["max_runtime_sec"] = fmt.Sprintf("%d", plan.MaxRuntimeSec.ValueInt64())
+	}
+	if !plan.InstanceType.Equal(state.InstanceType) && !plan.InstanceType.IsUnknown() && !plan.InstanceType.IsNull() {
+		args["instance_type"] = sqlbuild.StringLiteral(plan.InstanceType.ValueString())
 	}
 	return args, !diags.HasError()
 }

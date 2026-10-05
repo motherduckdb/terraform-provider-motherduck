@@ -42,9 +42,26 @@ exceeds them:
 | Lite | 3,600 (1 hour) | 3,600 | Yes |
 | Free | 3,600 (1 hour) | 3,600 | No |
 
-On a plan with a cap, `max_runtime_sec = 0` is rejected. The provider cannot
-see the organization's plan, so these limits fail at apply time, not at plan
-time.
+On a plan with a cap, `max_runtime_sec = 0` is rejected.
+
+`instance_type` sets the runner size for every run of the Flight, manual and
+scheduled:
+
+| Plan | Default `instance_type` | Offered sizes |
+| --- | --- | --- |
+| Business | `F16` | `F4`, `F16`, `F32` |
+| Free trial | `F16` | `F4`, `F16` |
+| Lite | `F16` | `F4`, `F16` |
+| Free | `F4` | `F4` |
+
+`F4`, `F16`, and `F32` have 4, 16, and 32 GB of memory. A Flight created
+before sizes existed reads back as `F16`. MotherDuck checks a size against the
+plan only when it is set, so a Flight keeps its size after the organization
+changes plans. An update that sets a size the new plan does not offer is
+rejected.
+
+The provider cannot see the organization's plan, so these limits fail at apply
+time, not at plan time.
 
 MotherDuck can disable a schedule on its own, for example after the
 organization moves to a plan without scheduled runs. `schedule_status` then
@@ -52,8 +69,9 @@ reads `DISABLED` while `schedule_cron` keeps its value. Terraform reports the
 status but does not manage it.
 
 The provider validates at plan time that `source_code` is 1 to 204,800 bytes,
-that `requirements_txt` is at most 20,480 bytes, and that `config` does not use
-a reserved name: `MOTHERDUCK_TOKEN`, `MOTHERDUCK_FLIGHTS_RUN`,
+that `requirements_txt` is at most 20,480 bytes, that `instance_type` is a
+MotherDuck size name (`F4`, `F8`, `F16`, or `F32`, case-sensitive), and that
+`config` does not use a reserved name: `MOTHERDUCK_TOKEN`, `MOTHERDUCK_FLIGHTS_RUN`,
 `MOTHERDUCK_FLIGHT_ID`, or `MOTHERDUCK_FLIGHT_RUN_ID`.
 
 ## Lifecycle and import

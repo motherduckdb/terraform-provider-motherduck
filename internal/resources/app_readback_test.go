@@ -253,7 +253,7 @@ func flightReadbackClient(schedule any) *scriptedAppSQL {
 	return &scriptedAppSQL{queryRow: func(query string) mdsql.RowScanner {
 		switch {
 		case strings.Contains(query, "MD_GET_FLIGHT_VERSION"):
-			return scannedRow{values: []any{"print(1)", nil, nil, nil, nil, int64(900)}}
+			return scannedRow{values: []any{"print(1)", nil, nil, nil, nil, int64(900), "F16"}}
 		case strings.Contains(query, "MD_GET_FLIGHT("):
 			return scannedRow{values: []any{"flight", schedule, nil, "ACTIVE", int64(1), "c", "u", "owner"}}
 		default:
@@ -335,6 +335,7 @@ func plannedFlight() *flightModel {
 		AccessTokenName:   types.StringNull(),
 		FlightSecretNames: types.ListNull(types.StringType),
 		MaxRuntimeSec:     types.Int64Unknown(),
+		InstanceType:      types.StringUnknown(),
 		Status:            types.StringUnknown(),
 		CurrentVersion:    types.Int64Unknown(),
 		CreatedAt:         types.StringUnknown(),

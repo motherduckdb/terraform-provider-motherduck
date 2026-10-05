@@ -156,6 +156,7 @@ func (c *flightDependencyContractSQL) QueryRow(_ context.Context, query string, 
 			nil,
 			nil,
 			nil,
+			"F16",
 		}}
 	case strings.Contains(query, "FROM MD_GET_FLIGHT("):
 		id, err := contractFlightID(query)
