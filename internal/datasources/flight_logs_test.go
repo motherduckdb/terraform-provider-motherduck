@@ -69,9 +69,10 @@ func TestFlightLogOrderValidator(t *testing.T) {
 }
 
 func TestFlightListingsDocumentServerDefaults(t *testing.T) {
-	for _, name := range []string{"flights", "flight_versions", "flight_runs"} {
-		if description := findSpec(t, name).description; !strings.Contains(description, "50") {
-			t.Fatalf("%s description must document the 50-row default page: %s", name, description)
+	// MotherDuck pages Flights and versions by 5,000 rows and runs by 50.
+	for name, want := range map[string]string{"flights": "5,000", "flight_versions": "5,000", "flight_runs": "50"} {
+		if description := findSpec(t, name).description; !strings.Contains(description, want) {
+			t.Fatalf("%s description must document the %s-row default page: %s", name, want, description)
 		}
 	}
 	if description := findSpec(t, "flight_logs").description; !strings.Contains(description, "1,000 lines") {
