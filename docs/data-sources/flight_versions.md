@@ -2,12 +2,12 @@
 page_title: "motherduck_flight_versions Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Lists versions for one MotherDuck Flight. MotherDuck returns 50 versions when limit is omitted, so set limit and offset to read more. Rows in the returned page are sorted newest version first.
+  Lists versions for one MotherDuck Flight. MotherDuck returns up to 5,000 versions when limit is omitted. Set limit and offset to page through more. Rows in the returned page are sorted newest version first and include the instance_type of each version.
 ---
 
 # motherduck_flight_versions (Data Source)
 
-Lists versions for one MotherDuck Flight. MotherDuck returns 50 versions when `limit` is omitted, so set `limit` and `offset` to read more. Rows in the returned page are sorted newest version first.
+Lists versions for one MotherDuck Flight. MotherDuck returns up to 5,000 versions when `limit` is omitted. Set `limit` and `offset` to page through more. Rows in the returned page are sorted newest version first and include the `instance_type` of each version.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read

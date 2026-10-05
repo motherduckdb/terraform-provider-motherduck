@@ -185,7 +185,7 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_LIST_DIVE_VERSIONS(id := " + sqlbuild.StringLiteral(m.DiveID.ValueString()) + "::UUID)", nil
 		}},
-		{name: "flights", description: "Lists MotherDuck Flights available to the current account. Callers with organization-wide Flight visibility can restrict results to their own Flights. MotherDuck returns 50 Flights when `limit` is omitted, so set `limit` and `offset` to read more. Rows in the returned page are sorted by Flight ID.", requiredFunction: "md_list_flights", attrs: []string{"limit", "offset", "owner_only"}, typedRows: flightSummaryRows(), postProcess: sortRowsByKeys(rowSortKey{field: "flight_id"}), build: func(m rowsModel) (string, error) {
+		{name: "flights", description: "Lists MotherDuck Flights available to the current account. Callers with organization-wide Flight visibility can restrict results to their own Flights. MotherDuck returns up to 5,000 Flights when `limit` is omitted. Set `limit` and `offset` to page through larger accounts. Rows in the returned page are sorted by Flight ID.", requiredFunction: "md_list_flights", attrs: []string{"limit", "offset", "owner_only"}, typedRows: flightSummaryRows(), postProcess: sortRowsByKeys(rowSortKey{field: "flight_id"}), build: func(m rowsModel) (string, error) {
 			args := map[string]string{}
 			if !m.Limit.IsNull() {
 				args[`"LIMIT"`] = fmt.Sprintf("%d", m.Limit.ValueInt64())
@@ -204,7 +204,7 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_GET_FLIGHT(flight_id := " + sqlbuild.StringLiteral(m.FlightID.ValueString()) + "::UUID)", nil
 		}},
-		{name: "flight_versions", description: "Lists versions for one MotherDuck Flight. MotherDuck returns 50 versions when `limit` is omitted, so set `limit` and `offset` to read more. Rows in the returned page are sorted newest version first.", requiredFunction: "md_list_flight_versions", attrs: []string{"flight_id", "limit", "offset"}, requiredAttrs: []string{"flight_id"}, postProcess: sortRowsByKeys(newestVersionFirst()...), build: func(m rowsModel) (string, error) {
+		{name: "flight_versions", description: "Lists versions for one MotherDuck Flight. MotherDuck returns up to 5,000 versions when `limit` is omitted. Set `limit` and `offset` to page through more. Rows in the returned page are sorted newest version first and include the `instance_type` of each version.", requiredFunction: "md_list_flight_versions", attrs: []string{"flight_id", "limit", "offset"}, requiredAttrs: []string{"flight_id"}, postProcess: sortRowsByKeys(newestVersionFirst()...), build: func(m rowsModel) (string, error) {
 			if m.FlightID.IsNull() {
 				return "", fmt.Errorf("flight_id is required")
 			}

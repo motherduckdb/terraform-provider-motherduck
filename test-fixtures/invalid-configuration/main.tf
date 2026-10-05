@@ -59,8 +59,9 @@ resource "motherduck_flight_run" "bad_wait_options" {
 }
 
 resource "motherduck_flight" "bad_config" {
-  name        = "bad_config"
-  source_code = "print('bad config')"
+  name          = "bad_config"
+  source_code   = "print('bad config')"
+  instance_type = "f16"
 
   config = {
     ""               = "empty"

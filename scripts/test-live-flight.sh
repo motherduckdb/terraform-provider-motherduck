@@ -65,11 +65,15 @@ trap live_cleanup_on_exit EXIT
 
 write_vars() {
   local source_label="$1"
+  local instance_type="${2:-}"
   cat > "${work_dir}/terraform.tfvars" <<HCL
 run_id = "${RUN_ID}"
 source_label = "${source_label}"
 run_flight = ${run_flight_hcl}
 HCL
+  if [[ -n "${instance_type}" ]]; then
+    printf 'instance_type = "%s"\n' "${instance_type}" >> "${work_dir}/terraform.tfvars"
+  fi
 }
 
 echo "==> Live Flight smoke (${RUN_ID})"
@@ -79,8 +83,20 @@ TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" valid
 write_vars "initial flight content"
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false
 
-write_vars "updated flight content"
+# Without instance_type, MotherDuck applies the plan default size.
+default_instance_type="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw instance_type)"
+if [[ ! "${default_instance_type}" =~ ^F(4|16|32)$ ]]; then
+  echo "Expected Flight instance_type to read back a plan default size, got '${default_instance_type}'" >&2
+  exit 1
+fi
+
+write_vars "updated flight content" "F4"
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false
+
+if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw instance_type)" != "F4" ]]; then
+  echo "Expected Flight instance_type to refresh as F4" >&2
+  exit 1
+fi
 
 if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw max_runtime_sec)" != "300" ]]; then
   echo "Expected Flight max_runtime_sec to refresh as 300" >&2

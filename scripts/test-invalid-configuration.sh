@@ -67,6 +67,7 @@ validate_fixture invalid-configuration \
   'Invalid MotherDuck Flight run poll interval' \
   'Invalid MotherDuck Flight run timeout' \
   'Invalid MotherDuck Flight config' \
+  'Invalid MotherDuck Flight instance type' \
   'reserved and cannot be set' \
   'must not contain "=".' \
   data_path \

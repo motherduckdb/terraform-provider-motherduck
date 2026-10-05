@@ -4,6 +4,14 @@ Each release has a versioned notes file under `release-notes/`, which is also th
 body of the matching [GitHub release](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
 This index lists the headline change for every release.
 
+## v0.3.2
+
+Set a Flight's runner size with `instance_type` and use DuckDB 1.5.6, matching the MotherDuck release of 2026-10-01. Constraints such as `~> 0.3.0` select it. See the [v0.3.2 release notes](release-notes/v0.3.2.md).
+
+## v0.3.1
+
+Look up separately owned secrets with `data.motherduck_secret` and keep snapshot state when a failed create or cleanup cannot resolve the snapshot ID. See the [v0.3.1 release notes](release-notes/v0.3.1.md).
+
 ## v0.3.0
 
 Register Iceberg REST catalogs as databases, manage the MotherDuck features released through 2026-09-25, and install on glibc 2.34 and macOS 13. Includes stricter plan-time validation and a few behavior changes, so `~> 0.2.x` constraints do not select it. See the [upgrade steps and v0.3.0 release notes](release-notes/v0.3.0.md).

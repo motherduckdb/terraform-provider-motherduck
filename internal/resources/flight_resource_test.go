@@ -30,6 +30,7 @@ func TestFlightArgs(t *testing.T) {
 		AccessTokenName:   types.StringValue("flight-token"),
 		FlightSecretNames: secrets,
 		MaxRuntimeSec:     types.Int64Value(900),
+		InstanceType:      types.StringValue("F32"),
 	}
 
 	var diags diag.Diagnostics
@@ -42,6 +43,7 @@ func TestFlightArgs(t *testing.T) {
 		"access_token_name":   "'flight-token'",
 		"config":              "MAP {'warehouse': 'analytics'}",
 		"flight_secret_names": "['aws', 'github']",
+		"instance_type":       "'F32'",
 		"name":                "'daily'",
 		"max_runtime_sec":     "900",
 		"requirements_txt":    "'requests==2.32.0'",
@@ -160,5 +162,66 @@ func TestOptionalFlightVersionValuesFromJSON(t *testing.T) {
 	}
 	if got := optionalStringFromLive(types.StringValue("old"), sql.NullString{String: "", Valid: true}); got.IsNull() || got.ValueString() != "" {
 		t.Fatalf("empty live optional string should be recorded when prior state was configured, got %#v", got)
+	}
+}
+
+func TestFlightUpdateArgsInstanceType(t *testing.T) {
+	ctx := context.Background()
+	base := func(instanceType types.String) *flightModel {
+		return &flightModel{
+			Name:              types.StringValue("daily"),
+			SourceCode:        types.StringValue("print('ok')"),
+			Config:            types.MapNull(types.StringType),
+			FlightSecretNames: types.ListNull(types.StringType),
+			MaxRuntimeSec:     types.Int64Value(900),
+			InstanceType:      instanceType,
+		}
+	}
+	cases := []struct {
+		name  string
+		plan  types.String
+		state types.String
+		want  map[string]string
+	}{
+		{"changed", types.StringValue("F4"), types.StringValue("F16"), map[string]string{"instance_type": "'F4'"}},
+		{"unchanged", types.StringValue("F16"), types.StringValue("F16"), map[string]string{}},
+		// Removing the attribute keeps the applied size, so nothing is sent.
+		{"unknown after removal", types.StringUnknown(), types.StringValue("F16"), map[string]string{}},
+		{"null", types.StringNull(), types.StringValue("F16"), map[string]string{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var diags diag.Diagnostics
+			got, ok := flightUpdateArgs(ctx, base(tc.plan), base(tc.state), &diags)
+			if !ok || diags.HasError() {
+				t.Fatalf("flightUpdateArgs failed: %v", diags)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("flightUpdateArgs() = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFlightCreateArgsOmitsUnsetInstanceType(t *testing.T) {
+	ctx := context.Background()
+	for _, value := range []types.String{types.StringNull(), types.StringUnknown()} {
+		model := &flightModel{
+			Name:              types.StringValue("daily"),
+			SourceCode:        types.StringValue("print('ok')"),
+			Config:            types.MapNull(types.StringType),
+			FlightSecretNames: types.ListNull(types.StringType),
+			MaxRuntimeSec:     types.Int64Unknown(),
+			InstanceType:      value,
+		}
+		var diags diag.Diagnostics
+		got, ok := flightCreateArgs(ctx, model, &diags)
+		if !ok || diags.HasError() {
+			t.Fatalf("flightCreateArgs failed: %v", diags)
+		}
+		// MotherDuck applies the plan default when instance_type is omitted.
+		if _, ok := got["instance_type"]; ok {
+			t.Fatalf("flightCreateArgs() sent instance_type for %v: %#v", value, got)
+		}
 	}
 }

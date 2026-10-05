@@ -42,9 +42,26 @@ exceeds them:
 | Lite | 3,600 (1 hour) | 3,600 | Yes |
 | Free | 3,600 (1 hour) | 3,600 | No |
 
-On a plan with a cap, `max_runtime_sec = 0` is rejected. The provider cannot
-see the organization's plan, so these limits fail at apply time, not at plan
-time.
+On a plan with a cap, `max_runtime_sec = 0` is rejected.
+
+`instance_type` sets the runner size for every run of the Flight, manual and
+scheduled:
+
+| Plan | Default `instance_type` | Offered sizes |
+| --- | --- | --- |
+| Business | `F16` | `F4`, `F16`, `F32` |
+| Free trial | `F16` | `F4`, `F16` |
+| Lite | `F16` | `F4`, `F16` |
+| Free | `F4` | `F4` |
+
+`F4`, `F16`, and `F32` have 4, 16, and 32 GB of memory. A Flight created
+before sizes existed reads back as `F16`. MotherDuck checks a size against the
+plan only when it is set, so a Flight keeps its size after the organization
+changes plans. An update that sets a size the new plan does not offer is
+rejected.
+
+The provider cannot see the organization's plan, so these limits fail at apply
+time, not at plan time.
 
 MotherDuck can disable a schedule on its own, for example after the
 organization moves to a plan without scheduled runs. `schedule_status` then
@@ -52,8 +69,9 @@ reads `DISABLED` while `schedule_cron` keeps its value. Terraform reports the
 status but does not manage it.
 
 The provider validates at plan time that `source_code` is 1 to 204,800 bytes,
-that `requirements_txt` is at most 20,480 bytes, and that `config` does not use
-a reserved name: `MOTHERDUCK_TOKEN`, `MOTHERDUCK_FLIGHTS_RUN`,
+that `requirements_txt` is at most 20,480 bytes, that `instance_type` is a
+MotherDuck size name (`F4`, `F8`, `F16`, or `F32`, case-sensitive), and that
+`config` does not use a reserved name: `MOTHERDUCK_TOKEN`, `MOTHERDUCK_FLIGHTS_RUN`,
 `MOTHERDUCK_FLIGHT_ID`, or `MOTHERDUCK_FLIGHT_RUN_ID`.
 
 ## Lifecycle and import
@@ -74,6 +92,7 @@ See [resource scope](../guides/resource-scope.md).
 resource "motherduck_flight" "heartbeat" {
   name            = "heartbeat"
   max_runtime_sec = 900
+  instance_type   = "F4"
 
   config = {
     mode = "default"
@@ -102,6 +121,7 @@ resource "motherduck_flight" "heartbeat" {
 - `access_token_name` (String) Optional MotherDuck access token name for the Flight. When omitted, MotherDuck uses its default Flight token behavior and Terraform keeps this field unset.
 - `config` (Map of String) Optional string configuration passed to the Flight. Keys become Flight runtime environment variables and must be valid Flight config names.
 - `flight_secret_names` (List of String) Optional MotherDuck secret names available to the Flight.
+- `instance_type` (String) Runner size for Flight runs: `F4`, `F16`, or `F32`, with 4, 16, or 32 GB of memory. Each plan offers a subset: `F4`, `F16`, and `F32` on the Business plan, `F4` and `F16` on the Lite plan and during a free trial, and `F4` on the Free plan. MotherDuck rejects a size the plan does not offer. When omitted at creation, MotherDuck applies the plan default: `F16` on the Business and Lite plans and during a free trial, and `F4` on the Free plan. Removing a configured value keeps the last applied size, so set the value explicitly to change it. A change creates a new Flight version.
 - `max_runtime_sec` (Number) Maximum Flight runtime in seconds. MotherDuck enforces a per-plan cap: 3,600 seconds (1 hour) on the Lite and Free plans, 28,800 seconds (8 hours) during a free trial, and no cap on the Business plan. On a capped plan, a value above the cap or `0` is rejected. On the Business plan, `0` removes the runtime limit. When omitted at creation, MotherDuck applies the plan default: 8 hours on the Business plan and during a free trial, and 1 hour on the Lite and Free plans. Removing a configured value keeps the last applied limit, so set the value explicitly to change it.
 - `requirements_txt` (String) Optional Python requirements text for the Flight runtime. Must be at most 20,480 bytes (20 KiB) of UTF-8.
 - `schedule_cron` (String) Optional cron schedule for the Flight. MotherDuck rejects schedules on plans without scheduled runs, such as the Free plan. See `schedule_status` for whether MotherDuck is currently running the schedule.
