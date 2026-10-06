@@ -9,4 +9,5 @@ packages:
     source: terraform-provider
     version: 1.4.0
     parameters:
-      - ./bin/terraform-provider-motherduck
+      - registry.terraform.io/motherduckdb/motherduck
+      - 0.3.2

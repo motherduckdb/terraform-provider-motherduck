@@ -16,6 +16,7 @@ import (
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlfunc"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 
@@ -172,6 +173,24 @@ func isNotFound(err error) bool {
 			strings.Contains(msg, "no database/share named")
 	}
 	return false
+}
+
+// isDatabaseGone reports whether a DROP inside database failed only because
+// the database itself no longer exists. A connection that attached the
+// database before another operation dropped it binds the statement and then
+// reports the missing catalog, so the object is gone with its database. This
+// happens when Pulumi destroys a database and its children in parallel, or when
+// the database is dropped outside Terraform. Only a message that names this
+// database matches, so errors about other catalogs still surface.
+func isDatabaseGone(err error, database string) bool {
+	var duckErr *duckdb.Error
+	if !errors.As(err, &duckErr) || (duckErr.Type != duckdb.ErrorTypeBinder && duckErr.Type != duckdb.ErrorTypeCatalog) {
+		return false
+	}
+	msg := strings.ToLower(duckErr.Error())
+	quoted := strings.ToLower(sqlbuild.QuoteIdentifier(database))
+	return strings.Contains(msg, "catalog "+quoted+" does not exist") ||
+		strings.Contains(msg, "catalog with name "+strings.ToLower(database)+" does not exist")
 }
 
 // isNotFoundFor reports whether err is a not-found error about one of the

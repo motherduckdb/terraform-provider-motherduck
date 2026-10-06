@@ -139,7 +139,7 @@ func (r *schemaResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		return
 	}
 	query := "DROP SCHEMA IF EXISTS " + sqlbuild.QuoteQualifiedIdentifier(state.Database.ValueString(), state.Name.ValueString()) + schemaDropMode(state)
-	if err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) }); err != nil {
+	if err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) }); err != nil && !isDatabaseGone(err, state.Database.ValueString()) {
 		resp.Diagnostics.AddError("Unable to drop MotherDuck schema", err.Error())
 	}
 }

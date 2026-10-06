@@ -76,6 +76,26 @@ jobs:
       - name: Run hermetic behavior contracts
         run: make test-unit test-contract
 
+  pulumi-bridge:
+    name: Pulumi bridge
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # Downloads the pinned Pulumi CLI and bridge plugin. No MotherDuck
+      # credentials are used.
+      - name: Generate the Pulumi schema and preview the example
+        run: make test-pulumi
+
   cli-compatibility:
     name: ${{ matrix.cli }} ${{ matrix.version }}
     timeout-minutes: 10
