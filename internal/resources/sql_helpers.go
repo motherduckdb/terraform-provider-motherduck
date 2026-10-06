@@ -107,7 +107,7 @@ func dropRelation(ctx context.Context, r interface {
 		diags.AddError("Unable to attach MotherDuck database", err.Error())
 		return
 	}
-	if err := client.Exec(ctx, "DROP "+keyword+" IF EXISTS "+sqlbuild.QuoteQualifiedIdentifier(database.ValueString(), schemaName.ValueString(), name.ValueString())); err != nil {
+	if err := client.Exec(ctx, "DROP "+keyword+" IF EXISTS "+sqlbuild.QuoteQualifiedIdentifier(database.ValueString(), schemaName.ValueString(), name.ValueString())); err != nil && !isDatabaseGone(err, database.ValueString()) {
 		diags.AddError("Unable to drop MotherDuck relation", err.Error())
 	}
 }

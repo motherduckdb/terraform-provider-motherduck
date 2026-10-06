@@ -151,6 +151,7 @@ test-scripts:
 	./scripts/test-release-signing-unit.sh
 	./scripts/test-release-platform-floor-unit.sh
 	./scripts/test-live-cleanup-audit-unit.sh
+	./scripts/test-pulumi-cli-unit.sh
 
 test-integration:
 	@if [ -z "$${MOTHERDUCK_TOKEN:-}" ]; then echo "MOTHERDUCK_TOKEN is required for SQL integration tests" >&2; exit 1; fi
@@ -242,7 +243,14 @@ SCRIPT_TEST_TARGETS := $(notdir $(SCRIPT_TEST_SCRIPTS:.sh=))
 $(SCRIPT_TEST_TARGETS):
 	./scripts/$@.sh
 
-.PHONY: test-pulumi-example test-example-backend test-live-cookbook-pipeline test-live-pulumi-example test-live-role-audit
+.PHONY: test-pulumi test-pulumi-schema test-pulumi-example test-example-backend test-live-cookbook-pipeline test-live-pulumi test-live-pulumi-example test-live-role-audit
+# Offline Pulumi bridge checks. They download the pinned Pulumi CLI and bridge
+# plugin, but need no MotherDuck credentials.
+test-pulumi: test-pulumi-schema test-pulumi-example
+
+test-pulumi-schema:
+	./scripts/test-pulumi-schema.sh
+
 test-pulumi-example:
 	./scripts/test-pulumi-example.sh
 
@@ -257,6 +265,9 @@ test-live-cookbook-pipeline:
 
 test-live-pulumi-example:
 	./scripts/test-live-pulumi-example.sh
+
+test-live-pulumi:
+	./scripts/test-live-pulumi.sh
 
 test-live-role-audit:
 	./scripts/test-live-role-audit.sh

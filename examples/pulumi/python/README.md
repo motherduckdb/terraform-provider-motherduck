@@ -3,23 +3,20 @@
 This is a small Pulumi program using Pulumi's Any Terraform Provider bridge with
 the MotherDuck Terraform provider. It creates one database, schema, and table.
 
-The recipe was verified with Pulumi `v3.265.0` and the MotherDuck provider
-`v0.2.10` on macOS ARM64. The bridge package is pinned to `v1.4.0` in
-`Pulumi.yaml`, and the Pulumi SDK is pinned to `3.265.0` in `requirements.txt`.
-The sample database name is required configuration so each stack can use a
-unique name.
+The recipe pins Pulumi `v3.265.0`, the bridge package `v1.4.0`, and the
+MotherDuck provider `0.3.2` in `Pulumi.yaml` and `requirements.txt`. The
+sample database name is required configuration so each stack can use a unique
+name. Read [Use the provider with Pulumi](../../../docs/guides/pulumi.md) for
+the differences from Terraform before adapting it.
 
 ## Setup
 
-Install Pulumi `v3.265.0`, then place the provider binary at
-`bin/terraform-provider-motherduck`. The binary name and path are significant:
-Pulumi requires a local provider path ending in `terraform-provider-<name>`.
-
-Download the v0.2.10 artifact for your platform from the
-[MotherDuck v0.2.10 GitHub release](https://github.com/motherduckdb/terraform-provider-motherduck/releases/tag/v0.2.10),
-verify it against `terraform-provider-motherduck_0.2.10_SHA256SUMS` and its
-detached publisher signature (see the [signed installation guide](../../../docs/guides/github-installation.md)), unzip
-it, and rename the executable to `bin/terraform-provider-motherduck`.
+Install Pulumi `v3.265.0`. `pulumi install` downloads the provider from the
+Terraform Registry and verifies its checksum and publisher signature, so no
+manual download is needed. To run a provider binary you built or verified
+yourself, replace the two `parameters` entries in `Pulumi.yaml` with a local
+path ending in `terraform-provider-motherduck`, such as
+`./bin/terraform-provider-motherduck`.
 
 Initialize a local backend and install the pinned bridge and generated SDK:
 
@@ -32,12 +29,11 @@ pulumi install
 ```
 
 `pulumi install` reads the pinned `terraform-provider` package declaration,
-generates the local `pulumi_motherduck` SDK, and creates `.venv` from the
+installs the pinned provider, generates the local `pulumi_motherduck` SDK, and creates `.venv` from the
 checked-in runtime options and requirements. Do not run an unversioned
 `pulumi package add` command here because it can select a newer bridge. Keep
 `Pulumi.yaml` and `requirements.txt` under source control. `requirements.txt`
-pins every transitive Python dependency and documents how to regenerate it. Keep the matching
-release checksum beside the downloaded artifact while verifying it. `.venv`, `sdks`, `bin`, and
+pins every transitive Python dependency and documents how to regenerate it. `.venv`, `sdks`, `bin`, and
 `Pulumi.<stack>.yaml` are local files and are ignored.
 
 `PULUMI_CONFIG_PASSPHRASE` must come from a secret manager or protected CI

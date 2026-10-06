@@ -21,7 +21,7 @@ Terraform Registry modules.
 | Tenant analytics | [Customer-facing analytics](customer-facing-analytics.md) | [Terraform root and Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/customer-facing-analytics) |
 | Reusable tenant infrastructure | [Authentication and ownership](authentication.md) | [Writer bootstrap](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/blueprints/writer-bootstrap) and [read hypertenancy](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/blueprints/read-hypertenancy) |
 | Team roles and grants | [Manage and audit access](access-control.md) | [Access control](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/access-control), [share audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/share-access-audit), and [role audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/role-access-audit) |
-| Pulumi Python | [Signed provider installation](github-installation.md) | [Pinned Python bridge example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/pulumi/python) |
+| Pulumi Python | [Use the provider with Pulumi](pulumi.md) | [Pinned Python bridge example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/pulumi/python) |
 
 ## Install and select credentials
 

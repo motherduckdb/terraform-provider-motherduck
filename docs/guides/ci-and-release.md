@@ -51,6 +51,18 @@ verified against the HashiCorp or OpenTofu release signing key. OpenTofu `1.12.6
 
 The live-smoke workflow also runs the provider against OpenTofu. The default OpenTofu version is `1.12.6`. Override it with the `opentofu_versions` manual workflow input or `TOFU_VERSIONS` locally.
 
+## Pulumi bridge checks
+
+The `Pulumi bridge` job runs `make test-pulumi` with no MotherDuck
+credentials. It installs the Pulumi CLI version pinned in
+`scripts/lib/pulumi-cli.sh`, verified against the release checksum file and a
+pinned digest, and builds the provider from the checkout. It then generates
+the Pulumi schema through the pinned Any Terraform Provider bridge and fails
+when a resource or data source does not map, or when the
+[Pulumi guide](pulumi.md) does not name an ephemeral resource the bridge cannot
+run. It also previews the Python example. Bump the CLI, the bridge, and the
+example pins together.
+
 ## Native package checks
 
 Four native package jobs run on Linux amd64/arm64 and macOS Intel/ARM runners.
@@ -78,6 +90,12 @@ Missing `MOTHERDUCK_TOKEN` fails the job instead of producing a successful skip.
 explicit manual `run_admin_lifecycle` request on `main`. It creates disposable
 accounts, rotates tokens, repairs revoked role grants, verifies writer/reader
 isolation, and checks cleanup. Pull-request code never receives either token.
+
+The `Live Pulumi lifecycle` job runs `make test-live-pulumi` after the other
+`main` jobs finish. It drives the Pulumi YAML programs in
+`test-fixtures/pulumi-live` through create, refresh, an empty preview,
+in-place updates, a `deleteBeforeReplace` replacement, import, and destroy,
+then audits cleanup. The admin program runs when an admin token is available.
 
 The weekly matrix runs read-only checks on every supported Terraform version and OpenTofu `1.12.6`. SQL lifecycle checks run on Terraform `1.5.7`, Terraform `1.16.4`, and OpenTofu `1.12.6`. The blueprint lifecycle runs on Terraform `1.16.4`.
 

@@ -1,0 +1,170 @@
+# Live Pulumi lifecycle for the SQL-backed MotherDuck resources and functions.
+# scripts/test-live-pulumi.sh points the package at the provider built from
+# this checkout and changes the config values between phases.
+name: motherduck-pulumi-live-sql
+runtime: yaml
+packages:
+  motherduck:
+    source: terraform-provider
+    version: 1.4.0
+    parameters:
+      - registry.terraform.io/motherduckdb/motherduck
+      - 0.3.2
+
+config:
+  runId:
+    type: string
+  viewLimit:
+    type: integer
+  tableLabelType:
+    type: string
+  secretScope:
+    type: string
+  flightRuntime:
+    type: integer
+  guideBody:
+    type: string
+
+resources:
+  database:
+    type: motherduck:Database
+    properties:
+      name: tf_pulumi_${runId}
+      snapshotRetentionDays: 7
+
+  # Pulumi auto-names a resource whose name is omitted.
+  tf_pulumi_auto:
+    type: motherduck:Database
+
+  schema:
+    type: motherduck:Schema
+    properties:
+      database: ${database.name}
+      name: app
+
+  table:
+    type: motherduck:Table
+    properties:
+      database: ${database.name}
+      schema: ${schema.name}
+      name: facts
+      columns:
+        id: INTEGER
+        label: ${tableLabelType}
+    options:
+      # A column change replaces the table under the same name, so the old
+      # table must be dropped before the new one is created.
+      deleteBeforeReplace: true
+
+  view:
+    type: motherduck:View
+    properties:
+      database: ${database.name}
+      schema: ${schema.name}
+      name: recent_facts
+      query: SELECT id FROM "${database.name}"."${schema.name}"."${table.name}" LIMIT ${viewLimit}
+
+  secret:
+    type: motherduck:Secret
+    properties:
+      name: tf_pulumi_${runId}_s3
+      type: s3
+      params:
+        key_id:
+          fn::secret: AKIAPULUMILIVETEST
+        secret:
+          fn::secret: pulumi-live-test-placeholder
+        region: us-east-1
+        scope: ${secretScope}
+
+  share:
+    type: motherduck:Share
+    properties:
+      name: tf_pulumi_${runId}_share
+      sourceDatabase: ${database.name}
+      access: restricted
+      visibility: hidden
+      updateMode: manual
+      includePatterns:
+        - ${schema.name}.${table.name}
+    options:
+      dependsOn:
+        - ${table}
+
+  snapshot:
+    type: motherduck:Snapshot
+    properties:
+      database: ${database.name}
+      name: tf_pulumi_${runId}_snapshot
+    options:
+      dependsOn:
+        - ${table}
+
+  flight:
+    type: motherduck:Flight
+    properties:
+      name: tf_pulumi_${runId}
+      maxRuntimeSec: ${flightRuntime}
+      instanceType: F4
+      config:
+        SOURCE_LABEL: pulumi
+      sourceCode: |
+        import os
+
+        def main():
+            print(os.environ.get("SOURCE_LABEL", "missing"))
+
+        if __name__ == "__main__":
+            main()
+
+  guide:
+    type: motherduck:Guide
+    properties:
+      topic: tf_pulumi/${runId}
+      title: Pulumi live ${runId}
+      description: Pulumi lifecycle check
+      access: user
+      content: |
+        # Pulumi live
+
+        ${guideBody}
+
+  dive:
+    type: motherduck:Dive
+    properties:
+      title: tf_pulumi_${runId}
+      description: Pulumi lifecycle check
+      content: |
+        export default function Dive() {
+          return <div>${guideBody}</div>;
+        }
+
+variables:
+  # Pulumi runs a function during preview whenever its arguments are known,
+  # even with dependsOn. Read a resource created here through an argument that
+  # is only known after creation, such as its ID.
+  flightInfo:
+    fn::invoke:
+      function: motherduck:getFlight
+      arguments:
+        flightId: ${flight.id}
+  currentUser:
+    fn::invoke:
+      function: motherduck:getCurrentUser
+      arguments: {}
+      return: value
+
+outputs:
+  databaseName: ${database.name}
+  flightRowsJson: ${flightInfo.rowsJson}
+  autoDatabaseName: ${tf_pulumi_auto.name}
+  currentUser: ${currentUser}
+  tableColumns: ${table.columns}
+  viewQuery: ${view.query}
+  shareUrl: ${share.url}
+  snapshotId: ${snapshot.id}
+  flightId: ${flight.id}
+  flightRuntime: ${flight.maxRuntimeSec}
+  flightInstanceType: ${flight.instanceType}
+  guideVersion: ${guide.currentVersion}
+  diveId: ${dive.id}

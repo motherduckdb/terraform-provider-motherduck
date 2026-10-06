@@ -103,6 +103,32 @@ jobs:
       - name: Run isolated admin and writer/reader contracts
         run: make test-live-admin
 
+  pulumi-lifecycle:
+    name: Live Pulumi lifecycle
+    timeout-minutes: 30
+    # Runs after the other main jobs, because the cleanup audit at its end
+    # would otherwise see their objects.
+    needs: [exact-main, admin-lifecycle]
+    if: always() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_admin_lifecycle))
+    runs-on: ubuntu-latest
+    environment: motherduck-live
+    env:
+      MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+      MOTHERDUCK_ADMIN_TOKEN: ${{ secrets.MOTHERDUCK_ADMIN_TOKEN || secrets.MOTHERDUCK_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Run Pulumi SQL and admin lifecycles
+        run: make test-live-pulumi
+
   prepare-matrix:
     name: Prepare CLI matrix
     timeout-minutes: 5

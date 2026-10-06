@@ -37,6 +37,10 @@ are present. Download a ZIP and checksums into a fresh directory, verify its
 digest and provenance, then install it with the documented filesystem mirror and
 run Terraform schema discovery and validation.
 
+After the Terraform Registry lists the new version, update the provider version
+in `examples/pulumi/python/Pulumi.yaml` and run `make test-pulumi`. The Pulumi
+bridge installs that pinned version from the Registry.
+
 Do not overwrite published artifacts or reuse a version. Correct a release by
 publishing a new version because dependency lock files depend on immutable digests.
 

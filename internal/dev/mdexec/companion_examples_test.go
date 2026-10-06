@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -37,18 +36,30 @@ func TestPulumiExampleManifest(t *testing.T) {
 	if !ok || manifest.Name == "" || manifest.Runtime.Name != "python" || manifest.Runtime.Options.Virtualenv == "" {
 		t.Fatal("Pulumi example must declare its Python runtime and MotherDuck bridge")
 	}
-	if bridge.Source != "terraform-provider" || !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(bridge.Version) || len(bridge.Parameters) != 1 {
-		t.Fatal("Pulumi bridge must have a pinned version and one provider binary parameter")
+	if bridge.Source != "terraform-provider" || !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(bridge.Version) || len(bridge.Parameters) != 2 {
+		t.Fatal("Pulumi bridge must have a pinned version, the provider registry address, and a pinned provider version")
 	}
-	path := filepath.Clean(bridge.Parameters[0])
-	if filepath.IsAbs(path) || strings.HasPrefix(path, "..") || filepath.Base(path) != "terraform-provider-motherduck" {
-		t.Fatal("Pulumi provider binary must resolve inside the example and retain its provider basename")
+	// Install from the Terraform Registry by exact version, so the bridge
+	// verifies the published, signed release instead of a hand-placed binary.
+	if bridge.Parameters[0] != "registry.terraform.io/motherduckdb/motherduck" || !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(bridge.Parameters[1]) {
+		t.Fatalf("Pulumi provider must be the Terraform Registry address with an exact version, got %v", bridge.Parameters)
+	}
+	pins, err := os.ReadFile("../../../scripts/lib/pulumi-cli.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(pins), `PULUMI_BRIDGE_VERSION="`+bridge.Version+`"`) {
+		t.Fatalf("Pulumi example bridge %s must match PULUMI_BRIDGE_VERSION in scripts/lib/pulumi-cli.sh", bridge.Version)
 	}
 	requirements, err := os.ReadFile("../../../examples/pulumi/python/requirements.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !regexp.MustCompile(`(?m)^pulumi==\d+\.\d+\.\d+$`).Match(requirements) {
+	sdk := regexp.MustCompile(`(?m)^pulumi==(\d+\.\d+\.\d+)$`).FindSubmatch(requirements)
+	if sdk == nil {
 		t.Fatal("Pulumi SDK must be pinned independently of the bridge")
+	}
+	if !strings.Contains(string(pins), `PULUMI_CLI_VERSION="`+string(sdk[1])+`"`) {
+		t.Fatalf("Pulumi SDK %s must match PULUMI_CLI_VERSION in scripts/lib/pulumi-cli.sh", sdk[1])
 	}
 }

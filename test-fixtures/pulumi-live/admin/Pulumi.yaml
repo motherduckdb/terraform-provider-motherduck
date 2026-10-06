@@ -1,0 +1,65 @@
+# Live Pulumi lifecycle for the REST-backed administration resources. The
+# provider reads MOTHERDUCK_TOKEN and MOTHERDUCK_ADMIN_TOKEN from the
+# environment, so neither token enters Pulumi state.
+name: motherduck-pulumi-live-admin
+runtime: yaml
+packages:
+  motherduck:
+    source: terraform-provider
+    version: 1.4.0
+    parameters:
+      - registry.terraform.io/motherduckdb/motherduck
+      - 0.3.2
+
+config:
+  runId:
+    type: string
+  cooldown:
+    type: integer
+  tokenName:
+    type: string
+
+resources:
+  serviceAccount:
+    type: motherduck:ServiceAccount
+    properties:
+      username: tf_pulumi_${runId}
+
+  ducklingConfig:
+    type: motherduck:DucklingConfig
+    properties:
+      username: ${serviceAccount.username}
+      readWriteInstanceSize: standard
+      readWriteCooldownSeconds: ${cooldown}
+      readScalingInstanceSize: standard
+      readScalingCooldownSeconds: 60
+      readScalingFlockSize: 1
+
+  # Renaming the token replaces it. Pulumi creates the new token before it
+  # deletes the old one, which suits rotation.
+  accessToken:
+    type: motherduck:AccessToken
+    properties:
+      username: ${serviceAccount.username}
+      name: ${tokenName}
+      tokenType: read_write
+      ttl: 3600
+
+  role:
+    type: motherduck:Role
+    properties:
+      name: tf_pulumi_${runId}
+
+  roleGrant:
+    type: motherduck:RoleGrant
+    properties:
+      roleName: ${role.name}
+      granteeName: ${serviceAccount.username}
+      granteeType: user
+
+outputs:
+  username: ${serviceAccount.username}
+  cooldown: ${ducklingConfig.readWriteCooldownSeconds}
+  tokenId: ${accessToken.id}
+  tokenName: ${accessToken.name}
+  roleGrantId: ${roleGrant.id}
