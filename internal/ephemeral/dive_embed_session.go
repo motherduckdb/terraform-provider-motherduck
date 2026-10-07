@@ -129,9 +129,10 @@ func (r *diveEmbedSessionEphemeralResource) Open(ctx context.Context, req tfephe
 }
 
 func (r *diveEmbedSessionEphemeralResource) rest(diags *diag.Diagnostics) *mdrest.Client {
-	if r.provider == nil || r.provider.REST == nil || !r.provider.REST.Available() {
-		diags.AddError("MotherDuck admin token required", mdrest.ErrMissingAdminToken.Error())
+	client, err := r.provider.AvailableRESTClient()
+	if err != nil {
+		diags.AddError("MotherDuck admin token required", err.Error())
 		return nil
 	}
-	return r.provider.REST
+	return client
 }
