@@ -30,11 +30,12 @@ func (d *baseDataSource) Configure(ctx context.Context, req datasource.Configure
 }
 
 func (d *baseDataSource) rest(diags *diag.Diagnostics) *mdrest.Client {
-	if d.provider == nil || d.provider.REST == nil || !d.provider.REST.Available() {
-		diags.AddError("MotherDuck admin token required", mdrest.ErrMissingAdminToken.Error())
+	client, err := d.provider.AvailableRESTClient()
+	if err != nil {
+		diags.AddError("MotherDuck admin token required", err.Error())
 		return nil
 	}
-	return d.provider.REST
+	return client
 }
 
 func (d *baseDataSource) sql(ctx context.Context, diags *diag.Diagnostics) providerctx.SQLClient {

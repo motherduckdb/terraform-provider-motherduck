@@ -75,11 +75,12 @@ func (r *baseResource) Configure(ctx context.Context, req resource.ConfigureRequ
 }
 
 func (r *baseResource) rest(resp *diag.Diagnostics) *mdrest.Client {
-	if r.provider == nil || r.provider.REST == nil || !r.provider.REST.Available() {
-		resp.AddError("MotherDuck admin token required", mdrest.ErrMissingAdminToken.Error())
+	client, err := r.provider.AvailableRESTClient()
+	if err != nil {
+		resp.AddError("MotherDuck admin token required", err.Error())
 		return nil
 	}
-	return r.provider.REST
+	return client
 }
 
 func (r *baseResource) sql(ctx context.Context, resp *diag.Diagnostics) providerctx.SQLClient {

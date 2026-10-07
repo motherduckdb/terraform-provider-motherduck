@@ -76,3 +76,12 @@ func (c *Context) AvailableSQLClient(ctx context.Context) (SQLClient, error) {
 	}
 	return client, nil
 }
+
+// AvailableRESTClient returns the configured REST client when it can serve admin operations.
+// A nil or unavailable client is treated like a missing admin token at the provider boundary.
+func (c *Context) AvailableRESTClient() (*mdrest.Client, error) {
+	if c == nil || c.REST == nil || !c.REST.Available() {
+		return nil, mdrest.ErrMissingAdminToken
+	}
+	return c.REST, nil
+}
