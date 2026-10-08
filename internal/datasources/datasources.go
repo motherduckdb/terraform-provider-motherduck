@@ -6,6 +6,7 @@ func All() []func() datasource.DataSource {
 	sources := []func() datasource.DataSource{
 		NewActiveAccountsDataSource,
 		NewUserTokensDataSource,
+		NewUsersDataSource,
 		NewDiveEmbedSessionDataSource,
 		NewOwnedShareDataSource,
 		NewDatabaseDataSource,

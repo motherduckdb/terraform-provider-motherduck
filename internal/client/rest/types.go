@@ -136,19 +136,21 @@ type ActiveAccountsResponse struct {
 	Pagination    pageInfo        `json:"pagination,omitempty"`
 }
 
-// pageInfo and the cursor fields on the list responses are forward-looking, not
-// a description of current behavior. As verified against the live API, neither
-// GET /v1/users/{username}/tokens nor GET /v1/active_accounts returns any cursor
-// field, the published spec declares no pagination parameters for either, and a
-// cursor query parameter is accepted and ignored. The loops in ListTokens and
-// ActiveAccounts therefore make exactly one request today.
+// pageInfo and the cursor fields on the token and account list responses are
+// forward-looking, not a description of current behavior. As verified against
+// the live API, neither GET /v1/users/{username}/tokens nor GET /v1/active_accounts
+// returns any cursor field, the published spec declares no pagination parameters
+// for either, and unknown query parameters are accepted and ignored. The loops in
+// ListTokens and ActiveAccounts therefore make exactly one request today.
 //
 // Keep them anyway. accessTokenResource.Read treats a token missing from the
 // listing as proof it was deleted and removes it from state, and that inference
 // is only sound while the client walks every page. If MotherDuck starts capping
 // list responses, unread pages would read as deleted tokens and Terraform would
-// destroy and recreate live credentials. Several cursor spellings are accepted
-// because the shape is unspecified. The nextCursor() helper takes whichever appears.
+// destroy and recreate live credentials. GET /v1/users set the convention for
+// paginated public endpoints: the response carries next_page_token and the client
+// sends it back as page_token. The other spellings stay accepted because those two
+// endpoints have not adopted it yet. The nextCursor() helper takes whichever appears.
 type pageInfo struct {
 	NextCursor    string `json:"next_cursor,omitempty"`
 	NextPageToken string `json:"next_page_token,omitempty"`
@@ -178,6 +180,33 @@ type Duckling struct {
 	ID     string `json:"id"`
 	Type   string `json:"type"`
 	Status string `json:"status"`
+}
+
+// ListUsersFilter narrows GET /v1/users. A nil field sends no filter.
+type ListUsersFilter struct {
+	IsServiceAccount *bool
+	IsDeprovisioned  *bool
+}
+
+// ListUsersResponse is one page of GET /v1/users. NextPageToken is null on the
+// last page, which decodes to an empty string.
+type ListUsersResponse struct {
+	Users         []User `json:"users"`
+	TotalCount    int64  `json:"total_count"`
+	NextPageToken string `json:"next_page_token,omitempty"`
+}
+
+// User is a user or service account in the caller's organization. Roles holds
+// the names of the RBAC roles granted directly to the user.
+type User struct {
+	ID               string   `json:"id"`
+	Username         string   `json:"username"`
+	Email            string   `json:"email"`
+	FirstName        string   `json:"first_name"`
+	LastName         string   `json:"last_name"`
+	IsServiceAccount bool     `json:"is_service_account"`
+	IsDeprovisioned  bool     `json:"is_deprovisioned"`
+	Roles            []string `json:"roles"`
 }
 
 // EmbedSessionRequest is the body of POST /v1/dives/{dive_id}/embed-session.

@@ -113,6 +113,7 @@ func TestRESTDataSourceSchemasHaveAttributeDescriptions(t *testing.T) {
 	for _, ds := range []datasource.DataSource{
 		NewActiveAccountsDataSource(),
 		NewUserTokensDataSource(),
+		NewUsersDataSource(),
 		NewDiveEmbedSessionDataSource(),
 	} {
 		var resp datasource.SchemaResponse
@@ -273,6 +274,92 @@ func TestUserTokensDataSourceReadSetsTypedTokens(t *testing.T) {
 	}
 	if strings.Contains(state.TokensJSON.ValueString(), "raw-secret") {
 		t.Fatal("tokens_json persisted a raw token returned by the list endpoint")
+	}
+}
+
+func TestUsersDataSourceReadSortsUsersAndRoles(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got, want := r.URL.RequestURI(), "/v1/users?is_service_account=true&limit=1000"; got != want {
+			t.Fatalf("request = %q, want %q", got, want)
+		}
+		_ = json.NewEncoder(w).Encode(mdrest.ListUsersResponse{
+			Users: []mdrest.User{
+				{ID: "u2", Username: "svc_b", Email: "b@example.com", IsServiceAccount: true, Roles: []string{"loader", "explorer"}},
+				{ID: "u1", Username: "svc_a", Email: "a@example.com", FirstName: "Ada", IsServiceAccount: true, Roles: []string{}},
+			},
+			TotalCount: 2,
+		})
+	}))
+	defer server.Close()
+
+	client, err := mdrest.New(server.URL, "admin-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ds := NewUsersDataSource().(*usersDataSource)
+	var configureResp datasource.ConfigureResponse
+	ds.Configure(context.Background(), datasource.ConfigureRequest{ProviderData: &providerctx.Context{REST: client}}, &configureResp)
+	if configureResp.Diagnostics.HasError() {
+		t.Fatalf("configure diagnostics: %v", configureResp.Diagnostics)
+	}
+
+	var schemaResp datasource.SchemaResponse
+	ds.Schema(context.Background(), datasource.SchemaRequest{}, &schemaResp)
+	if schemaResp.Diagnostics.HasError() {
+		t.Fatalf("schema diagnostics: %v", schemaResp.Diagnostics)
+	}
+	userObjectType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"id":                 tftypes.String,
+		"username":           tftypes.String,
+		"email":              tftypes.String,
+		"first_name":         tftypes.String,
+		"last_name":          tftypes.String,
+		"is_service_account": tftypes.Bool,
+		"is_deprovisioned":   tftypes.Bool,
+		"roles":              tftypes.List{ElementType: tftypes.String},
+	}}
+	usersType := tftypes.List{ElementType: userObjectType}
+	configType := tftypes.Object{AttributeTypes: map[string]tftypes.Type{
+		"is_service_account": tftypes.Bool,
+		"is_deprovisioned":   tftypes.Bool,
+		"users":              usersType,
+	}}
+	config := tftypes.NewValue(configType, map[string]tftypes.Value{
+		"is_service_account": tftypes.NewValue(tftypes.Bool, true),
+		"is_deprovisioned":   tftypes.NewValue(tftypes.Bool, nil),
+		"users":              tftypes.NewValue(usersType, nil),
+	})
+	readResp := datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
+	ds.Read(context.Background(), datasource.ReadRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: config}}, &readResp)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("read diagnostics: %v", readResp.Diagnostics)
+	}
+
+	var state usersModel
+	readResp.Diagnostics.Append(readResp.State.Get(context.Background(), &state)...)
+	if readResp.Diagnostics.HasError() {
+		t.Fatalf("state diagnostics: %v", readResp.Diagnostics)
+	}
+	elements := state.Users.Elements()
+	if len(elements) != 2 {
+		t.Fatalf("users = %#v, want two users", state.Users)
+	}
+	first := elements[0].(types.Object).Attributes()
+	second := elements[1].(types.Object).Attributes()
+	if got := first["username"].(types.String).ValueString(); got != "svc_a" {
+		t.Fatalf("first username = %q, want svc_a", got)
+	}
+	if got := first["first_name"].(types.String).ValueString(); got != "Ada" {
+		t.Fatalf("first_name = %q, want Ada", got)
+	}
+	if !first["last_name"].(types.String).IsNull() {
+		t.Fatalf("last_name = %#v, want null for an empty name", first["last_name"])
+	}
+	if got := second["roles"].String(); got != `["explorer","loader"]` {
+		t.Fatalf("roles = %s, want sorted role names", got)
+	}
+	if !state.IsDeprovisioned.IsNull() {
+		t.Fatalf("is_deprovisioned = %#v, want the unset filter to stay null", state.IsDeprovisioned)
 	}
 }
 

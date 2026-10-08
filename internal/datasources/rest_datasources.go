@@ -20,6 +20,8 @@ var (
 	_ datasource.DataSourceWithConfigure = &activeAccountsDataSource{}
 	_ datasource.DataSource              = &userTokensDataSource{}
 	_ datasource.DataSourceWithConfigure = &userTokensDataSource{}
+	_ datasource.DataSource              = &usersDataSource{}
+	_ datasource.DataSourceWithConfigure = &usersDataSource{}
 	_ datasource.DataSource              = &diveEmbedSessionDataSource{}
 	_ datasource.DataSourceWithConfigure = &diveEmbedSessionDataSource{}
 )
@@ -215,6 +217,152 @@ func optionalRESTString(value string) types.String {
 		return types.StringNull()
 	}
 	return types.StringValue(value)
+}
+
+type usersDataSource struct{ baseDataSource }
+
+type usersModel struct {
+	IsServiceAccount types.Bool `tfsdk:"is_service_account"`
+	IsDeprovisioned  types.Bool `tfsdk:"is_deprovisioned"`
+	Users            types.List `tfsdk:"users"`
+}
+
+func NewUsersDataSource() datasource.DataSource { return &usersDataSource{} }
+
+func (d *usersDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_users"
+}
+
+func (d *usersDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		MarkdownDescription: "Lists the users and service accounts in the organization of the admin token, sorted by username. The provider reads every page of the listing. The token needs the `member_management.view_all_members` privilege, which the built-in `admin`, `builder` and `explorer` roles include.",
+		Attributes: map[string]schema.Attribute{
+			"is_service_account": schema.BoolAttribute{
+				Optional:            true,
+				MarkdownDescription: "Set to `true` to list only service accounts, or `false` to list only human users. Omit it to list both.",
+			},
+			"is_deprovisioned": schema.BoolAttribute{
+				Optional:            true,
+				MarkdownDescription: "Set to `true` to list only deprovisioned users, or `false` to list only active users. Omit it to list both.",
+			},
+			"users": schema.ListNestedAttribute{
+				Computed:            true,
+				MarkdownDescription: "Users that match the filters, sorted by username and then by ID.",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"id": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "User ID.",
+						},
+						"username": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Username. Service account names can be passed to `motherduck_user_tokens` and `motherduck_access_token`.",
+						},
+						"email": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Email address MotherDuck has on record for the user.",
+						},
+						"first_name": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "First name. Null when MotherDuck has none, as for most service accounts.",
+						},
+						"last_name": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Last name. Null when MotherDuck has none, as for most service accounts.",
+						},
+						"is_service_account": schema.BoolAttribute{
+							Computed:            true,
+							MarkdownDescription: "Whether the user is a service account.",
+						},
+						"is_deprovisioned": schema.BoolAttribute{
+							Computed:            true,
+							MarkdownDescription: "Whether the user is deprovisioned.",
+						},
+						"roles": schema.ListAttribute{
+							Computed:            true,
+							ElementType:         types.StringType,
+							MarkdownDescription: "Names of the roles granted directly to the user, sorted. Roles inherited through other roles are not listed. Use `motherduck_roles_for_user` for those.",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func (d *usersDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	client := d.rest(&resp.Diagnostics)
+	if client == nil {
+		return
+	}
+	var config usersModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	users, err := client.ListUsers(ctx, mdrest.ListUsersFilter{
+		IsServiceAccount: config.IsServiceAccount.ValueBoolPointer(),
+		IsDeprovisioned:  config.IsDeprovisioned.ValueBoolPointer(),
+	})
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to list MotherDuck users", err.Error())
+		return
+	}
+	config.Users = usersListValue(users, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
+}
+
+// usersListValue sorts by username and ID so the listing does not depend on
+// the collation MotherDuck sorts with.
+func usersListValue(users []mdrest.User, diags *diag.Diagnostics) types.List {
+	attrTypes := map[string]attr.Type{
+		"id":                 types.StringType,
+		"username":           types.StringType,
+		"email":              types.StringType,
+		"first_name":         types.StringType,
+		"last_name":          types.StringType,
+		"is_service_account": types.BoolType,
+		"is_deprovisioned":   types.BoolType,
+		"roles":              types.ListType{ElemType: types.StringType},
+	}
+	objectType := types.ObjectType{AttrTypes: attrTypes}
+	sorted := make([]mdrest.User, len(users))
+	copy(sorted, users)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if sorted[i].Username != sorted[j].Username {
+			return sorted[i].Username < sorted[j].Username
+		}
+		return sorted[i].ID < sorted[j].ID
+	})
+	values := make([]attr.Value, 0, len(sorted))
+	for _, user := range sorted {
+		roleNames := make([]string, len(user.Roles))
+		copy(roleNames, user.Roles)
+		sort.Strings(roleNames)
+		roles, roleDiags := types.ListValueFrom(context.Background(), types.StringType, roleNames)
+		diags.Append(roleDiags...)
+		objectValue, objectDiags := types.ObjectValue(attrTypes, map[string]attr.Value{
+			"id":                 types.StringValue(user.ID),
+			"username":           types.StringValue(user.Username),
+			"email":              types.StringValue(user.Email),
+			"first_name":         optionalRESTString(user.FirstName),
+			"last_name":          optionalRESTString(user.LastName),
+			"is_service_account": types.BoolValue(user.IsServiceAccount),
+			"is_deprovisioned":   types.BoolValue(user.IsDeprovisioned),
+			"roles":              roles,
+		})
+		diags.Append(objectDiags...)
+		values = append(values, objectValue)
+	}
+	if diags.HasError() {
+		return types.ListNull(objectType)
+	}
+	listValue, listDiags := types.ListValue(objectType, values)
+	diags.Append(listDiags...)
+	return listValue
 }
 
 type diveEmbedSessionDataSource struct{ baseDataSource }

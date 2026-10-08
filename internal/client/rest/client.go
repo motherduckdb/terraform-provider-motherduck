@@ -165,6 +165,45 @@ func (c *Client) ActiveAccounts(ctx context.Context) (*ActiveAccountsResponse, e
 	return &ActiveAccountsResponse{Accounts: accounts}, nil
 }
 
+// maxListUsersPageSize is the largest page GET /v1/users accepts. A larger
+// limit is a 400.
+const maxListUsersPageSize = 1000
+
+// ListUsers walks every page of GET /v1/users and returns each user once.
+// MotherDuck pages by offset, so a user inserted mid-walk can repeat across a
+// page boundary. Keeping the first copy of each ID stops that duplicate from
+// breaking a for_each keyed by username.
+func (c *Client) ListUsers(ctx context.Context, filter ListUsersFilter) ([]User, error) {
+	query := url.Values{}
+	query.Set("limit", strconv.Itoa(maxListUsersPageSize))
+	if filter.IsServiceAccount != nil {
+		query.Set("is_service_account", strconv.FormatBool(*filter.IsServiceAccount))
+	}
+	if filter.IsDeprovisioned != nil {
+		query.Set("is_deprovisioned", strconv.FormatBool(*filter.IsDeprovisioned))
+	}
+	users, err := collectPages("/v1/users?"+query.Encode(), func(path string) ([]User, string, error) {
+		var out ListUsersResponse
+		if err := c.do(ctx, http.MethodGet, path, nil, &out); err != nil {
+			return nil, "", err
+		}
+		return out.Users, out.NextPageToken, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{}, len(users))
+	unique := users[:0]
+	for _, user := range users {
+		if _, ok := seen[user.ID]; ok {
+			continue
+		}
+		seen[user.ID] = struct{}{}
+		unique = append(unique, user)
+	}
+	return unique, nil
+}
+
 func collectPages[T any](basePath string, fetch func(string) ([]T, string, error)) ([]T, error) {
 	var result []T
 	var cursor string
@@ -378,7 +417,7 @@ func pathWithCursor(path, cursor string) string {
 	if strings.Contains(path, "?") {
 		separator = "&"
 	}
-	return path + separator + "cursor=" + url.QueryEscape(cursor)
+	return path + separator + "page_token=" + url.QueryEscape(cursor)
 }
 
 func firstNonEmpty(values ...string) string {

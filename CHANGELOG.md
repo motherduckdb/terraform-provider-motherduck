@@ -4,6 +4,10 @@ Each release has a versioned notes file under `release-notes/`, which is also th
 body of the matching [GitHub release](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
 This index lists the headline change for every release.
 
+## v0.3.3
+
+List the users and service accounts in your organization with `data.motherduck_users`, matching the MotherDuck release of 2026-10-07. Constraints such as `~> 0.3.0` select it. See the [v0.3.3 release notes](release-notes/v0.3.3.md).
+
 ## v0.3.2
 
 Set a Flight's runner size with `instance_type` and use DuckDB 1.5.6, matching the MotherDuck release of 2026-10-01. Constraints such as `~> 0.3.0` select it. See the [v0.3.2 release notes](release-notes/v0.3.2.md).
