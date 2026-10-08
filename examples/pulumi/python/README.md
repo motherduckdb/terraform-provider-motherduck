@@ -4,7 +4,7 @@ This is a small Pulumi program using Pulumi's Any Terraform Provider bridge with
 the MotherDuck Terraform provider. It creates one database, schema, and table.
 
 The recipe pins Pulumi `v3.265.0`, the bridge package `v1.4.0`, and the
-MotherDuck provider `0.3.2` in `Pulumi.yaml` and `requirements.txt`. The
+MotherDuck provider `0.3.3` in `Pulumi.yaml` and `requirements.txt`. The
 sample database name is required configuration so each stack can use a unique
 name. Read [Use the provider with Pulumi](../../../docs/guides/pulumi.md) for
 the differences from Terraform before adapting it.
