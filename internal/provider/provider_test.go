@@ -82,6 +82,7 @@ func TestProviderRegistersResourcesAndDataSources(t *testing.T) {
 		"motherduck_share_grants",
 		"motherduck_shared_with_me",
 		"motherduck_user_tokens",
+		"motherduck_users",
 		"motherduck_version",
 	}
 	if !reflect.DeepEqual(gotDataSources, wantDataSources) {

@@ -3,8 +3,8 @@ source:
   rest_openapi: https://api.motherduck.com/docs/specs
 rest:
   - path: /v1/users
-    methods: [POST]
-    provider_surface: resource.motherduck_service_account
+    methods: [GET, POST]
+    provider_surface: [resource.motherduck_service_account, data_source.motherduck_users]
     status: stable
   - path: /v1/users/{username}
     methods: [DELETE]

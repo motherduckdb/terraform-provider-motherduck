@@ -224,7 +224,7 @@ func TestClientPaginatesTokenAndActiveAccountLists(t *testing.T) {
 				Tokens:     []Token{{ID: "tok-1"}},
 				NextCursor: "page-2",
 			})
-		case "/v1/users/svc/tokens?cursor=page-2":
+		case "/v1/users/svc/tokens?page_token=page-2":
 			_ = json.NewEncoder(w).Encode(ListTokensResponse{
 				Tokens: []Token{{ID: "tok-2"}},
 			})
@@ -233,7 +233,7 @@ func TestClientPaginatesTokenAndActiveAccountLists(t *testing.T) {
 				Accounts:   []ActiveAccount{{Username: "svc-1"}},
 				Pagination: pageInfo{NextCursor: "page-2"},
 			})
-		case "/v1/active_accounts?cursor=page-2":
+		case "/v1/active_accounts?page_token=page-2":
 			_ = json.NewEncoder(w).Encode(ActiveAccountsResponse{
 				Accounts: []ActiveAccount{{Username: "svc-2"}},
 			})
@@ -264,9 +264,9 @@ func TestClientPaginatesTokenAndActiveAccountLists(t *testing.T) {
 
 	wantCalls := []string{
 		"GET /v1/users/svc/tokens",
-		"GET /v1/users/svc/tokens?cursor=page-2",
+		"GET /v1/users/svc/tokens?page_token=page-2",
 		"GET /v1/active_accounts",
-		"GET /v1/active_accounts?cursor=page-2",
+		"GET /v1/active_accounts?page_token=page-2",
 	}
 	if !reflect.DeepEqual(calls, wantCalls) {
 		t.Fatalf("calls = %#v, want %#v", calls, wantCalls)

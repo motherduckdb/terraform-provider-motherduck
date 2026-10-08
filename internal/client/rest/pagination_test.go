@@ -71,7 +71,7 @@ func TestClientPaginationCursorPrecedence(t *testing.T) {
 						http.Error(w, "unexpected endpoint", http.StatusBadRequest)
 					case r.URL.RawQuery == "":
 						_, _ = fmt.Fprintf(w, "{%s%s}", fmt.Sprintf(endpoint.items, "first"), tc.fields)
-					case tc.cursor != "" && r.URL.RawQuery == "cursor="+url.QueryEscape(tc.cursor):
+					case tc.cursor != "" && r.URL.RawQuery == "page_token="+url.QueryEscape(tc.cursor):
 						_, _ = fmt.Fprintf(w, "{%s}", fmt.Sprintf(endpoint.items, "second"))
 					default:
 						http.Error(w, "unexpected cursor", http.StatusBadRequest)
@@ -90,7 +90,7 @@ func TestClientPaginationCursorPrecedence(t *testing.T) {
 				wantRequests := []string{endpoint.path}
 				if tc.cursor != "" {
 					wantIDs = append(wantIDs, "second")
-					wantRequests = append(wantRequests, endpoint.path+"?cursor="+url.QueryEscape(tc.cursor))
+					wantRequests = append(wantRequests, endpoint.path+"?page_token="+url.QueryEscape(tc.cursor))
 				}
 				if !reflect.DeepEqual(ids, wantIDs) {
 					t.Fatalf("items = %v, want %v", ids, wantIDs)
@@ -104,5 +104,53 @@ func TestClientPaginationCursorPrecedence(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestClientListUsersWalksPageTokensAndDropsRepeats(t *testing.T) {
+	var requests []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.URL.RequestURI())
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/users" {
+			http.Error(w, "unexpected endpoint", http.StatusBadRequest)
+			return
+		}
+		switch r.URL.Query().Get("page_token") {
+		case "":
+			_, _ = fmt.Fprint(w, `{"users":[{"id":"u1","username":"alice","roles":["admin"]},{"id":"u2","username":"bob","roles":[]}],"total_count":3,"next_page_token":"tok-2"}`)
+		case "tok-2":
+			// A user inserted mid-walk shifts bob onto the second page as well.
+			_, _ = fmt.Fprint(w, `{"users":[{"id":"u2","username":"bob","roles":[]},{"id":"u3","username":"svc","is_service_account":true,"roles":[]}],"total_count":4,"next_page_token":null}`)
+		default:
+			http.Error(w, "unexpected page token", http.StatusBadRequest)
+		}
+	}))
+	defer server.Close()
+	client, err := New(server.URL, "admin-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	isDeprovisioned := false
+	users, err := client.ListUsers(t.Context(), ListUsersFilter{IsDeprovisioned: &isDeprovisioned})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, user := range users {
+		ids = append(ids, user.ID)
+	}
+	if want := []string{"u1", "u2", "u3"}; !reflect.DeepEqual(ids, want) {
+		t.Fatalf("user ids = %v, want %v", ids, want)
+	}
+	if !users[2].IsServiceAccount || !reflect.DeepEqual(users[0].Roles, []string{"admin"}) {
+		t.Fatalf("users = %#v, want decoded service account flag and roles", users)
+	}
+	wantRequests := []string{
+		"/v1/users?is_deprovisioned=false&limit=1000",
+		"/v1/users?is_deprovisioned=false&limit=1000&page_token=tok-2",
+	}
+	if !reflect.DeepEqual(requests, wantRequests) {
+		t.Fatalf("requests = %v, want %v", requests, wantRequests)
 	}
 }
