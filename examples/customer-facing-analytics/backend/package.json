@@ -8,5 +8,5 @@
     "test": "node --test server.test.mjs",
     "start": "node server.mjs"
   },
-  "dependencies": {"pg": "8.23.0"}
+  "dependencies": {"pg": "8.23.1"}
 }
