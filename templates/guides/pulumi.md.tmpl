@@ -28,7 +28,7 @@ packages:
     version: 1.4.0
     parameters:
       - registry.terraform.io/motherduckdb/motherduck
-      - 0.3.3
+      - 0.3.4
 ```
 
 Then run `pulumi install`. For Python, TypeScript, Go, and .NET programs this
