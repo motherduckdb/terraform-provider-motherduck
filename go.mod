@@ -2,7 +2,7 @@ module github.com/motherduckdb/terraform-provider-motherduck
 
 go 1.26.0
 
-toolchain go1.27.1
+toolchain go1.27.2
 
 require (
 	github.com/duckdb/duckdb-go/v2 v2.10506.0
