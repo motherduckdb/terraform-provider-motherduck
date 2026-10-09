@@ -218,7 +218,7 @@ func (r *snapshotResource) Delete(ctx context.Context, req resource.DeleteReques
 	}
 	if state.ID.IsNull() || state.ID.IsUnknown() || state.ID.ValueString() == "" {
 		// Creation can succeed before the catalog ID is available in state.
-		if !r.readSnapshotByName(ctx, client, &state, &resp.Diagnostics) {
+		if found, _ := r.readSnapshotByName(ctx, client, &state, &resp.Diagnostics); !found {
 			if !resp.Diagnostics.HasError() {
 				resp.Diagnostics.AddError("Unable to unname MotherDuck snapshot", "The snapshot ID could not be recovered from its database and name. Terraform kept the resource in state because an unlisted snapshot may still retain its name. Retry when catalog reads recover, or confirm the remote name was cleared before removing the resource from state.")
 			}
@@ -338,7 +338,10 @@ func (r *snapshotResource) readSnapshotStatus(ctx context.Context, model *snapsh
 			return snapshotCleared
 		}
 	}
-	if r.readSnapshotByName(ctx, client, model, diags) {
+	if found, databaseGone := r.readSnapshotByName(ctx, client, model, diags); found {
+		if databaseGone {
+			return snapshotRetainedWithoutDatabase
+		}
 		return snapshotFound
 	}
 	if diags.HasError() {
@@ -382,39 +385,46 @@ func (r *snapshotResource) readSnapshotByID(ctx context.Context, client provider
 	return true, true, databaseGone
 }
 
-func (r *snapshotResource) readSnapshotByName(ctx context.Context, client providerctx.SQLClient, model *snapshotModel, diags *diag.Diagnostics) bool {
+// readSnapshotByName can recover a missing ID even after the creating database
+// was dropped. Only a confirmed missing database permits a catalog lookup
+// without attaching it, matching the recovery contract of readSnapshotByID.
+func (r *snapshotResource) readSnapshotByName(ctx context.Context, client providerctx.SQLClient, model *snapshotModel, diags *diag.Diagnostics) (found, databaseGone bool) {
 	var id, created stdsql.NullString
 	var matches int
 	err := retry.SQL(ctx, func() error {
+		databaseGone = false
 		if err := client.AttachDatabase(ctx, model.Database.ValueString()); err != nil {
-			return err
+			if !isNotFoundFor(err, model.Database.ValueString()) {
+				return err
+			}
+			databaseGone = true
 		}
 		return client.QueryRow(ctx, `SELECT snapshot_id::VARCHAR, created_ts::VARCHAR, count(*) OVER () FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE database_name = ? AND snapshot_name = ?`, model.Database.ValueString(), model.Name.ValueString()).Scan(&id, &created, &matches)
 	})
 	if err != nil && isNotFoundFor(err, model.Database.ValueString(), model.Name.ValueString()) {
-		return false
+		return false, databaseGone
 	}
 	if errors.Is(err, stdsql.ErrNoRows) {
-		return false
+		return false, databaseGone
 	}
 	if err != nil {
 		diags.AddError("Unable to read MotherDuck snapshot", err.Error())
-		return false
+		return false, databaseGone
 	}
 	if matches > 1 {
 		diags.AddError(
 			"Ambiguous MotherDuck snapshot",
 			fmt.Sprintf("Found %d snapshots named %q for database %q. Rename or remove duplicates before managing this snapshot with Terraform.", matches, model.Name.ValueString(), model.Database.ValueString()),
 		)
-		return false
+		return false, databaseGone
 	}
 	if !id.Valid || id.String == "" {
 		diags.AddError("Unable to read MotherDuck snapshot", "The snapshot catalog returned an empty snapshot ID. Terraform kept the database and name for recovery.")
-		return false
+		return false, databaseGone
 	}
 	model.ID = nullString(id)
 	model.CreatedTS = nullString(created)
-	return true
+	return true, databaseGone
 }
 
 func prepareSnapshotCreateState(model *snapshotModel) {

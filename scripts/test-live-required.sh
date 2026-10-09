@@ -21,3 +21,6 @@ trap audit_on_exit EXIT
 cd "${ROOT_DIR}"
 MD_TF_ACC=1 go test -tags=acceptance -count=1 ./internal/client/sql
 TF_ACC=1 MD_TF_ACC=1 go test -tags=acceptance -count=1 ./internal/acceptance
+# Snapshot readback can fail after the remote create. Verify retained-name
+# recovery and cleanup even when the creating database has been dropped.
+go test -tags=acceptance -run '^TestLiveSnapshot(FailedCreateDestroyWithoutRefresh|MissingIDRecoveryAfterDatabaseDrop)$' -count=1 ./internal/resources

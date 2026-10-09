@@ -126,6 +126,156 @@ func TestSnapshotReadKeepsRetainedSnapshotOfDroppedDatabase(t *testing.T) {
 	}
 }
 
+type snapshotMissingIDBackend struct {
+	*snapshotOrphanBackend
+	readErr      error
+	readID       any
+	matches      int
+	catalogReads int
+}
+
+func (c *snapshotMissingIDBackend) QueryRow(ctx context.Context, query string, args ...any) mdsql.RowScanner {
+	if strings.Contains(query, "MD_INFORMATION_SCHEMA.DATABASES") {
+		return c.snapshotOrphanBackend.QueryRow(ctx, query, args...)
+	}
+	c.catalogReads++
+	if c.readErr != nil {
+		return errRowScanner{err: c.readErr}
+	}
+	return snapshotIdentityRow{id: c.readID, matches: c.matches}
+}
+
+func missingIDSnapshotState(t *testing.T, r *snapshotResource) tfsdk.State {
+	t.Helper()
+	state := snapshotTestState(t, r)
+	var model snapshotModel
+	if d := state.Get(t.Context(), &model); d.HasError() {
+		t.Fatal(d)
+	}
+	model.ID = types.StringNull()
+	if d := state.Set(t.Context(), &model); d.HasError() {
+		t.Fatal(d)
+	}
+	return state
+}
+
+func TestSnapshotReadRecoversMissingIDAfterDatabaseDrop(t *testing.T) {
+	client := &snapshotMissingIDBackend{
+		snapshotOrphanBackend: &snapshotOrphanBackend{attachErr: missingDatabaseError()},
+		readID:                "snapshot-recovered-id",
+	}
+	r := &snapshotResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	state := missingIDSnapshotState(t, r)
+	response := resource.ReadResponse{State: state}
+	r.Read(t.Context(), resource.ReadRequest{State: state}, &response)
+	if response.Diagnostics.HasError() {
+		t.Fatal(response.Diagnostics)
+	}
+	var got snapshotModel
+	if d := response.State.Get(t.Context(), &got); d.HasError() {
+		t.Fatal(d)
+	}
+	if got.ID.ValueString() != "snapshot-recovered-id" {
+		t.Fatalf("recovered ID = %q, want snapshot-recovered-id", got.ID.ValueString())
+	}
+	if findWarning(response.Diagnostics, "MotherDuck snapshot outlived its database") == nil {
+		t.Fatalf("expected retained snapshot warning, got %v", response.Diagnostics)
+	}
+}
+
+func TestSnapshotDestroyRecoversMissingIDAndUsesNativeDatabase(t *testing.T) {
+	client := &snapshotMissingIDBackend{
+		snapshotOrphanBackend: &snapshotOrphanBackend{
+			attachErr: missingDatabaseError(),
+			rows:      []scannedRow{nativeDatabaseRow()},
+		},
+		readID: "snapshot-recovered-id",
+	}
+	r := &snapshotResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	state := missingIDSnapshotState(t, r)
+	response := resource.DeleteResponse{State: state}
+	r.Delete(t.Context(), resource.DeleteRequest{State: state}, &response)
+	if response.Diagnostics.HasError() {
+		t.Fatal(response.Diagnostics)
+	}
+	want := "ALTER SNAPSHOT 'snapshot-recovered-id' SET snapshot_name = ''"
+	if len(client.execs) != 1 || client.execs[0] != want {
+		t.Fatalf("unname statements = %v, want %q", client.execs, want)
+	}
+	if len(client.used) != 1 || client.used[0] != "my_db" {
+		t.Fatalf("native database selections = %v, want [my_db]", client.used)
+	}
+}
+
+func TestSnapshotMissingIDDroppedDatabaseFailuresStayConservative(t *testing.T) {
+	cases := map[string]struct {
+		attachErr error
+		readErr   error
+		readID    any
+		matches   int
+	}{
+		"denied attach": {
+			attachErr: &duckdb.Error{Type: duckdb.ErrorTypePermission, Msg: "Permission Error: access denied"},
+			readID:    "snapshot-recovered-id",
+		},
+		"unrelated missing database": {
+			attachErr: &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: "Catalog Error: Database other_db does not exist"},
+			readID:    "snapshot-recovered-id",
+		},
+		"empty catalog": {readErr: sql.ErrNoRows},
+		"null ID":       {readID: nil},
+		"blank ID":      {readID: ""},
+		"ambiguous":     {readID: "snapshot-recovered-id", matches: 2},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			attachErr := tc.attachErr
+			if attachErr == nil {
+				attachErr = missingDatabaseError()
+			}
+			client := &snapshotMissingIDBackend{
+				snapshotOrphanBackend: &snapshotOrphanBackend{attachErr: attachErr},
+				readErr:               tc.readErr,
+				readID:                tc.readID,
+				matches:               tc.matches,
+			}
+			r := &snapshotResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+			state := missingIDSnapshotState(t, r)
+			response := resource.ReadResponse{State: state}
+			r.Read(t.Context(), resource.ReadRequest{State: state}, &response)
+			if !response.Diagnostics.HasError() || response.State.Raw.IsNull() {
+				t.Fatalf("unsafe lookup must diagnose and preserve state: diagnostics=%v state-null=%t", response.Diagnostics, response.State.Raw.IsNull())
+			}
+			if len(client.execs) != 0 {
+				t.Fatalf("read failure must not write snapshot state: %v", client.execs)
+			}
+			if (name == "denied attach" || name == "unrelated missing database") && client.catalogReads != 0 {
+				t.Fatalf("unsafe attach error must not permit catalog lookup, reads=%d", client.catalogReads)
+			}
+
+			deleteClient := &snapshotMissingIDBackend{
+				snapshotOrphanBackend: &snapshotOrphanBackend{attachErr: attachErr},
+				readErr:               tc.readErr,
+				readID:                tc.readID,
+				matches:               tc.matches,
+			}
+			deleteResource := &snapshotResource{baseResource: baseResource{provider: &providerctx.Context{SQL: deleteClient}}}
+			deleteState := missingIDSnapshotState(t, deleteResource)
+			deleted := resource.DeleteResponse{State: deleteState}
+			deleteResource.Delete(t.Context(), resource.DeleteRequest{State: deleteState}, &deleted)
+			if !deleted.Diagnostics.HasError() || deleted.State.Raw.IsNull() {
+				t.Fatalf("unsafe destroy must diagnose and preserve state: diagnostics=%v state-null=%t", deleted.Diagnostics, deleted.State.Raw.IsNull())
+			}
+			if len(deleteClient.execs) != 0 {
+				t.Fatalf("destroy failure must not write snapshot state: %v", deleteClient.execs)
+			}
+			if (name == "denied attach" || name == "unrelated missing database") && deleteClient.catalogReads != 0 {
+				t.Fatalf("unsafe attach error must not permit destroy lookup, reads=%d", deleteClient.catalogReads)
+			}
+		})
+	}
+}
+
 func TestSnapshotDeleteTreatsMissingSnapshotAsDeleted(t *testing.T) {
 	notFound := &duckdb.Error{Type: duckdb.ErrorTypeInvalidInput, Msg: "Invalid Input Error: Snapshot not found"}
 	for name, attachErr := range map[string]error{"database exists": nil, "database dropped": missingDatabaseError()} {
