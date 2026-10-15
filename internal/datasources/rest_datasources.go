@@ -97,41 +97,46 @@ func (d *userTokensDataSource) Schema(ctx context.Context, req datasource.Schema
 				Sensitive:           true,
 				MarkdownDescription: "Raw access token metadata returned by the MotherDuck REST API. Sensitive because token inventory reveals account security metadata.",
 			},
-			"tokens": schema.ListNestedAttribute{
-				Computed:            true,
-				Sensitive:           true,
-				MarkdownDescription: "Typed access token metadata. Sensitive because token inventory reveals account security metadata.",
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"id": schema.StringAttribute{
-							Computed:            true,
-							MarkdownDescription: "Access token ID.",
-						},
-						"name": schema.StringAttribute{
-							Computed:            true,
-							MarkdownDescription: "Access token label.",
-						},
-						"description": schema.StringAttribute{
-							Computed:            true,
-							MarkdownDescription: "Free-form notes on the token's purpose, when set.",
-						},
-						"expire_at": schema.StringAttribute{
-							Computed:            true,
-							MarkdownDescription: "Token expiration timestamp when present.",
-						},
-						"created_ts": schema.StringAttribute{
-							Computed:            true,
-							MarkdownDescription: "Token creation timestamp.",
-						},
-						"read_only": schema.BoolAttribute{
-							Computed:            true,
-							MarkdownDescription: "Whether the token is read-only according to MotherDuck.",
-						},
-						"token_type": schema.StringAttribute{
-							Computed:            true,
-							MarkdownDescription: "Token type reported by MotherDuck.",
-						},
-					},
+			"tokens": userTokensAttribute(),
+		},
+	}
+}
+
+// userTokensAttribute owns the object shape used by the schema and state conversion.
+func userTokensAttribute() schema.ListNestedAttribute {
+	return schema.ListNestedAttribute{
+		Computed:            true,
+		Sensitive:           true,
+		MarkdownDescription: "Typed access token metadata. Sensitive because token inventory reveals account security metadata.",
+		NestedObject: schema.NestedAttributeObject{
+			Attributes: map[string]schema.Attribute{
+				"id": schema.StringAttribute{
+					Computed:            true,
+					MarkdownDescription: "Access token ID.",
+				},
+				"name": schema.StringAttribute{
+					Computed:            true,
+					MarkdownDescription: "Access token label.",
+				},
+				"description": schema.StringAttribute{
+					Computed:            true,
+					MarkdownDescription: "Free-form notes on the token's purpose, when set.",
+				},
+				"expire_at": schema.StringAttribute{
+					Computed:            true,
+					MarkdownDescription: "Token expiration timestamp when present.",
+				},
+				"created_ts": schema.StringAttribute{
+					Computed:            true,
+					MarkdownDescription: "Token creation timestamp.",
+				},
+				"read_only": schema.BoolAttribute{
+					Computed:            true,
+					MarkdownDescription: "Whether the token is read-only according to MotherDuck.",
+				},
+				"token_type": schema.StringAttribute{
+					Computed:            true,
+					MarkdownDescription: "Token type reported by MotherDuck.",
 				},
 			},
 		},
@@ -180,16 +185,8 @@ func tokenMetadataOnly(tokens []mdrest.Token) []mdrest.Token {
 }
 
 func userTokensListValue(tokens []mdrest.Token, diags *diag.Diagnostics) types.List {
-	attrTypes := map[string]attr.Type{
-		"id":          types.StringType,
-		"name":        types.StringType,
-		"description": types.StringType,
-		"expire_at":   types.StringType,
-		"created_ts":  types.StringType,
-		"read_only":   types.BoolType,
-		"token_type":  types.StringType,
-	}
-	objectType := types.ObjectType{AttrTypes: attrTypes}
+	objectType := userTokensAttribute().NestedObject.Type().(types.ObjectType)
+	attrTypes := objectType.AttrTypes
 	values := make([]attr.Value, 0, len(tokens))
 	for _, token := range tokens {
 		objectValue, objectDiags := types.ObjectValue(attrTypes, map[string]attr.Value{
@@ -245,45 +242,50 @@ func (d *usersDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 				Optional:            true,
 				MarkdownDescription: "Set to `true` to list only deprovisioned users, or `false` to list only active users. Omit it to list both.",
 			},
-			"users": schema.ListNestedAttribute{
-				Computed:            true,
-				MarkdownDescription: "Users that match the filters, sorted by username and then by ID.",
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"id": schema.StringAttribute{
-							Computed:            true,
-							MarkdownDescription: "User ID.",
-						},
-						"username": schema.StringAttribute{
-							Computed:            true,
-							MarkdownDescription: "Username. Service account names can be passed to `motherduck_user_tokens` and `motherduck_access_token`.",
-						},
-						"email": schema.StringAttribute{
-							Computed:            true,
-							MarkdownDescription: "Email address MotherDuck has on record for the user.",
-						},
-						"first_name": schema.StringAttribute{
-							Computed:            true,
-							MarkdownDescription: "First name. Null when MotherDuck has none, as for most service accounts.",
-						},
-						"last_name": schema.StringAttribute{
-							Computed:            true,
-							MarkdownDescription: "Last name. Null when MotherDuck has none, as for most service accounts.",
-						},
-						"is_service_account": schema.BoolAttribute{
-							Computed:            true,
-							MarkdownDescription: "Whether the user is a service account.",
-						},
-						"is_deprovisioned": schema.BoolAttribute{
-							Computed:            true,
-							MarkdownDescription: "Whether the user is deprovisioned.",
-						},
-						"roles": schema.ListAttribute{
-							Computed:            true,
-							ElementType:         types.StringType,
-							MarkdownDescription: "Names of the roles granted directly to the user, sorted. Roles inherited through other roles are not listed. Use `motherduck_roles_for_user` for those.",
-						},
-					},
+			"users": usersAttribute(),
+		},
+	}
+}
+
+// usersAttribute owns the object shape used by the schema and state conversion.
+func usersAttribute() schema.ListNestedAttribute {
+	return schema.ListNestedAttribute{
+		Computed:            true,
+		MarkdownDescription: "Users that match the filters, sorted by username and then by ID.",
+		NestedObject: schema.NestedAttributeObject{
+			Attributes: map[string]schema.Attribute{
+				"id": schema.StringAttribute{
+					Computed:            true,
+					MarkdownDescription: "User ID.",
+				},
+				"username": schema.StringAttribute{
+					Computed:            true,
+					MarkdownDescription: "Username. Service account names can be passed to `motherduck_user_tokens` and `motherduck_access_token`.",
+				},
+				"email": schema.StringAttribute{
+					Computed:            true,
+					MarkdownDescription: "Email address MotherDuck has on record for the user.",
+				},
+				"first_name": schema.StringAttribute{
+					Computed:            true,
+					MarkdownDescription: "First name. Null when MotherDuck has none, as for most service accounts.",
+				},
+				"last_name": schema.StringAttribute{
+					Computed:            true,
+					MarkdownDescription: "Last name. Null when MotherDuck has none, as for most service accounts.",
+				},
+				"is_service_account": schema.BoolAttribute{
+					Computed:            true,
+					MarkdownDescription: "Whether the user is a service account.",
+				},
+				"is_deprovisioned": schema.BoolAttribute{
+					Computed:            true,
+					MarkdownDescription: "Whether the user is deprovisioned.",
+				},
+				"roles": schema.ListAttribute{
+					Computed:            true,
+					ElementType:         types.StringType,
+					MarkdownDescription: "Names of the roles granted directly to the user, sorted. Roles inherited through other roles are not listed. Use `motherduck_roles_for_user` for those.",
 				},
 			},
 		},
@@ -318,17 +320,8 @@ func (d *usersDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 // usersListValue sorts by username and ID so the listing does not depend on
 // the collation MotherDuck sorts with.
 func usersListValue(users []mdrest.User, diags *diag.Diagnostics) types.List {
-	attrTypes := map[string]attr.Type{
-		"id":                 types.StringType,
-		"username":           types.StringType,
-		"email":              types.StringType,
-		"first_name":         types.StringType,
-		"last_name":          types.StringType,
-		"is_service_account": types.BoolType,
-		"is_deprovisioned":   types.BoolType,
-		"roles":              types.ListType{ElemType: types.StringType},
-	}
-	objectType := types.ObjectType{AttrTypes: attrTypes}
+	objectType := usersAttribute().NestedObject.Type().(types.ObjectType)
+	attrTypes := objectType.AttrTypes
 	sorted := make([]mdrest.User, len(users))
 	copy(sorted, users)
 	sort.SliceStable(sorted, func(i, j int) bool {
