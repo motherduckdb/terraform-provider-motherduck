@@ -102,7 +102,11 @@ func TestIsTransientMotherDuckError(t *testing.T) {
 		"deadline":    {err: errors.New("DEADLINE_EXCEEDED, RPC 'SETUP_PLAN_FRAGMENTS'"), want: true},
 		"unavailable": {err: errors.New("UNAVAILABLE: failed to connect to all addresses"), want: true},
 		"other":       {err: errors.New("Parser Error: syntax error"), want: false},
-		"nil":         {err: nil, want: false},
+		"tls verification": {
+			err:  errors.New("Request failed: Could not connect to MotherDuck. (UNAVAILABLE, RPC 'CREATE_SLT', request id: 'id', msg: 'failed to connect to all addresses; last error: UNKNOWN: ipv4:1.2.3.4:443: Tls handshake failed (TSI_PROTOCOL_FAILURE): certificate verify failed')"),
+			want: false,
+		},
+		"nil": {err: nil, want: false},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {

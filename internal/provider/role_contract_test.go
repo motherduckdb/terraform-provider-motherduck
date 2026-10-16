@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -148,11 +149,62 @@ resource "motherduck_role_grant" "builder" {
 	})
 }
 
+func TestContractRoleGrantExplainsIdentityProviderManagedRoles(t *testing.T) {
+	sqlClient := newRoleContractSQL()
+	providerOnly := contractProviderConfig("http://127.0.0.1")
+	config := providerOnly + `
+resource "motherduck_role_grant" "user" {
+  role_name    = "builder"
+  grantee_name = "alice@example.com"
+}
+
+resource "motherduck_role_grant" "service_account" {
+  role_name    = "builder"
+  grantee_name = "svc_reader"
+}
+`
+
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(sqlClient),
+		Steps: []resource.TestStep{
+			{
+				Config:      config,
+				PreConfig:   func() { sqlClient.setIdentityProviderManaged(true) },
+				ExpectError: regexp.MustCompile(`(?s)Unable to grant MotherDuck role.*accepts\s+role\s+grants\s+and\s+revokes\s+only\s+for\s+service\s+accounts`),
+			},
+			{
+				Config:    config,
+				PreConfig: func() { sqlClient.setIdentityProviderManaged(false) },
+			},
+			{
+				Config:      providerOnly,
+				PreConfig:   func() { sqlClient.setIdentityProviderManaged(true) },
+				ExpectError: regexp.MustCompile(`(?s)Unable to revoke MotherDuck role.*MotherDuck\s+kept\s+the\s+grant.*terraform\s+state\s+rm`),
+			},
+			{
+				Config:    providerOnly,
+				PreConfig: func() { sqlClient.setIdentityProviderManaged(false) },
+			},
+		},
+	})
+
+	if got := sqlClient.countCalls(`exec GRANT ROLE "builder" TO USER "svc_reader"`); got != 1 {
+		t.Errorf("service account grant calls = %d, want 1 because the refused user grant must not block it", got)
+	}
+	if grants := sqlClient.grants(); len(grants) != 0 {
+		t.Errorf("remaining grants = %#v, want none", grants)
+	}
+}
+
 type roleContractSQL struct {
 	mu          sync.Mutex
 	calls       []contractCall
 	roles       map[string]bool
 	memberships map[string]map[string]bool
+	// idpManaged mirrors an organization whose user role assignment source of
+	// truth is its identity provider. Grantees named svc_* act as service
+	// accounts, which MotherDuck still lets Terraform manage.
+	idpManaged bool
 }
 
 func newRoleContractSQL() *roleContractSQL {
@@ -202,6 +254,9 @@ func (c *roleContractSQL) Exec(_ context.Context, query string, args ...any) err
 		defer c.mu.Unlock()
 		if !c.roles[roleName] {
 			return fmt.Errorf("missing role %q", roleName)
+		}
+		if c.idpManaged && granteeType == "user" && !strings.HasPrefix(granteeName, "svc_") {
+			return errors.New("Permission Error: Assigning roles to users is disabled for this organization (role assignment source of truth: IDP_SCIM). User roles are managed through the identity provider's SCIM provisioning.")
 		}
 		if c.memberships[key] == nil {
 			c.memberships[key] = map[string]bool{}
@@ -316,6 +371,12 @@ func (c *roleContractSQL) grants() map[string]map[string]bool {
 		}
 	}
 	return result
+}
+
+func (c *roleContractSQL) setIdentityProviderManaged(managed bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.idpManaged = managed
 }
 
 func (c *roleContractSQL) setDirect(key, roleName string, direct bool) {

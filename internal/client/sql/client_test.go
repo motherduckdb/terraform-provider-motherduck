@@ -172,6 +172,21 @@ func TestOneTimeInitializerDoesNotMaskInitialAttachError(t *testing.T) {
 	}
 }
 
+func TestOneTimeInitializerExplainsConnectionFailures(t *testing.T) {
+	const connectErr = "IO Error: Request failed: Could not connect to MotherDuck. Please try again later or contact support@motherduck.com for help. (UNAVAILABLE, RPC 'CREATE_SLT', request id: 'id', msg: 'DNS resolution failed for api.motherduck.com:443')"
+	initializer := &oneTimeInitializer{queries: []string{"ATTACH 'md:'"}, token: "test-token"}
+	err := initializer.run(context.Background(), &recordingExecer{attachFailures: 1, attachError: connectErr})
+	if err == nil || !strings.Contains(err.Error(), connectErr) || !strings.Contains(err.Error(), "rather than a token problem") {
+		t.Fatalf("connection failure = %v, want the extension error followed by the network hint", err)
+	}
+
+	initializer = &oneTimeInitializer{queries: []string{"ATTACH 'md:'"}, token: "test-token"}
+	err = initializer.run(context.Background(), &recordingExecer{attachFailures: 1, attachError: "Invalid Input Error: Your request is not authenticated. Please check your MotherDuck token."})
+	if err == nil || strings.Contains(err.Error(), "token problem") {
+		t.Fatalf("authentication failure = %v, want no network hint", err)
+	}
+}
+
 type recordingExecer struct {
 	contexts       []context.Context
 	queries        []string

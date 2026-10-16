@@ -4,6 +4,10 @@ Each release has a versioned notes file under `release-notes/`, which is also th
 body of the matching [GitHub release](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
 This index lists the headline change for every release.
 
+## v0.3.5
+
+Explain refused role grants in organizations that manage user roles through SCIM, matching the MotherDuck release of 2026-10-15, report unreachable MotherDuck as a network problem rather than a token problem, and detect ENUM label case drift on tables. Constraints such as `~> 0.3.0` select it. See the [v0.3.5 release notes](release-notes/v0.3.5.md).
+
 ## v0.3.4
 
 Recover a missing snapshot ID after its creating database was dropped, so refresh and destroy can manage the retained snapshot name. See the [v0.3.4 release notes](release-notes/v0.3.4.md).
