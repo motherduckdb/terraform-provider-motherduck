@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	stdsql "database/sql"
 	"fmt"
 	"reflect"
 	"strings"
@@ -124,5 +125,48 @@ func TestTableColumnsSemanticallyEqualDetectsSemanticDrift(t *testing.T) {
 	}
 	if diags.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+}
+
+// embeddedTypeStringer resolves types with DuckDB rather than duplicating its parser.
+type embeddedTypeStringer struct{ db *stdsql.DB }
+
+func (s embeddedTypeStringer) ScalarString(ctx context.Context, query string, args ...any) (string, error) {
+	var value string
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&value)
+	return value, err
+}
+
+func TestColumnTypesSemanticallyEqualPreservesQuotedCase(t *testing.T) {
+	db, err := stdsql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	client := embeddedTypeStringer{db: db}
+	for _, tc := range []struct {
+		name, configured, live string
+		want                   bool
+	}{
+		{"alias", "int", "INTEGER", true},
+		{"enum spelling", "enum('open', 'closed')", "ENUM('open', 'closed')", true},
+		{"enum label drift", "ENUM('open', 'closed')", "ENUM('OPEN', 'closed')", false},
+		{"nested enum drift", "STRUCT(status ENUM('open', 'closed'))[]", "STRUCT(status ENUM('OPEN', 'closed'))[]", false},
+		{"escaped label drift", "ENUM('it''s open')", "ENUM('IT''S OPEN')", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			canonicalLive, err := canonicalColumnType(t.Context(), client, tc.live)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := columnTypesSemanticallyEqual(t.Context(), client, tc.configured, canonicalLive)
+			if err != nil || got != tc.want {
+				t.Fatalf("equivalent = %v, error = %v, want %v (live %q)", got, err, tc.want, canonicalLive)
+			}
+		})
 	}
 }
