@@ -23,6 +23,11 @@ and `INTEGER`, are compared semantically. Respelling a type with an alias, for
 example after an import that recorded `INTEGER`, updates state in place and
 does not replace the table.
 
+Refresh detects case changes inside ENUM labels, including nested ENUM types.
+These changes affect the values the column accepts. Review any replacement plan
+before applying because replacing a table removes its rows. To retain the live
+type and data, update the configured type to match it instead.
+
 The database, schema, and name also require replacement when changed. Destroy
 drops the table. Import uses `<database>.<schema>.<table>` and reads its existing
 column definitions.

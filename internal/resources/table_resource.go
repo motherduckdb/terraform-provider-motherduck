@@ -336,7 +336,7 @@ func columnTypesSemanticallyEqual(ctx context.Context, client scalarStringer, co
 	if err != nil {
 		return false, err
 	}
-	return strings.EqualFold(canonical, strings.TrimSpace(liveType)), nil
+	return sameColumnTypeSpelling(canonical, liveType), nil
 }
 
 func canonicalColumnType(ctx context.Context, client scalarStringer, columnType string) (string, error) {
