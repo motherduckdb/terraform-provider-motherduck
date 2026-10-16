@@ -647,6 +647,7 @@ type contractREST struct {
 	token       *mdrest.Token
 	createCount int
 	listErr     error
+	listBody    *string
 	server      *httptest.Server
 }
 
@@ -696,6 +697,12 @@ func (c *contractREST) serveHTTP(w http.ResponseWriter, req *http.Request) {
 		_ = json.NewEncoder(w).Encode(response)
 	case "GET /v1/users/contract_user/tokens":
 		c.mu.Lock()
+		if c.listBody != nil {
+			body := *c.listBody
+			c.mu.Unlock()
+			_, _ = w.Write([]byte(body))
+			return
+		}
 		if c.listErr != nil {
 			err := c.listErr
 			c.mu.Unlock()
