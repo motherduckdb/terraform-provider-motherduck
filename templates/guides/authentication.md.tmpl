@@ -93,6 +93,7 @@ example's outputs and defaults before adopting it.
 | Symptom | Check |
 | --- | --- |
 | SQL token is missing | Inject `MOTHERDUCK_TOKEN` into the actual Terraform process |
+| `Could not connect to MotherDuck` | The machine cannot reach MotherDuck. Check network, proxy, DNS, and TLS trust. A new token does not help. The gRPC `msg` names the failing step |
 | REST resource requests an admin token | A normal SQL token does not replace `MOTHERDUCK_ADMIN_TOKEN` |
 | Objects appear under the wrong account | Compare `motherduck_current_user.value` with the intended writer |
 | Initialization cannot find a database | Provider-level `database` must already exist. Leave it unset when creating databases |

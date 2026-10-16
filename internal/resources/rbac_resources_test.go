@@ -2,6 +2,8 @@ package resources
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -226,5 +228,24 @@ func TestRoleGrantStatementsQuoteDottedUserAsOneIdentifier(t *testing.T) {
 	}
 	if got, want := roleGrantStatement("REVOKE", "analytics_readers", "FROM", "user", username), `REVOKE ROLE "analytics_readers" FROM USER "first.last@example.com"`; got != want {
 		t.Fatalf("roleGrantStatement() = %q, want %q", got, want)
+	}
+}
+
+func TestRoleAssignmentErrorDetail(t *testing.T) {
+	other := errors.New(`Catalog Error: Role "missing" does not exist`)
+	if got := roleAssignmentErrorDetail(other, true); got != other.Error() {
+		t.Fatalf("unrelated error detail = %q, want the message unchanged", got)
+	}
+
+	refused := errors.New("Permission Error: Assigning roles to users is disabled for this organization (role assignment source of truth: IDP_SCIM).")
+	grant := roleAssignmentErrorDetail(refused, false)
+	if !strings.HasPrefix(grant, refused.Error()) || !strings.Contains(grant, "only for service accounts and roles") {
+		t.Fatalf("grant detail = %q, want the MotherDuck message followed by the SCIM explanation", grant)
+	}
+	if strings.Contains(grant, "terraform state rm") {
+		t.Fatalf("grant detail = %q, want the state removal hint only for revokes", grant)
+	}
+	if revoke := roleAssignmentErrorDetail(refused, true); !strings.Contains(revoke, "terraform state rm") {
+		t.Fatalf("revoke detail = %q, want the state removal hint", revoke)
 	}
 }

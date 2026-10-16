@@ -65,6 +65,11 @@ func isTransientMotherDuckError(err error) bool {
 		return false
 	}
 	message := strings.ToLower(err.Error())
+	// A server certificate that fails verification fails the same way on
+	// every attempt, so retrying the UNAVAILABLE status only delays the error.
+	if strings.Contains(message, "certificate verify failed") {
+		return false
+	}
 	return strings.Contains(message, "deadline_exceeded") ||
 		strings.Contains(message, "unavailable") ||
 		strings.Contains(message, "request timed out") ||

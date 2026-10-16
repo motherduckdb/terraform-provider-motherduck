@@ -46,6 +46,15 @@ satisfy it. If the direct grant is revoked outside Terraform, the next apply
 restores it. Destroy revokes that grant without deleting either role or principal.
 Permissions received through other grants remain in effect.
 
+### Organizations that manage roles through SCIM
+
+An organization can make its identity provider the source of truth for user role
+assignment. MotherDuck then refuses role grants and revokes for people, and the
+provider reports the refusal with the reason. Grants to service accounts and to
+roles keep working. If destroy is refused, MotherDuck keeps the grant and Terraform
+keeps it in state. Manage the person's roles in the identity provider, or run
+`terraform state rm` on the resource to stop managing the grant without revoking it.
+
 ## Import
 
 Import a direct grant using `<role_name>/<grantee_type>/<grantee_name>`:

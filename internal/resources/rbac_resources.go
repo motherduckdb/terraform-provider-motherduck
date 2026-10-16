@@ -300,7 +300,7 @@ func (r *roleGrantResource) Create(ctx context.Context, req resource.CreateReque
 	}
 	query := roleGrantStatement("GRANT", plan.RoleName.ValueString(), "TO", plan.GranteeType.ValueString(), plan.GranteeName.ValueString())
 	if err := client.Exec(ctx, query); err != nil {
-		resp.Diagnostics.AddError("Unable to grant MotherDuck role", err.Error())
+		resp.Diagnostics.AddError("Unable to grant MotherDuck role", roleAssignmentErrorDetail(err, false))
 		return
 	}
 	plan.ID = roleGrantID(plan)
@@ -347,7 +347,7 @@ func (r *roleGrantResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 	query := roleGrantStatement("REVOKE", state.RoleName.ValueString(), "FROM", state.GranteeType.ValueString(), state.GranteeName.ValueString())
 	if err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) }); err != nil && !isNotFound(err) {
-		resp.Diagnostics.AddError("Unable to revoke MotherDuck role", err.Error())
+		resp.Diagnostics.AddError("Unable to revoke MotherDuck role", roleAssignmentErrorDetail(err, true))
 	}
 }
 
@@ -403,6 +403,22 @@ func (r *roleGrantResource) readRoleGrant(ctx context.Context, model *roleGrantM
 	model.ID = roleGrantID(*model)
 	model.GrantedAt = grantedAt
 	return true
+}
+
+// roleAssignmentErrorDetail explains a refused role grant or revoke when the
+// organization manages user role assignment through its identity provider.
+// MotherDuck then rejects GRANT ROLE and REVOKE ROLE for users who are not
+// service accounts. Other errors keep their message unchanged.
+func roleAssignmentErrorDetail(err error, revoke bool) string {
+	detail := err.Error()
+	if !strings.Contains(strings.ToLower(detail), "role assignment source of truth") {
+		return detail
+	}
+	detail += "\n\nThis organization manages user roles through its identity provider's SCIM provisioning, so MotherDuck accepts role grants and revokes only for service accounts and roles. Manage this user's roles in the identity provider, or ask an administrator who can configure SCIM to make MotherDuck the role assignment source of truth."
+	if revoke {
+		detail += " MotherDuck kept the grant, so Terraform keeps it in state. To stop managing the grant without revoking it, run `terraform state rm` on this resource."
+	}
+	return detail
 }
 
 func showRolesToStatement(granteeType, granteeName string) string {

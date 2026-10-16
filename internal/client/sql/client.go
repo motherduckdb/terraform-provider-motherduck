@@ -119,7 +119,7 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 					continue
 				}
 			}
-			return fmt.Errorf("running boot query %q: %s", redactToken(query, i.token), redactToken(err.Error(), i.token))
+			return fmt.Errorf("running boot query %q: %s%s", redactToken(query, i.token), redactToken(err.Error(), i.token), connectionFailureHint(err))
 		}
 		i.next++
 	}
@@ -132,6 +132,16 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 	}
 	i.initialized = true
 	return nil
+}
+
+// connectionFailureHint explains a boot failure in which the MotherDuck
+// extension could not reach MotherDuck at all. Without it, users tend to
+// replace a working token, which cannot help.
+func connectionFailureHint(err error) string {
+	if !strings.Contains(strings.ToLower(err.Error()), "could not connect to motherduck") {
+		return ""
+	}
+	return ". Terraform could not reach MotherDuck from this machine. This is a network, proxy, DNS, or TLS problem rather than a token problem, so replacing the token does not help. When the error includes a gRPC msg, it names the step that failed, such as DNS resolution or TLS certificate verification"
 }
 
 func currentDatabase(ctx context.Context, queryer driver.QueryerContext) (string, error) {
