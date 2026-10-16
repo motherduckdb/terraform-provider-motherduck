@@ -299,8 +299,14 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	if truncated {
 		return fmt.Errorf("MotherDuck API response exceeded the %d-byte safety limit", maxSuccessBodyBytes)
 	}
-	if out == nil || len(data) == 0 {
+	if out == nil {
 		return nil
+	}
+	// Missing objects are not empty inventories. In particular, treating an
+	// empty token listing as success would remove live credentials from state.
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return fmt.Errorf("decoding MotherDuck API response: expected a JSON response object, got an empty or null body")
 	}
 	if err := json.Unmarshal(data, out); err != nil {
 		return fmt.Errorf("decoding MotherDuck API response: %w", err)

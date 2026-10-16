@@ -6,8 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
+	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -37,8 +42,26 @@ func TestPluginTestingAdminGraphLifecycle(t *testing.T) {
 		}
 	})
 	name := fmt.Sprintf("tf_admin_graph_%d", time.Now().UnixNano())
+	upstream, err := url.Parse(mdrest.DefaultBaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy := httputil.NewSingleHostReverseProxy(upstream)
+	var malformedListing atomic.Pointer[string]
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodGet && req.URL.Path == "/v1/users/"+name+"/tokens" {
+			if body := malformedListing.Swap(nil); body != nil {
+				_, _ = w.Write([]byte(*body))
+				return
+			}
+		}
+		req.Host = upstream.Host
+		proxy.ServeHTTP(w, req)
+	}))
+	t.Cleanup(server.Close)
 	config := func(cooldown int, tokenName string) string {
 		return fmt.Sprintf(`
+provider "motherduck" { api_base_url = %q }
 resource "motherduck_service_account" "test" { username = %q }
 resource "motherduck_duckling_config" "test" {
  username = motherduck_service_account.test.username
@@ -60,11 +83,12 @@ resource "motherduck_role_grant" "test" {
  grantee_name = motherduck_service_account.test.username
  grantee_type = "user"
 }
-`, name, cooldown, tokenName, name)
+`, server.URL, name, cooldown, tokenName, name)
 	}
 	initial := config(60, "initial")
 	updated := config(90, "rotated")
 	var tokenID string
+	var initialTokenSecret string
 	check := func(wantCooldown int) resource.TestCheckFunc {
 		return func(state *terraform.State) error {
 			cfg, err := admin.GetDucklingConfig(t.Context(), name)
@@ -78,7 +102,18 @@ resource "motherduck_role_grant" "test" {
 			if err != nil {
 				return err
 			}
-			tokenID = state.RootModule().Resources["motherduck_access_token.test"].Primary.ID
+			tokenState := state.RootModule().Resources["motherduck_access_token.test"].Primary
+			if wantCooldown == 60 {
+				if tokenID != "" && tokenState.ID != tokenID {
+					return errors.New("malformed refresh changed the managed token ID")
+				}
+				secret := tokenState.Attributes["token"]
+				if secret == "" || (initialTokenSecret != "" && secret != initialTokenSecret) {
+					return errors.New("malformed refresh lost or changed the one-time token secret")
+				}
+				initialTokenSecret = secret
+			}
+			tokenID = tokenState.ID
 			if len(tokens) != 1 || tokens[0].ID != tokenID {
 				return fmt.Errorf("expected only the current managed token")
 			}
@@ -114,10 +149,50 @@ resource "motherduck_role_grant" "test" {
 			{Config: initial, ResourceName: "motherduck_service_account.test", ImportState: true, ImportStateVerify: true},
 			{Config: initial, ResourceName: "motherduck_duckling_config.test", ImportState: true, ImportStateVerify: true},
 			{Config: initial, ResourceName: "motherduck_role_grant.test", ImportState: true, ImportStateVerify: true},
+			{
+				Config: initial, ResourceName: "motherduck_access_token.test", ImportState: true, ImportStateVerify: true,
+				ImportStateIdFunc: func(*terraform.State) (string, error) { return name + "/" + tokenID, nil },
+				// The API cannot recover the secret or requested TTL. check verifies
+				// the saved secret, token identity and independent live inventory.
+				ImportStateVerifyIgnore: []string{"token", "ttl"},
+			},
+			{
+				RefreshState: true,
+				PreConfig: func() {
+					body := ""
+					malformedListing.Store(&body)
+				},
+				ExpectError: regexp.MustCompile("expected a JSON response object"),
+			},
+			{
+				Config:           initial,
+				PreConfig:        func() { malformedListing.Store(nil) },
+				Check:            check(60),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
+			{
+				RefreshState: true,
+				PreConfig: func() {
+					body := "null"
+					malformedListing.Store(&body)
+				},
+				ExpectError: regexp.MustCompile("expected a JSON response object"),
+			},
+			{
+				Config:           initial,
+				PreConfig:        func() { malformedListing.Store(nil) },
+				Check:            check(60),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
 			{Config: updated, Check: check(90), ConfigPlanChecks: resource.ConfigPlanChecks{
 				PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_duckling_config.test", plancheck.ResourceActionUpdate), plancheck.ExpectResourceAction("motherduck_access_token.test", plancheck.ResourceActionReplace)},
 				PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 			}},
+			{
+				Config: updated, ResourceName: "motherduck_access_token.test", ImportState: true, ImportStateVerify: true,
+				ImportStateIdFunc:       func(*terraform.State) (string, error) { return name + "/" + tokenID, nil },
+				ImportStateVerifyIgnore: []string{"token", "ttl"},
+			},
 			{Config: updated, PreConfig: func() {
 				if err := probe.Exec(t.Context(), fmt.Sprintf("REVOKE ROLE %s FROM USER %s", name, name)); err != nil {
 					t.Fatal(err)

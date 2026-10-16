@@ -111,3 +111,63 @@ resource "motherduck_access_token" "test" {
 		},
 	})
 }
+
+func TestContractAccessTokenMissingResponsePreservesStateAndRecovers(t *testing.T) {
+	for name, body := range map[string]string{"empty": "", "null": "null"} {
+		t.Run(name, func(t *testing.T) {
+			restClient := newContractREST(t)
+			config := contractProviderConfig(restClient.URL()) + `
+resource "motherduck_access_token" "test" {
+  username = "contract_user"
+  name = "contract token"
+  token_type = "read_write"
+}
+`
+			checkToken := resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("motherduck_access_token.test", "id", "token-1"),
+				resource.TestCheckResourceAttr("motherduck_access_token.test", "token", "md_contract_secret_1"),
+			)
+			resource.UnitTest(t, resource.TestCase{
+				ProtoV6ProviderFactories: contractProviderFactories(newContractSQL()),
+				CheckDestroy: func(*terraform.State) error {
+					restClient.mu.Lock()
+					defer restClient.mu.Unlock()
+					if restClient.token != nil || restClient.createCount != 1 {
+						return fmt.Errorf("token remains or was recreated after malformed refresh, creates = %d", restClient.createCount)
+					}
+					return nil
+				},
+				Steps: []resource.TestStep{
+					{Config: config, Check: checkToken, ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+					{
+						Config: config, ResourceName: "motherduck_access_token.test", ImportState: true, ImportStateId: "contract_user/token-1", ImportStateVerify: true,
+						// The one-time secret cannot be recovered by import.
+						ImportStateVerifyIgnore: []string{"token"},
+					},
+					{
+						RefreshState: true,
+						PreConfig: func() {
+							restClient.mu.Lock()
+							restClient.listBody = &body
+							restClient.mu.Unlock()
+						},
+						ExpectError: regexp.MustCompile("expected a JSON response object"),
+					},
+					{
+						Config: config,
+						PreConfig: func() {
+							restClient.mu.Lock()
+							defer restClient.mu.Unlock()
+							if restClient.token == nil || restClient.token.ID != "token-1" || restClient.createCount != 1 {
+								t.Fatal("malformed refresh changed remote token")
+							}
+							restClient.listBody = nil
+						},
+						Check:            checkToken,
+						ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+					},
+				},
+			})
+		})
+	}
+}
