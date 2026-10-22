@@ -61,6 +61,10 @@ func TestDucklingCooldownPlanModifier(t *testing.T) {
 		"new size lets MotherDuck decide": {"standard", "jumbo", types.Int64Value(300), types.Int64Unknown()},
 		"old null state stays unknown":    {"standard", "standard", types.Int64Null(), types.Int64Unknown()},
 		"pulse keeps no cooldown":         {"pulse", "pulse", types.Int64Null(), types.Int64Null()},
+		// After a plan limit lowers the size to Pulse, MotherDuck still reports
+		// the stored cooldown, and a write that sends it is rejected.
+		"pulse drops a reported cooldown": {"pulse", "pulse", types.Int64Value(60), types.Int64Null()},
+		"switch to pulse plans none":      {"standard", "pulse", types.Int64Value(300), types.Int64Null()},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got := ducklingCooldownModifierPlan(t, tc.stateSize, tc.planSize, tc.state); !got.Equal(tc.want) {

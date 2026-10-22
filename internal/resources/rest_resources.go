@@ -16,7 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -73,7 +72,7 @@ func (r *serviceAccountResource) Schema(ctx context.Context, req resource.Schema
 			},
 			"username": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Unique service account username. Must be 3-255 UTF-16 code units, start with a letter, and contain only letters, ASCII digits, and underscores. MotherDuck compares usernames case-insensitively, so a change in letter case updates the resource in place. Any other change replaces the account.",
+				MarkdownDescription: "Unique service account username. Must be 3-255 UTF-16 code units, start with a letter, and contain only letters, ASCII digits, and underscores. An existing service account with a legacy username that also contains `-`, `@`, or `.`, such as `mdw-writer@motherduck-com`, can be imported and managed, but MotherDuck does not create new accounts with these characters, so a plan that would create one fails. MotherDuck compares usernames case-insensitively, so a change in letter case updates the resource in place. Any other change replaces the account.",
 				Validators:          serviceAccountUsernameValidators(),
 				PlanModifiers:       usernameRequiresReplace(),
 			},
@@ -156,27 +155,38 @@ func (r *serviceAccountResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 }
 
-// ModifyPlan rejects a description change. MotherDuck cannot change a
+// ModifyPlan rejects a new account whose username MotherDuck would refuse,
+// such as a legacy username that only an existing account can have.
+//
+// It also rejects a description change. MotherDuck cannot change a
 // service account description, and replacing the account to apply one would
 // delete its data. Removing the description only clears it from state. An
 // imported account, or one whose description was removed from the
 // configuration, has no recorded description, so it may adopt the configured
 // one.
 func (r *serviceAccountResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
-	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+	if req.Plan.Raw.IsNull() {
 		return
 	}
-	var planned, current, plannedUsername, currentUsername types.String
-	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("description"), &planned)...)
-	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("description"), &current)...)
+	var plannedUsername, currentUsername types.String
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("username"), &plannedUsername)...)
-	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("username"), &currentUsername)...)
-	if resp.Diagnostics.HasError() || planned.IsUnknown() || planned.IsNull() || planned.Equal(current) {
+	if !req.State.Raw.IsNull() {
+		resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("username"), &currentUsername)...)
+	}
+	if resp.Diagnostics.HasError() {
 		return
 	}
 	// A rename already replaces the account, and the new account is created
-	// with the new description.
-	if plannedUsername.IsUnknown() || !strings.EqualFold(plannedUsername.ValueString(), currentUsername.ValueString()) {
+	// with the new username and description.
+	creates := req.State.Raw.IsNull() || !strings.EqualFold(plannedUsername.ValueString(), currentUsername.ValueString())
+	if creates {
+		validateNewServiceAccountUsername(plannedUsername, &resp.Diagnostics)
+		return
+	}
+	var planned, current types.String
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("description"), &planned)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("description"), &current)...)
+	if resp.Diagnostics.HasError() || planned.IsUnknown() || planned.IsNull() || planned.Equal(current) {
 		return
 	}
 	if current.IsNull() {
@@ -194,6 +204,23 @@ func (r *serviceAccountResource) ModifyPlan(ctx context.Context, req resource.Mo
 			"Restore the previous description in the configuration. To record the new description without changing the account or its data, remove the resource from state with `terraform state rm` and import it again with `terraform import`. "+
 			"MotherDuck keeps the description the account was created with. To recreate the account with the new description and lose its data, destroy it first with `terraform destroy -target`.",
 	)
+}
+
+// validateNewServiceAccountUsername applies the MotherDuck creation rule at
+// plan time. The configuration validator also accepts the legacy usernames of
+// existing accounts, which MotherDuck refuses for a new account.
+func validateNewServiceAccountUsername(username types.String, diags *diag.Diagnostics) {
+	if username.IsUnknown() || username.IsNull() {
+		return
+	}
+	if detail, ok := validateServiceAccountUsernameValue(username.ValueString()); !ok {
+		diags.AddAttributeError(
+			path.Root("username"),
+			"Invalid MotherDuck service account username",
+			"MotherDuck cannot create service account "+username.ValueString()+". "+detail+
+				" A legacy username with other characters, such as hyphens, at signs, or periods, is accepted only for an existing service account. Import the account with `terraform import`, or choose a username that follows the rule.",
+		)
+	}
 }
 
 // Update applies only changes that need no API call. The plan replaces the
@@ -278,12 +305,12 @@ func (r *serviceAccountResource) Delete(ctx context.Context, req resource.Delete
 }
 
 func (r *serviceAccountResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	detail, ok := validateServiceAccountUsernameValue(req.ID)
-	if !ok {
-		resp.Diagnostics.AddError("Invalid import ID", "Use `<username>`. "+detail)
+	// The creation rule does not apply to an existing account, whose legacy
+	// username can contain other characters. The Read that follows import
+	// confirms the username is a service account.
+	if !validateRESTUsernameImportID(req.ID, "`<username>`", &resp.Diagnostics) {
 		return
 	}
-	// The Read that follows import confirms the username is a service account.
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("username"), req.ID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
 	resp.Diagnostics.Append(resp.Private.SetKey(ctx, serviceAccountDescriptionUnverified, []byte(serviceAccountDescriptionImported))...)
@@ -438,11 +465,13 @@ func (r *accessTokenResource) Schema(ctx context.Context, req resource.SchemaReq
 				Validators:          accessTokenTTLValidators(),
 				PlanModifiers:       int64RequiresReplace(),
 			},
+			// No static default: a default would plan an in-place change to
+			// read_write for a read_scaling token whose configuration omits the
+			// type, such as an imported token, and the type cannot change in place.
 			"token_type": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				Default:             stringdefault.StaticString("read_write"),
-				MarkdownDescription: "`read_write` or `read_scaling`. Defaults to `read_write`. Changing this value replaces the token.",
+				MarkdownDescription: "`read_write` or `read_scaling`. A new token is `read_write` when this is omitted. Changing a configured value replaces the token. When omitted, Terraform keeps the type MotherDuck reports, so removing it from the configuration or importing a `read_scaling` token without it plans no change.",
 				Validators:          accessTokenTypeValidators(),
 				PlanModifiers:       stringOptionalComputedRequiresReplaceIfConfigured(),
 			},
@@ -482,8 +511,10 @@ func (r *accessTokenResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
+	// An omitted token type is unknown in the plan, and a new token then
+	// defaults to read_write.
 	tokenType := "read_write"
-	if !plan.TokenType.IsNull() && plan.TokenType.ValueString() != "" {
+	if !plan.TokenType.IsNull() && !plan.TokenType.IsUnknown() && plan.TokenType.ValueString() != "" {
 		tokenType = strings.ToLower(strings.TrimSpace(plan.TokenType.ValueString()))
 	}
 	createReq := mdrest.CreateTokenRequest{Name: plan.Name.ValueString(), TokenType: tokenType}
@@ -534,7 +565,8 @@ func (r *accessTokenResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 	for _, token := range tokens {
-		if token.ID == state.ID.ValueString() {
+		// Token IDs are UUIDs, which compare without regard to letter case.
+		if strings.EqualFold(token.ID, state.ID.ValueString()) {
 			secret := state.Token
 			setTokenModelFromREST(&state, &token)
 			state.Token = secret
@@ -624,8 +656,10 @@ func (r *accessTokenResource) ImportState(ctx context.Context, req resource.Impo
 	if !validateUUIDString(parts[1], "MotherDuck access token ID import segment", &resp.Diagnostics) {
 		return
 	}
+	// UUIDs are case-insensitive. MotherDuck stores them as PostgreSQL UUIDs,
+	// which it reports in lower case.
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("username"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), parts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), strings.ToLower(parts[1]))...)
 }
 
 func setTokenModelFromREST(model *accessTokenModel, token *mdrest.Token) {
@@ -682,6 +716,11 @@ type ducklingConfigModel struct {
 
 func NewDucklingConfigResource() resource.Resource { return &ducklingConfigResource{} }
 
+const ducklingUnsetCooldownDescription = "Pulse instances do not support cooldown seconds. " +
+	"When unset, Terraform does not manage the cooldown: it records the live value, keeps it while the instance size stays the same, including on the first apply, and lets MotherDuck apply its default when the instance size changes. " +
+	"With a Pulse instance size an unset cooldown is cleared, including one MotherDuck still reports after a plan limit lowered the size to Pulse. " +
+	"Removing a configured value keeps the current cooldown. Set a value to change it."
+
 func (r *ducklingConfigResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_duckling_config"
 }
@@ -710,7 +749,7 @@ func (r *ducklingConfigResource) Schema(ctx context.Context, req resource.Schema
 			"read_write_cooldown_seconds": schema.Int64Attribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Optional read-write cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds. When unset, Terraform does not manage the cooldown: it records the live value, keeps it while the instance size stays the same, and lets MotherDuck apply its default when the instance size changes. Removing a configured value keeps the current cooldown. Set a value to change it.",
+				MarkdownDescription: "Optional read-write cooldown in seconds. Must be between 60 and 86400. " + ducklingUnsetCooldownDescription,
 				Validators:          ducklingCooldownValidators(),
 				PlanModifiers:       []planmodifier.Int64{ducklingCooldownPlanModifier{sizeAttribute: "read_write_instance_size"}},
 			},
@@ -727,7 +766,7 @@ func (r *ducklingConfigResource) Schema(ctx context.Context, req resource.Schema
 			"read_scaling_cooldown_seconds": schema.Int64Attribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Optional read-scaling cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds. When unset, Terraform does not manage the cooldown: it records the live value, keeps it while the instance size stays the same, and lets MotherDuck apply its default when the instance size changes. Removing a configured value keeps the current cooldown. Set a value to change it.",
+				MarkdownDescription: "Optional read-scaling cooldown in seconds. Must be between 60 and 86400. " + ducklingUnsetCooldownDescription,
 				Validators:          ducklingCooldownValidators(),
 				PlanModifiers:       []planmodifier.Int64{ducklingCooldownPlanModifier{sizeAttribute: "read_scaling_instance_size"}},
 			},
@@ -745,7 +784,7 @@ func (r *ducklingConfigResource) ValidateConfig(ctx context.Context, req resourc
 }
 
 func (r *ducklingConfigResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	r.putDucklingConfig(ctx, req.Plan, &resp.State, &resp.Diagnostics)
+	r.putDucklingConfig(ctx, req.Plan, &resp.State, &resp.Diagnostics, true)
 }
 
 func (r *ducklingConfigResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -772,7 +811,7 @@ func (r *ducklingConfigResource) Read(ctx context.Context, req resource.ReadRequ
 }
 
 func (r *ducklingConfigResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	r.putDucklingConfig(ctx, req.Plan, &resp.State, &resp.Diagnostics)
+	r.putDucklingConfig(ctx, req.Plan, &resp.State, &resp.Diagnostics, false)
 }
 
 func (r *ducklingConfigResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -795,7 +834,7 @@ func (r *ducklingConfigResource) putDucklingConfig(ctx context.Context, planGett
 	Get(context.Context, any) diag.Diagnostics
 }, stateSetter interface {
 	Set(context.Context, any) diag.Diagnostics
-}, diags *diag.Diagnostics) {
+}, diags *diag.Diagnostics, create bool) {
 	client := r.rest(diags)
 	if client == nil {
 		return
@@ -825,6 +864,30 @@ func (r *ducklingConfigResource) putDucklingConfig(ctx context.Context, planGett
 		v := plan.ReadScalingCooldownSeconds.ValueInt64()
 		cfg.ReadScaling.CooldownSeconds = &v
 	}
+	// MotherDuck stores the configuration exactly as written, so a write that
+	// omits a cooldown drops an override set outside Terraform. On create no
+	// state holds the live cooldown yet, so read it and send it back while the
+	// instance size stays the same.
+	if create && (keepsLiveCooldown(plan.ReadWriteCooldownSeconds, cfg.ReadWrite.InstanceSize) || keepsLiveCooldown(plan.ReadScalingCooldownSeconds, cfg.ReadScaling.InstanceSize)) {
+		live, err := client.GetDucklingConfig(ctx, plan.Username.ValueString())
+		if err != nil {
+			diags.AddError("Unable to read MotherDuck Duckling config", "Terraform reads the current Duckling configuration before its first write to keep cooldowns the configuration does not set. "+err.Error())
+			return
+		}
+		if keepsLiveCooldown(plan.ReadWriteCooldownSeconds, cfg.ReadWrite.InstanceSize) && sameInstanceSize(cfg.ReadWrite.InstanceSize, live.ReadWrite.InstanceSize) {
+			cfg.ReadWrite.CooldownSeconds = live.ReadWrite.CooldownSeconds
+		}
+		if keepsLiveCooldown(plan.ReadScalingCooldownSeconds, cfg.ReadScaling.InstanceSize) && sameInstanceSize(cfg.ReadScaling.InstanceSize, live.ReadScaling.InstanceSize) {
+			cfg.ReadScaling.CooldownSeconds = live.ReadScaling.CooldownSeconds
+		}
+	}
+	// MotherDuck rejects any cooldown for Pulse.
+	if isPulseSize(cfg.ReadWrite.InstanceSize) {
+		cfg.ReadWrite.CooldownSeconds = nil
+	}
+	if isPulseSize(cfg.ReadScaling.InstanceSize) {
+		cfg.ReadScaling.CooldownSeconds = nil
+	}
 	updated, err := client.SetDucklingConfig(ctx, plan.Username.ValueString(), cfg)
 	if err != nil {
 		diags.AddError("Unable to set MotherDuck Duckling config", ducklingConfigErrorDetail(err))
@@ -838,7 +901,24 @@ func (r *ducklingConfigResource) putDucklingConfig(ctx context.Context, planGett
 	// next refresh report real drift.
 	plan.ReadWriteCooldownSeconds = plannedCooldownOrLive(planned.ReadWriteCooldownSeconds, plan.ReadWriteCooldownSeconds)
 	plan.ReadScalingCooldownSeconds = plannedCooldownOrLive(planned.ReadScalingCooldownSeconds, plan.ReadScalingCooldownSeconds)
+	// The plan has no cooldown for Pulse, and the write sent none.
+	if isPulseSize(cfg.ReadWrite.InstanceSize) {
+		plan.ReadWriteCooldownSeconds = types.Int64Null()
+	}
+	if isPulseSize(cfg.ReadScaling.InstanceSize) {
+		plan.ReadScalingCooldownSeconds = types.Int64Null()
+	}
 	diags.Append(stateSetter.Set(ctx, &plan)...)
+}
+
+// keepsLiveCooldown reports whether a write should carry the live cooldown:
+// the configuration leaves it unset and the size is not Pulse.
+func keepsLiveCooldown(planned types.Int64, size string) bool {
+	return planned.IsUnknown() && !isPulseSize(size)
+}
+
+func sameInstanceSize(planned, live string) bool {
+	return strings.EqualFold(strings.TrimSpace(planned), strings.TrimSpace(live))
 }
 
 // ducklingTierLimits are the default Duckling limits for each MotherDuck plan,
@@ -915,11 +995,11 @@ func int64FromLive(live *int64) types.Int64 {
 }
 
 // ducklingCooldownPlanModifier plans an unset cooldown. A configured value
-// always wins. While unset, the cooldown keeps its state value as long as the
-// matching instance size is unchanged, and the write sends that value so
-// MotherDuck keeps it. When the instance size changes, or state has no value
-// for a non-Pulse size, the value is unknown because MotherDuck applies the
-// default for the size, or none for Pulse.
+// always wins. An unset cooldown on a Pulse size is null, because Pulse has
+// none. Otherwise it keeps its state value as long as the matching instance
+// size is unchanged, and the write sends that value so MotherDuck keeps it.
+// When the instance size changes, or state has no value, the value is unknown
+// because MotherDuck applies the default for the size.
 type ducklingCooldownPlanModifier struct {
 	sizeAttribute string
 }
@@ -933,13 +1013,27 @@ func (m ducklingCooldownPlanModifier) MarkdownDescription(ctx context.Context) s
 }
 
 func (m ducklingCooldownPlanModifier) PlanModifyInt64(ctx context.Context, req planmodifier.Int64Request, resp *planmodifier.Int64Response) {
-	if !req.ConfigValue.IsNull() || req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+	if !req.ConfigValue.IsNull() || req.Plan.Raw.IsNull() {
 		return
 	}
-	var planned, current types.String
+	var planned types.String
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root(m.sizeAttribute), &planned)...)
+	if resp.Diagnostics.HasError() || planned.IsUnknown() || planned.IsNull() {
+		return
+	}
+	// Pulse has no cooldown, and the write sends none for it. MotherDuck can
+	// still report the cooldown stored for a larger size after a plan limit
+	// lowered the size to Pulse, so the state value is not carried forward.
+	if isPulseSize(planned.ValueString()) {
+		resp.PlanValue = types.Int64Null()
+		return
+	}
+	if req.State.Raw.IsNull() {
+		return
+	}
+	var current types.String
 	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root(m.sizeAttribute), &current)...)
-	if resp.Diagnostics.HasError() || planned.IsUnknown() || planned.IsNull() || current.IsNull() {
+	if resp.Diagnostics.HasError() || current.IsNull() {
 		return
 	}
 	if !strings.EqualFold(strings.TrimSpace(planned.ValueString()), strings.TrimSpace(current.ValueString())) {
@@ -948,10 +1042,14 @@ func (m ducklingCooldownPlanModifier) PlanModifyInt64(ctx context.Context, req p
 	// A null cooldown on a non-Pulse size comes from state written before
 	// cooldowns were recorded. The write omits it and MotherDuck fills in its
 	// default, so the value stays unknown until apply.
-	if req.StateValue.IsNull() && !strings.EqualFold(strings.TrimSpace(planned.ValueString()), "pulse") {
+	if req.StateValue.IsNull() {
 		return
 	}
 	resp.PlanValue = req.StateValue
+}
+
+func isPulseSize(size string) bool {
+	return strings.EqualFold(strings.TrimSpace(size), "pulse")
 }
 
 func validateDucklingCooldowns(model *ducklingConfigModel, diags *diag.Diagnostics) bool {

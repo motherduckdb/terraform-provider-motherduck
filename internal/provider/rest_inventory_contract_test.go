@@ -89,6 +89,8 @@ data "motherduck_active_accounts" "test" {}
 				resource.TestCheckResourceAttr("data.motherduck_user_tokens.test", "tokens_json", "[]"),
 				resource.TestCheckResourceAttr("data.motherduck_users.test", "users.#", "0"),
 				resource.TestCheckResourceAttr("data.motherduck_active_accounts.test", "accounts.#", "0"),
+				// An empty listing is an empty JSON array, like tokens_json, not null.
+				resource.TestCheckResourceAttr("data.motherduck_active_accounts.test", "accounts_json", "[]"),
 			)},
 			{Config: config, PreConfig: func() { denied.Store(true) }, ExpectError: regexp.MustCompile("inventory denied")},
 			{Config: config, PreConfig: func() { denied.Store(false); empty.Store(false) }, Check: populated, ConfigPlanChecks: noOp},
