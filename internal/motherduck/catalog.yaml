@@ -20,7 +20,7 @@ rest:
     status: stable
   - path: /v1/users/{username}/instances
     methods: [GET, PUT]
-    provider_surface: [resource.motherduck_duckling_config, resource.motherduck_service_account]
+    provider_surface: resource.motherduck_duckling_config
     status: stable
   - path: /v1/active_accounts
     methods: [GET]

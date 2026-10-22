@@ -27,6 +27,11 @@ func TestServiceAccountUsernameMinimumLength(t *testing.T) {
 		"abc":                    true,
 		strings.Repeat("a", 255): true,
 		strings.Repeat("a", 256): false,
+		// MotherDuck counts UTF-16 code units, and a letter outside the Basic
+		// Multilingual Plane counts twice.
+		"𝐀𝐁":                           true,
+		"a" + strings.Repeat("𝐀", 127): true,
+		"a" + strings.Repeat("𝐀", 128): false,
 	} {
 		if _, ok := validateServiceAccountUsernameValue(value); ok != wantOK {
 			t.Errorf("validateServiceAccountUsernameValue(%q) = %t, want %t", value, ok, wantOK)

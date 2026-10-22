@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf16"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
 	resourceTimeouts "github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -324,6 +325,10 @@ func boolRequiresReplace() []planmodifier.Bool {
 	return []planmodifier.Bool{boolplanmodifier.RequiresReplace()}
 }
 
+func boolUseStateForUnknown() []planmodifier.Bool {
+	return []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()}
+}
+
 func boolRequiresReplaceIfConfigured() []planmodifier.Bool {
 	return []planmodifier.Bool{boolplanmodifier.RequiresReplaceIfConfigured()}
 }
@@ -391,23 +396,48 @@ func roleGranteeTypeValidators() []validator.String {
 func restUsernameValidators() []validator.String {
 	return []validator.String{
 		tfvalidators.StringLength("MotherDuck REST username", 1, 255),
+		tfvalidators.StringMaxUTF16Units("MotherDuck REST username", 255),
 		tfvalidators.RESTPathSegment("MotherDuck REST username"),
 	}
+}
+
+// usernameRequiresReplace replaces a resource when its username changes,
+// except for a change in letter case. MotherDuck compares usernames
+// case-insensitively, so a case-only edit names the same account and is
+// applied in place without an API call.
+func usernameRequiresReplace() []planmodifier.String {
+	return []planmodifier.String{stringplanmodifier.RequiresReplaceIf(
+		func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+			resp.RequiresReplace = !strings.EqualFold(req.StateValue.ValueString(), req.PlanValue.ValueString())
+		},
+		"Changing the username replaces the resource unless only its letter case changes.",
+		"Changing the username replaces the resource unless only its letter case changes.",
+	)}
 }
 
 func accessTokenNameValidators() []validator.String {
 	return []validator.String{
 		tfvalidators.StringLength("MotherDuck access token name", 1, 255),
+		// MotherDuck measures the limit in UTF-16 code units.
+		tfvalidators.StringMaxUTF16Units("MotherDuck access token name", 255),
 		reservedAccessTokenNameValidator{},
 	}
 }
 
 func accessTokenDescriptionValidators() []validator.String {
+	return descriptionValidators("MotherDuck access token description")
+}
+
+func serviceAccountDescriptionValidators() []validator.String {
+	return descriptionValidators("MotherDuck service account description")
+}
+
+func descriptionValidators(name string) []validator.String {
 	return []validator.String{
-		tfvalidators.StringLength("MotherDuck access token description", 1, 1000),
+		tfvalidators.StringLength(name, 1, 1000),
 		// MotherDuck measures the limit in UTF-16 code units, where a
 		// character outside the Basic Multilingual Plane counts twice.
-		tfvalidators.StringMaxUTF16Units("MotherDuck access token description", 1000),
+		tfvalidators.StringMaxUTF16Units(name, 1000),
 	}
 }
 
@@ -612,11 +642,11 @@ func (v stringEnumValidator) ValidateString(ctx context.Context, req validator.S
 type serviceAccountUsernameValidator struct{}
 
 func (serviceAccountUsernameValidator) Description(context.Context) string {
-	return "must be 3-255 characters, start with an ASCII letter, and contain only ASCII letters, digits, and underscores"
+	return serviceAccountUsernameRule
 }
 
 func (serviceAccountUsernameValidator) MarkdownDescription(context.Context) string {
-	return "must be 3-255 characters, start with an ASCII letter, and contain only ASCII letters, digits, and underscores"
+	return serviceAccountUsernameRule
 }
 
 func (serviceAccountUsernameValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
@@ -630,19 +660,25 @@ func (serviceAccountUsernameValidator) ValidateString(ctx context.Context, req v
 	}
 }
 
+const serviceAccountUsernameRule = "must be 3-255 UTF-16 code units, start with a letter, and contain only letters, ASCII digits, and underscores"
+
+// validateServiceAccountUsernameValue applies the MotherDuck username rule.
+// The service checks /^\p{L}/ and /^[\p{L}\d_]*$/ with JavaScript Unicode
+// regular expressions, where \d matches only ASCII digits, and measures the
+// 3-255 length in UTF-16 code units.
 func validateServiceAccountUsernameValue(value string) (string, bool) {
-	if length := len([]rune(value)); value != strings.TrimSpace(value) || length < 3 || length > 255 {
-		return "Username must be between 3 and 255 characters, start with an ASCII letter, and contain only ASCII letters, digits, and underscores.", false
+	if length := len(utf16.Encode([]rune(value))); value != strings.TrimSpace(value) || length < 3 || length > 255 {
+		return "Username must be between 3 and 255 UTF-16 code units, start with a letter, and contain only letters, ASCII digits, and underscores.", false
 	}
 	for i, r := range value {
 		if i == 0 {
-			if !isASCIILetter(r) {
-				return "Username must start with an ASCII letter.", false
+			if !unicode.IsLetter(r) {
+				return "Username must start with a letter.", false
 			}
 			continue
 		}
-		if !isASCIILetter(r) && !isASCIIDigit(r) && r != '_' {
-			return "Username must contain only ASCII letters, digits, and underscores.", false
+		if !unicode.IsLetter(r) && !isASCIIDigit(r) && r != '_' {
+			return "Username must contain only letters, ASCII digits, and underscores.", false
 		}
 	}
 	return "", true
@@ -744,10 +780,6 @@ func validateRoleNameValueWithReserved(value string, rejectReserved bool) (strin
 		}
 	}
 	return "", true
-}
-
-func isASCIILetter(r rune) bool {
-	return ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z')
 }
 
 func isASCIIDigit(r rune) bool {

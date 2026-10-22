@@ -143,7 +143,7 @@ Dive and Flight SQL resources and data sources are enabled by default. Function 
 
 ## Lifecycle behavior
 
-Treat identity and create-only arguments as replacements. For example, changing a service account username, an access token name, token type, TTL, a database name, DuckLake path, or Iceberg catalog endpoint or warehouse, a table column map, or a share definition should create a replacement resource instead of mutating the existing object. Service account usernames must start with an ASCII letter and contain only ASCII letters, digits, and underscores. Omit access-token `token_type` when you want the provider default of `read_write`.
+Treat identity and create-only arguments as replacements. For example, changing a service account username, an access token name, token type, TTL, a database name, DuckLake path, or Iceberg catalog endpoint or warehouse, a table column map, or a share definition should create a replacement resource instead of mutating the existing object. A username change that only alters letter case is the exception, because MotherDuck compares usernames case-insensitively, so it updates in place. Service account usernames must start with a letter and contain only letters, ASCII digits, and underscores. A service account `description` is create-only, and changing it fails the plan rather than replacing the account. Omit access-token `token_type` when you want the provider default of `read_write`.
 
 SQL resource names must be non-empty, must not contain dots, and must not have leading or trailing whitespace. Spaces inside identifiers are supported for resources such as databases, schemas, tables, views, secrets, shares, and snapshots, but dots are reserved for Terraform import IDs such as `<database>.<schema>.<name>`.
 

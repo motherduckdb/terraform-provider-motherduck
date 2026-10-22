@@ -181,6 +181,24 @@ func TestActiveAccountsDataSourceReadUsesRESTClient(t *testing.T) {
 	if got, want := state.AccountsJSON.ValueString(), `[{"username":"svc","ducklings":null}]`; got != want {
 		t.Fatalf("accounts_json = %q, want %q", got, want)
 	}
+	if rows := state.Accounts.Elements(); len(rows) != 1 || !rows[0].(types.Object).Attributes()["username"].Equal(types.StringValue("svc")) {
+		t.Fatalf("accounts = %v, want one typed svc account", state.Accounts)
+	}
+}
+
+// TestActiveAccountsTypedListIsUsable keeps the typed inventory out of the
+// sensitive marking, so it can drive expressions and outputs. The users data
+// source already exposes the same usernames without it.
+func TestActiveAccountsTypedListIsUsable(t *testing.T) {
+	var resp datasource.SchemaResponse
+	NewActiveAccountsDataSource().Schema(context.Background(), datasource.SchemaRequest{}, &resp)
+	attr, ok := resp.Schema.Attributes["accounts"].(schema.ListNestedAttribute)
+	if !ok {
+		t.Fatalf("accounts attribute = %T, want schema.ListNestedAttribute", resp.Schema.Attributes["accounts"])
+	}
+	if !attr.Computed || attr.Sensitive {
+		t.Fatalf("accounts Computed=%t Sensitive=%t, want computed and not sensitive", attr.Computed, attr.Sensitive)
+	}
 }
 
 func TestUserTokensDataSourceReadSetsTypedTokens(t *testing.T) {

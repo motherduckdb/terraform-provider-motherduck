@@ -117,7 +117,7 @@ func TestClientCoversPublicPaths(t *testing.T) {
 	}
 	ctx := context.Background()
 	mustNoErr(t, client.DeleteUser(ctx, "svc"))
-	if _, err := client.CreateServiceAccount(ctx, "svc"); err != nil {
+	if _, err := client.CreateServiceAccount(ctx, CreateServiceAccountRequest{Username: "svc"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := client.ListTokens(ctx, "svc"); err != nil {

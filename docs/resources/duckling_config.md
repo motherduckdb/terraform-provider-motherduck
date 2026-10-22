@@ -16,9 +16,10 @@ The settings apply to the named account. To scale a separate BI reader,
 configure that reader's username, not the writer's. A read-scaling pool limit is
 not a preallocated count of continuously running replicas.
 
-Instance-size and pool changes update the configuration in place. The username
-is replacement-only. Pulse does not accept cooldown settings, so omit the
-corresponding cooldown when selecting Pulse.
+Instance-size and pool changes update the configuration in place. A username
+change replaces the resource unless only its letter case changes, because
+MotherDuck compares usernames case-insensitively. Pulse does not accept
+cooldown settings, so omit the corresponding cooldown when selecting Pulse.
 
 Cooldowns are optional. When a cooldown is unset, Terraform records the live
 value and keeps it while that instance size stays the same. When the instance
@@ -29,6 +30,23 @@ of deleting the line.
 Measure representative queries and concurrency before choosing production
 sizes. The provider validates accepted values, while the service enforces
 availability and account-specific limits.
+
+## Plan limits
+
+MotherDuck rejects a configuration above the limits of the organization's plan.
+The provider then names the plan and its default limits in the error. These
+are the default limits:
+
+| Plan | Read-write size | Read-scaling size | Flock size |
+| --- | --- | --- | --- |
+| Free | `pulse` | `pulse` | at most 4 |
+| Lite | `pulse` | `pulse` | 0 |
+| Trial not yet started | up to `jumbo` | up to `jumbo` | at most 4 |
+| Active free trial | up to `mega` | up to `jumbo` | at most 16 |
+| Business | up to `giga` | up to `jumbo` | at most 16 |
+
+MotherDuck can set different limits for an organization or a single user, so
+the provider does not check these values itself.
 
 ## Destroy and import
 
@@ -65,7 +83,7 @@ resource "motherduck_service_account" "app" {
 - `read_scaling_flock_size` (Number) Read-scaling flock size. Must be between 0 and 64.
 - `read_scaling_instance_size` (String) Read-scaling Duckling instance size. Must be one of `pulse`, `standard`, `jumbo`, `mega`, or `giga`.
 - `read_write_instance_size` (String) Read-write Duckling instance size. Must be one of `pulse`, `standard`, `jumbo`, `mega`, or `giga`.
-- `username` (String) User or service account username. Must be non-blank and 1-255 characters.
+- `username` (String) User or service account username. Must be non-blank and 1-255 characters. MotherDuck compares usernames case-insensitively, so a change in letter case updates the resource in place. Any other change replaces it.
 
 ### Optional
 

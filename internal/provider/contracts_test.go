@@ -191,20 +191,20 @@ resource "motherduck_access_token" "test" {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("motherduck_access_token.test", "token", "md_contract_secret_1"),
-					resource.TestCheckResourceAttr("motherduck_access_token.test", "id", "token-1"),
+					resource.TestCheckResourceAttr("motherduck_access_token.test", "id", contractTokenID1),
 				),
 			},
 			{
 				RefreshState: true,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("motherduck_access_token.test", "token", "md_contract_secret_1"),
-					resource.TestCheckResourceAttr("motherduck_access_token.test", "id", "token-1"),
+					resource.TestCheckResourceAttr("motherduck_access_token.test", "id", contractTokenID1),
 				),
 			},
 			{
 				ResourceName:            "motherduck_access_token.test",
 				ImportState:             true,
-				ImportStateId:           "contract_user/token-1",
+				ImportStateId:           "contract_user/" + contractTokenID1,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"token"},
 			},
@@ -642,6 +642,14 @@ func (r contractRow) Scan(dest ...any) error {
 	return nil
 }
 
+// contractTokenID returns the UUID the contract server assigns to the nth
+// token it creates. Import accepts only UUID token IDs, as MotherDuck issues.
+func contractTokenID(n int) string {
+	return fmt.Sprintf("00000000-0000-4000-8000-%012d", n)
+}
+
+var contractTokenID1 = contractTokenID(1)
+
 type contractREST struct {
 	mu          sync.Mutex
 	token       *mdrest.Token
@@ -686,7 +694,7 @@ func (c *contractREST) serveHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		c.createCount++
 		c.token = &mdrest.Token{
-			ID:        fmt.Sprintf("token-%d", c.createCount),
+			ID:        contractTokenID(c.createCount),
 			Name:      createReq.Name,
 			Token:     fmt.Sprintf("md_contract_secret_%d", c.createCount),
 			TokenType: createReq.TokenType,

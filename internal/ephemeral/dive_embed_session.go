@@ -50,7 +50,7 @@ func (r *diveEmbedSessionEphemeralResource) Configure(ctx context.Context, req t
 
 func (r *diveEmbedSessionEphemeralResource) Schema(ctx context.Context, req tfephemeral.SchemaRequest, resp *tfephemeral.SchemaResponse) {
 	resp.Schema = ephschema.Schema{
-		MarkdownDescription: "Creates a short-lived MotherDuck Dive embed session without writing the session credential to Terraform state.",
+		MarkdownDescription: "Creates a short-lived MotherDuck Dive embed session without writing the session credential to Terraform state. The session is valid for 24 hours. Embedding needs a Business plan or an active free trial, and `username` must be a service account in the same organization.",
 		Attributes: map[string]ephschema.Attribute{
 			"dive_id": ephschema.StringAttribute{
 				Required:            true,

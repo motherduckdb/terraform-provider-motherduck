@@ -24,4 +24,22 @@ data "motherduck_active_accounts" "current" {}
 
 ### Read-Only
 
+- `accounts` (Attributes List) Accounts that have an active or cooling-down Duckling, sorted by username. It holds the same inventory as `accounts_json`, without the sensitive marking, so it can be used in expressions and outputs. (see [below for nested schema](#nestedatt--accounts))
 - `accounts_json` (String, Sensitive) Raw active-account inventory returned by the MotherDuck REST API. Sensitive because it can reveal account and Duckling metadata.
+
+<a id="nestedatt--accounts"></a>
+### Nested Schema for `accounts`
+
+Read-Only:
+
+- `ducklings` (Attributes List) Active Ducklings of the account, sorted by ID. (see [below for nested schema](#nestedatt--accounts--ducklings))
+- `username` (String) Username of the user or service account.
+
+<a id="nestedatt--accounts--ducklings"></a>
+### Nested Schema for `accounts.ducklings`
+
+Read-Only:
+
+- `id` (String) Duckling ID. `rw` is the read-write Duckling, and `rs.N` is read-scaling replica `N`.
+- `status` (String) `active` or `cooldown`.
+- `type` (String) `read_write` or `read_scaling`.

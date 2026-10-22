@@ -88,7 +88,7 @@ validate_fixture invalid-configuration \
   'Invalid MotherDuck access token name' \
   'Reserved MotherDuck access token name' \
   'Invalid MotherDuck access token description' \
-  'Username must be between 3 and 255 characters' \
+  'Username must be between 3 and 255 UTF-16 code units' \
   'Invalid MotherDuck access token TTL' \
   'Invalid MotherDuck access token type' \
   'Invalid MotherDuck Duckling instance size' \

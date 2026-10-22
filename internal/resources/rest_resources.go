@@ -2,6 +2,9 @@ package resources
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -21,6 +24,7 @@ var (
 	_ resource.Resource                   = &serviceAccountResource{}
 	_ resource.ResourceWithConfigure      = &serviceAccountResource{}
 	_ resource.ResourceWithImportState    = &serviceAccountResource{}
+	_ resource.ResourceWithModifyPlan     = &serviceAccountResource{}
 	_ resource.Resource                   = &accessTokenResource{}
 	_ resource.ResourceWithConfigure      = &accessTokenResource{}
 	_ resource.ResourceWithImportState    = &accessTokenResource{}
@@ -35,9 +39,15 @@ type serviceAccountResource struct {
 }
 
 type serviceAccountModel struct {
-	ID       types.String `tfsdk:"id"`
-	Username types.String `tfsdk:"username"`
+	ID          types.String `tfsdk:"id"`
+	Username    types.String `tfsdk:"username"`
+	Description types.String `tfsdk:"description"`
 }
+
+// serviceAccountDescriptionUnverified marks state written by import. No
+// MotherDuck API returns a service account description, so an imported account
+// may adopt the configured description once without a plan-time error.
+const serviceAccountDescriptionUnverified = "description_unverified"
 
 func NewServiceAccountResource() resource.Resource { return &serviceAccountResource{} }
 
@@ -48,17 +58,23 @@ func (r *serviceAccountResource) Metadata(ctx context.Context, req resource.Meta
 func (r *serviceAccountResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Version:             1,
-		MarkdownDescription: "Creates a MotherDuck service account through the public REST API. Deleting the account permanently deletes the account and all data it owns, so destroy dependent databases and other data first.",
+		MarkdownDescription: "Creates a MotherDuck service account through the public REST API. Deleting the account permanently deletes the account and all data it owns, so destroy dependent databases and other data first. The provider manages only service accounts. Refresh, import, and destroy fail when the username belongs to a human user.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Service account ID. This is the service account username returned by MotherDuck.",
+				PlanModifiers:       []planmodifier.String{idFollowsUsernameOnUpdate{}},
 			},
 			"username": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Unique service account username. Must be 3-255 characters, start with an ASCII letter, and contain only ASCII letters, digits, and underscores.",
+				MarkdownDescription: "Unique service account username. Must be 3-255 UTF-16 code units, start with a letter, and contain only letters, ASCII digits, and underscores. MotherDuck compares usernames case-insensitively, so a change in letter case updates the resource in place. Any other change replaces the account.",
 				Validators:          serviceAccountUsernameValidators(),
-				PlanModifiers:       stringRequiresReplace(),
+				PlanModifiers:       usernameRequiresReplace(),
+			},
+			"description": schema.StringAttribute{
+				Optional:            true,
+				MarkdownDescription: "Optional free-form notes on the account's purpose. Must be non-blank and 1-1000 characters. MotherDuck sets the description only when it creates the account and has no API to read or change it, so changing it after creation fails at plan time instead of replacing the account and deleting its data.",
+				Validators:          serviceAccountDescriptionValidators(),
 			},
 		},
 	}
@@ -74,7 +90,11 @@ func (r *serviceAccountResource) Create(ctx context.Context, req resource.Create
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	created, err := client.CreateServiceAccount(ctx, plan.Username.ValueString())
+	createReq := mdrest.CreateServiceAccountRequest{Username: plan.Username.ValueString()}
+	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
+		createReq.Description = plan.Description.ValueString()
+	}
+	created, err := client.CreateServiceAccount(ctx, createReq)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to create MotherDuck service account", err.Error())
 		return
@@ -82,6 +102,15 @@ func (r *serviceAccountResource) Create(ctx context.Context, req resource.Create
 	plan.ID = types.StringValue(created.Username)
 	plan.Username = types.StringValue(created.Username)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if createReq.Description != "" && created.Description != createReq.Description {
+		// An error here would taint the account, and replacing a service
+		// account deletes its data, so the mismatch is only a warning.
+		resp.Diagnostics.AddAttributeWarning(
+			path.Root("description"),
+			"MotherDuck did not confirm the service account description",
+			"MotherDuck created service account "+created.Username+" but did not return the requested description. The MotherDuck region may not support service account descriptions yet. Terraform recorded the configured description, but MotherDuck may not have stored it.",
+		)
+	}
 }
 
 func (r *serviceAccountResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -94,21 +123,86 @@ func (r *serviceAccountResource) Read(ctx context.Context, req resource.ReadRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	// MotherDuck has no GET /v1/users/{username}, so probe existence through the
-	// per-username Duckling config endpoint instead. The unrouted path returned 404
-	// on every refresh, which isNotFound() could not distinguish from a missing
-	// service account.
-	if _, err := client.GetDucklingConfig(ctx, state.Username.ValueString()); err != nil {
-		if isNotFound(err) {
-			resp.State.RemoveResource(ctx)
-			return
-		}
+	// MotherDuck has no GET /v1/users/{username}, so the organization listing
+	// is the only source that says whether a username is a service account.
+	// The client walks every page, so a username absent from it was deleted.
+	user, err := findUser(ctx, client, state.Username.ValueString())
+	if err != nil {
 		resp.Diagnostics.AddError("Unable to read MotherDuck service account", err.Error())
+		return
+	}
+	if user == nil {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+	if !user.IsServiceAccount {
+		resp.Diagnostics.Append(notServiceAccountDiagnostic(user.Username))
 	}
 }
 
+// ModifyPlan rejects a description change. MotherDuck cannot change a
+// service account description, and replacing the account to apply one would
+// delete its data. An imported account has no recorded description, so it may
+// adopt the configured one.
+func (r *serviceAccountResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	var planned, current, plannedUsername, currentUsername types.String
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("description"), &planned)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("description"), &current)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("username"), &plannedUsername)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("username"), &currentUsername)...)
+	if resp.Diagnostics.HasError() || planned.IsUnknown() || planned.Equal(current) {
+		return
+	}
+	// A rename already replaces the account, and the new account is created
+	// with the new description.
+	if plannedUsername.IsUnknown() || !strings.EqualFold(plannedUsername.ValueString(), currentUsername.ValueString()) {
+		return
+	}
+	if current.IsNull() {
+		unverified, diags := req.Private.GetKey(ctx, serviceAccountDescriptionUnverified)
+		resp.Diagnostics.Append(diags...)
+		if len(unverified) > 0 {
+			return
+		}
+	}
+	resp.Diagnostics.AddAttributeError(
+		path.Root("description"),
+		"Service account description cannot change",
+		"MotherDuck sets a service account description only when it creates the account and has no API to change it. "+
+			"Replacing the account to apply a new description would delete all data the account owns, so the provider does not plan that. "+
+			"Restore the previous description in the configuration. To recreate the account with a new description and lose its data, destroy it first with `terraform destroy -target`.",
+	)
+}
+
+// Update applies only changes that need no API call. The plan replaces the
+// account for any username change other than letter case, and ModifyPlan
+// rejects description changes except the one adopted after import.
 func (r *serviceAccountResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Service account updates are not supported", "Change the username by replacing the resource.")
+	var plan, state serviceAccountModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !strings.EqualFold(plan.Username.ValueString(), state.Username.ValueString()) {
+		resp.Diagnostics.AddError("Service account updates are not supported", "Change the username by replacing the resource.")
+		return
+	}
+	plan.ID = plan.Username
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+	if !plan.Description.Equal(state.Description) {
+		resp.Diagnostics.AddAttributeWarning(
+			path.Root("description"),
+			"Service account description recorded without verification",
+			"MotherDuck has no API to read or change a service account description, so Terraform recorded the configured description for this imported account without checking it against MotherDuck.",
+		)
+		// The adopted description is now the recorded one, so later changes
+		// fail at plan time like any other description change.
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, serviceAccountDescriptionUnverified, nil)...)
+	}
 }
 
 func (r *serviceAccountResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -119,6 +213,21 @@ func (r *serviceAccountResource) Delete(ctx context.Context, req resource.Delete
 	var state serviceAccountModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+	// DELETE /v1/users/{username} deletes any user and the data it owns, and
+	// deleting the last human user drops the organization. Confirm the account
+	// is still a service account right before deleting it.
+	user, err := findUser(ctx, client, state.Username.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to verify MotherDuck service account before deletion", err.Error())
+		return
+	}
+	if user == nil {
+		return
+	}
+	if !user.IsServiceAccount {
+		resp.Diagnostics.Append(notServiceAccountDiagnostic(user.Username))
 		return
 	}
 	if err := client.DeleteUser(ctx, state.Username.ValueString()); err != nil && !isNotFound(err) {
@@ -132,8 +241,63 @@ func (r *serviceAccountResource) ImportState(ctx context.Context, req resource.I
 		resp.Diagnostics.AddError("Invalid import ID", "Use `<username>`. "+detail)
 		return
 	}
+	// The Read that follows import confirms the username is a service account.
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("username"), req.ID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
+	resp.Diagnostics.Append(resp.Private.SetKey(ctx, serviceAccountDescriptionUnverified, []byte("true"))...)
+}
+
+// findUser returns the organization member named username, or nil when there
+// is none. MotherDuck compares usernames case-insensitively, so an exact match
+// wins and a match that differs only in letter case is accepted.
+func findUser(ctx context.Context, client *mdrest.Client, username string) (*mdrest.User, error) {
+	users, err := client.ListUsers(ctx, mdrest.ListUsersFilter{})
+	if err != nil {
+		return nil, err
+	}
+	var folded *mdrest.User
+	for i := range users {
+		if users[i].Username == username {
+			return &users[i], nil
+		}
+		if folded == nil && strings.EqualFold(users[i].Username, username) {
+			folded = &users[i]
+		}
+	}
+	return folded, nil
+}
+
+func notServiceAccountDiagnostic(username string) diag.Diagnostic {
+	return diag.NewAttributeErrorDiagnostic(
+		path.Root("username"),
+		"MotherDuck user is not a service account",
+		"MotherDuck user "+username+" is a human user, not a service account. motherduck_service_account manages only service accounts, because deleting a user permanently deletes the user and the data it owns. "+
+			"Terraform kept the resource in state and made no change. Remove it from state with `terraform state rm` and manage the user outside Terraform.",
+	)
+}
+
+// idFollowsUsernameOnUpdate plans an existing resource's ID as its planned
+// username, so a case-only username change updates the ID in the same plan.
+type idFollowsUsernameOnUpdate struct{}
+
+func (idFollowsUsernameOnUpdate) Description(context.Context) string {
+	return "Plans the ID of an existing resource as its username."
+}
+
+func (m idFollowsUsernameOnUpdate) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (idFollowsUsernameOnUpdate) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	var username types.String
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("username"), &username)...)
+	if resp.Diagnostics.HasError() || username.IsUnknown() || username.IsNull() {
+		return
+	}
+	resp.PlanValue = username
 }
 
 type accessTokenResource struct {
@@ -167,16 +331,17 @@ func (r *accessTokenResource) Schema(ctx context.Context, req resource.SchemaReq
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Access token ID assigned by MotherDuck.",
+				PlanModifiers:       stringUseStateForUnknown(),
 			},
 			"username": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "User or service account username. Must be non-blank and 1-255 characters.",
+				MarkdownDescription: "Your own username or a service account username. MotherDuck refuses tokens for other human users. Must be non-blank and 1-255 characters. MotherDuck compares usernames case-insensitively, so a change in letter case updates the resource in place. Any other change replaces the token.",
 				Validators:          restUsernameValidators(),
-				PlanModifiers:       stringRequiresReplace(),
+				PlanModifiers:       usernameRequiresReplace(),
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Access token label. Must be non-blank and 1-255 characters. `MotherDuck Extension` and `MotherDuck Flights` are reserved.",
+				MarkdownDescription: "Access token label. Must be non-blank and 1-255 characters, counted in UTF-16 code units. It must be unique among the user's unexpired tokens. `MotherDuck Extension` and `MotherDuck Flights` are reserved.",
 				Validators:          accessTokenNameValidators(),
 				PlanModifiers:       stringRequiresReplace(),
 			},
@@ -205,18 +370,22 @@ func (r *accessTokenResource) Schema(ctx context.Context, req resource.SchemaReq
 				Computed:            true,
 				Sensitive:           true,
 				MarkdownDescription: "Token secret, returned only at creation time.",
+				PlanModifiers:       stringUseStateForUnknown(),
 			},
 			"expire_at": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Token expiration timestamp reported by MotherDuck.",
+				PlanModifiers:       stringUseStateForUnknown(),
 			},
 			"created_ts": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Token creation timestamp reported by MotherDuck.",
+				PlanModifiers:       stringUseStateForUnknown(),
 			},
 			"read_only": schema.BoolAttribute{
 				Computed:            true,
 				MarkdownDescription: "Whether the token is read-only according to MotherDuck.",
+				PlanModifiers:       boolUseStateForUnknown(),
 			},
 		},
 	}
@@ -326,8 +495,22 @@ func accessTokenExpired(expireAt types.String, now time.Time) bool {
 	return err == nil && when.Before(now)
 }
 
+// Update records a case-only username change, the only change the plan does
+// not turn into a replacement. MotherDuck matches usernames case-insensitively,
+// so the token needs no API call.
 func (r *accessTokenResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Access token updates are not supported", "Change token arguments by replacing the resource.")
+	var plan, state accessTokenModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !strings.EqualFold(plan.Username.ValueString(), state.Username.ValueString()) {
+		resp.Diagnostics.AddError("Access token updates are not supported", "Change token arguments by replacing the resource.")
+		return
+	}
+	state.Username = plan.Username
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
 func (r *accessTokenResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -354,6 +537,11 @@ func (r *accessTokenResource) ImportState(ctx context.Context, req resource.Impo
 		return
 	}
 	if !validateRESTImportIDPart(parts[1], "`<username>/<token_id>`", "access token ID", &resp.Diagnostics) {
+		return
+	}
+	// MotherDuck token IDs are UUIDs. The delete endpoint treats any other
+	// value as a token name, so a name must never reach state as an ID.
+	if !validateUUIDString(parts[1], "MotherDuck access token ID import segment", &resp.Diagnostics) {
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("username"), parts[0])...)
@@ -425,14 +613,14 @@ func (r *ducklingConfigResource) Schema(ctx context.Context, req resource.Schema
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
-				PlanModifiers:       stringUseStateForUnknown(),
+				PlanModifiers:       []planmodifier.String{idFollowsUsernameOnUpdate{}},
 				MarkdownDescription: "Duckling configuration ID. This is the configured username.",
 			},
 			"username": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "User or service account username. Must be non-blank and 1-255 characters.",
+				MarkdownDescription: "User or service account username. Must be non-blank and 1-255 characters. MotherDuck compares usernames case-insensitively, so a change in letter case updates the resource in place. Any other change replaces it.",
 				Validators:          restUsernameValidators(),
-				PlanModifiers:       stringRequiresReplace(),
+				PlanModifiers:       usernameRequiresReplace(),
 			},
 			"read_write_instance_size": schema.StringAttribute{
 				Required:            true,
@@ -559,7 +747,7 @@ func (r *ducklingConfigResource) putDucklingConfig(ctx context.Context, planGett
 	}
 	updated, err := client.SetDucklingConfig(ctx, plan.Username.ValueString(), cfg)
 	if err != nil {
-		diags.AddError("Unable to set MotherDuck Duckling config", err.Error())
+		diags.AddError("Unable to set MotherDuck Duckling config", ducklingConfigErrorDetail(err))
 		return
 	}
 	plan.ID = types.StringValue(plan.Username.ValueString())
@@ -571,6 +759,51 @@ func (r *ducklingConfigResource) putDucklingConfig(ctx context.Context, planGett
 	plan.ReadWriteCooldownSeconds = plannedCooldownOrLive(planned.ReadWriteCooldownSeconds, plan.ReadWriteCooldownSeconds)
 	plan.ReadScalingCooldownSeconds = plannedCooldownOrLive(planned.ReadScalingCooldownSeconds, plan.ReadScalingCooldownSeconds)
 	diags.Append(stateSetter.Set(ctx, &plan)...)
+}
+
+// ducklingTierLimits are the default Duckling limits for each MotherDuck plan,
+// keyed by the plan name the service puts in its tier error. They only make
+// that error readable. The service enforces the limits, and MotherDuck can set
+// different limits for an organization or a user.
+var ducklingTierLimits = []struct{ tier, plan, limits string }{
+	{"free", "Free", "read-write `pulse`, read-scaling `pulse`, and a flock size of at most 4"},
+	{"lite", "Lite", "read-write `pulse`, read-scaling `pulse`, and a flock size of 0"},
+	{"trial_not_started", "not yet started trial", "read-write up to `jumbo`, read-scaling up to `jumbo`, and a flock size of at most 4"},
+	{"free_trial", "free trial", "read-write up to `mega`, read-scaling up to `jumbo`, and a flock size of at most 16"},
+	{"business", "Business", "read-write up to `giga`, read-scaling up to `jumbo`, and a flock size of at most 16"},
+}
+
+var ducklingTierErrorPattern = regexp.MustCompile(`Invalid config for tier ([A-Za-z_]+)`)
+
+// ducklingConfigErrorDetail explains a plan-limit rejection. MotherDuck
+// reports it as a 400 whose message names the plan but renders the rejected
+// configuration as "[object Object]".
+func ducklingConfigErrorDetail(err error) string {
+	var apiErr *mdrest.APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusBadRequest {
+		return err.Error()
+	}
+	match := ducklingTierErrorPattern.FindStringSubmatch(apiErr.Error())
+	if match == nil {
+		return err.Error()
+	}
+	tier := strings.ToLower(match[1])
+	detail := "MotherDuck rejected the configuration because it exceeds the Duckling limits for the organization's plan (`" + tier + "`)."
+	known := false
+	for _, limit := range ducklingTierLimits {
+		if limit.tier == tier {
+			detail += " By default the " + limit.plan + " plan allows " + limit.limits + "."
+			known = true
+		}
+	}
+	detail += " MotherDuck can set different limits for an organization or a user. Choose smaller instance sizes or a smaller flock size, or ask MotherDuck to raise the limits."
+	if !known {
+		detail += "\n\nDefault limits by plan:"
+		for _, limit := range ducklingTierLimits {
+			detail += "\n- " + limit.plan + ": " + limit.limits + "."
+		}
+	}
+	return detail + "\n\nMotherDuck response: " + err.Error()
 }
 
 // plannedCooldownOrLive prefers a known planned cooldown over a write
