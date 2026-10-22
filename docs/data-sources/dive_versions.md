@@ -2,12 +2,12 @@
 page_title: "motherduck_dive_versions Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Lists versions for one MotherDuck Dive, newest version first.
+  Lists versions for one MotherDuck Dive. Set limit and offset to page through the version history. Rows in the returned page are sorted newest version first.
 ---
 
 # motherduck_dive_versions (Data Source)
 
-Lists versions for one MotherDuck Dive, newest version first.
+Lists versions for one MotherDuck Dive. Set `limit` and `offset` to page through the version history. Rows in the returned page are sorted newest version first.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read
@@ -28,6 +28,25 @@ data "motherduck_dive_versions" "revenue" {
 
 - `dive_id` (String) Dive ID. Must be a UUID with no leading or trailing whitespace.
 
+### Optional
+
+- `limit` (Number) Maximum number of rows to return when the underlying MotherDuck catalog function supports limits.
+- `offset` (Number) Number of rows to skip when the underlying MotherDuck catalog function supports offsets.
+
 ### Read-Only
 
+- `rows` (Attributes List) Typed catalog rows for stable MotherDuck metadata. `rows_json` remains available for raw server columns. (see [below for nested schema](#nestedatt--rows))
 - `rows_json` (String, Sensitive) Raw MotherDuck catalog rows encoded as JSON. Sensitive because catalog rows can include share URLs and account metadata.
+
+<a id="nestedatt--rows"></a>
+### Nested Schema for `rows`
+
+Read-Only:
+
+- `api_version` (String) Dive API version of the version.
+- `created_at` (String) Version creation timestamp.
+- `description` (String) Version description.
+- `id` (String) Dive ID.
+- `required_resources` (String, Sensitive) JSON list of resources the version requires. Sensitive because entries can include share URLs.
+- `storage_url` (String, Sensitive) Storage URL of the version. Sensitive because it locates the Dive content.
+- `version` (String) Dive version number.

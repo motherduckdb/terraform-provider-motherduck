@@ -45,6 +45,7 @@ Read-Only:
 - `include_pattern` (String) Catalog include patterns applied to the share.
 - `name` (String) Share name.
 - `source_database` (String) Database backing the share.
+- `source_database_uuid` (String) UUID of the database backing the share.
 - `update_mode` (String) Share update mode.
 - `url` (String, Sensitive) Share URL. This is sensitive because unrestricted share URLs can grant access.
 - `visibility` (String) Share visibility mode.

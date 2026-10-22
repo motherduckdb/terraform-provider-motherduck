@@ -58,6 +58,43 @@ data "motherduck_owned_shares" "organization" {
   depends_on = [motherduck_share.organization]
 }
 
+data "motherduck_owned_share" "organization" {
+  name = motherduck_share.organization.name
+
+  depends_on = [motherduck_share.organization]
+}
+
+data "motherduck_share" "by_name" {
+  name = motherduck_share.organization.name
+
+  depends_on = [motherduck_share.organization]
+}
+
+data "motherduck_share" "by_url" {
+  url = motherduck_share.organization.url
+
+  depends_on = [motherduck_share.organization]
+}
+
+output "share_description_matches" {
+  value = alltrue([
+    for described in [data.motherduck_share.by_name, data.motherduck_share.by_url] :
+    described.name == motherduck_share.organization.name &&
+    described.source_database == motherduck_database.source.name &&
+    described.source_database_uuid == data.motherduck_owned_share.organization.source_database_uuid &&
+    described.access == motherduck_share.organization.access &&
+    described.visibility == motherduck_share.organization.visibility &&
+    described.update_mode == motherduck_share.organization.update_mode
+  ])
+}
+
+output "owned_share_source_uuid_matches" {
+  value = (
+    data.motherduck_owned_share.organization.source_database_uuid != null &&
+    data.motherduck_owned_share.organization.source_database_uuid == one(data.motherduck_owned_shares.organization.rows[*].source_database_uuid)
+  )
+}
+
 output "share_name" {
   value = motherduck_share.organization.name
 }

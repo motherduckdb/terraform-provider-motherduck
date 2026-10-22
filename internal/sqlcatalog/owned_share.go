@@ -16,6 +16,9 @@ type OwnedShare struct {
 	UpdateMode     stdsql.NullString
 	IncludePattern stdsql.NullString
 	CreatedTS      stdsql.NullString
+	// SourceDatabaseUUID is read last so callers that only add a column at
+	// the end of the select list stay aligned with earlier releases.
+	SourceDatabaseUUID stdsql.NullString
 }
 
 type ownedShareClient interface {
@@ -25,7 +28,7 @@ type ownedShareClient interface {
 func ReadOwnedShare(ctx context.Context, client ownedShareClient, name string) (OwnedShare, error) {
 	var share OwnedShare
 	err := retry.SQL(ctx, func() error {
-		return client.QueryRow(ctx, `SELECT url, source_db_name, access, visibility, update, to_json(include_pattern)::VARCHAR, created_ts::VARCHAR FROM MD_INFORMATION_SCHEMA.OWNED_SHARES WHERE name = ?`, name).Scan(
+		return client.QueryRow(ctx, `SELECT url, source_db_name, access, visibility, update, to_json(include_pattern)::VARCHAR, created_ts::VARCHAR, source_db_uuid::VARCHAR FROM MD_INFORMATION_SCHEMA.OWNED_SHARES WHERE name = ?`, name).Scan(
 			&share.URL,
 			&share.SourceDatabase,
 			&share.Access,
@@ -33,6 +36,7 @@ func ReadOwnedShare(ctx context.Context, client ownedShareClient, name string) (
 			&share.UpdateMode,
 			&share.IncludePattern,
 			&share.CreatedTS,
+			&share.SourceDatabaseUUID,
 		)
 	})
 	return share, err

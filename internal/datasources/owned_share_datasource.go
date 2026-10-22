@@ -24,6 +24,7 @@ type ownedShareDataSource struct{ baseDataSource }
 type ownedShareModel struct {
 	Name           types.String `tfsdk:"name"`
 	SourceDatabase types.String `tfsdk:"source_database"`
+	SourceDBUUID   types.String `tfsdk:"source_database_uuid"`
 	Access         types.String `tfsdk:"access"`
 	Visibility     types.String `tfsdk:"visibility"`
 	UpdateMode     types.String `tfsdk:"update_mode"`
@@ -51,6 +52,10 @@ func (d *ownedShareDataSource) Schema(ctx context.Context, req datasource.Schema
 			"source_database": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Database backing the owned share.",
+			},
+			"source_database_uuid": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "UUID of the database backing the owned share.",
 			},
 			"access": schema.StringAttribute{
 				Computed:            true,
@@ -105,6 +110,7 @@ func (d *ownedShareDataSource) Read(ctx context.Context, req datasource.ReadRequ
 
 	config.URL = dataSourceNullString(share.URL)
 	config.SourceDatabase = dataSourceNullString(share.SourceDatabase)
+	config.SourceDBUUID = dataSourceNullString(share.SourceDatabaseUUID)
 	config.Access = lowerDataSourceNullString(share.Access)
 	config.Visibility = lowerDataSourceNullString(share.Visibility)
 	config.UpdateMode = lowerDataSourceNullString(share.UpdateMode)

@@ -57,6 +57,11 @@ TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" init 
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" validate
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false
 
+if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw snapshot_rows_typed)" != "true" ]]; then
+  echo "Expected the named snapshot row to expose typed storage and user columns" >&2
+  exit 1
+fi
+
 initial_snapshot_id="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw snapshot_id)"
 
 go run "${ROOT_DIR}/internal/dev/mdexec" -database "${database_name}" -pre "USE \"${database_name}\"" -sql "ALTER SNAPSHOT '${initial_snapshot_id}' SET snapshot_name = ''"

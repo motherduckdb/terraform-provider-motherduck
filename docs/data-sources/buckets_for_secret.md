@@ -2,12 +2,12 @@
 page_title: "motherduck_buckets_for_secret Data Source - motherduck"
 subcategory: "Catalog and storage"
 description: |-
-  Lists object-storage buckets accessible through a MotherDuck secret. Rows are sorted by bucket name. Set limit and offset to page through large listings. Paging orders the listing by all of its columns, so pages are stable, and rows within each page are then sorted.
+  Lists object-storage buckets accessible through a MotherDuck secret. Rows are sorted by bucket name. Set limit and offset to page through large listings. Paging follows bucket name order, so pages are stable, and MotherDuck stops listing once it has returned limit plus offset buckets.
 ---
 
 # motherduck_buckets_for_secret (Data Source)
 
-Lists object-storage buckets accessible through a MotherDuck secret. Rows are sorted by bucket name. Set `limit` and `offset` to page through large listings. Paging orders the listing by all of its columns, so pages are stable, and rows within each page are then sorted.
+Lists object-storage buckets accessible through a MotherDuck secret. Rows are sorted by bucket name. Set `limit` and `offset` to page through large listings. Paging follows bucket name order, so pages are stable, and MotherDuck stops listing once it has returned `limit` plus `offset` buckets.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read
@@ -35,4 +35,15 @@ data "motherduck_buckets_for_secret" "analytics" {
 
 ### Read-Only
 
+- `rows` (Attributes List) Typed catalog rows for stable MotherDuck metadata. `rows_json` remains available for raw server columns. (see [below for nested schema](#nestedatt--rows))
 - `rows_json` (String, Sensitive) Raw MotherDuck catalog rows encoded as JSON. Sensitive because catalog rows can include share URLs and account metadata.
+
+<a id="nestedatt--rows"></a>
+### Nested Schema for `rows`
+
+Read-Only:
+
+- `arn` (String) Bucket ARN.
+- `creation_date` (String) Bucket creation date reported by the object store.
+- `name` (String) Bucket name.
+- `region` (String) Bucket region.

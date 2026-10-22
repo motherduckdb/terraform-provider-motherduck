@@ -37,4 +37,25 @@ data "motherduck_flight_runs" "daily_load" {
 
 ### Read-Only
 
+- `rows` (Attributes List) Typed catalog rows for stable MotherDuck metadata. `rows_json` remains available for raw server columns. (see [below for nested schema](#nestedatt--rows))
 - `rows_json` (String, Sensitive) Raw MotherDuck catalog rows encoded as JSON. Sensitive because catalog rows can include share URLs and account metadata.
+
+<a id="nestedatt--rows"></a>
+### Nested Schema for `rows`
+
+Read-Only:
+
+- `cancelled_at` (String) Run cancellation timestamp.
+- `config` (String, Sensitive) JSON object of configuration values for the run. Sensitive because configuration can carry credentials.
+- `created_at` (String) Run creation timestamp.
+- `ended_at` (String) Run end timestamp.
+- `exit_code` (String) Process exit code of the run.
+- `flight_id` (String) Flight ID.
+- `flight_name` (String) Flight name.
+- `flight_version` (String) Flight version the run used.
+- `is_scheduled` (String) Whether the run was started by the Flight schedule.
+- `run_id` (String) Flight run ID.
+- `run_number` (String) Flight run number.
+- `scheduled_at` (String) Scheduled run timestamp.
+- `started_at` (String) Run start timestamp.
+- `status` (String) Flight run status.

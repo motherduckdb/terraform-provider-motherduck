@@ -9,6 +9,12 @@ description: |-
 
 Reads metadata for shares discoverable by the current MotherDuck account. Hidden shares can be accessed by URL but are not listed.
 
+Rows mirror `MD_INFORMATION_SCHEMA.SHARED_WITH_ME`. MotherDuck does not report
+the source database of a received share in that catalog, so
+`rows[*].source_database` is deprecated and always null. Pass a row's `url` to
+the [motherduck_share](share.md) data source to read the source database and
+its UUID.
+
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read
 them. See [authentication](../guides/authentication.md).
@@ -42,8 +48,12 @@ data "motherduck_shared_with_me" "analytics" {
 
 Read-Only:
 
+- `access` (String) Share access mode.
 - `created_ts` (String) Share creation timestamp.
 - `name` (String) Share name.
 - `owner` (String) Share owner when exposed by MotherDuck.
-- `source_database` (String) Database backing the share.
+- `source_database` (String, Deprecated) Always null. MotherDuck does not report the source database for received shares. Read it with the `motherduck_share` data source and the share `url`.
+- `update_mode` (String) Share update mode.
+- `updated_ts` (String) Timestamp of the latest share update.
 - `url` (String, Sensitive) Share URL. This is sensitive because unrestricted share URLs can grant access.
+- `visibility` (String) Share visibility mode.

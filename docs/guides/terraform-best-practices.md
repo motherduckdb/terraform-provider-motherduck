@@ -118,7 +118,7 @@ SQL object names may contain spaces, and table column names may contain spaces o
 
 ## Catalog data sources
 
-Account-wide catalog data sources can return many rows in organizations with many databases or incoming shares. Scope them when possible before passing `rows_json` through reusable modules, outputs, or remote state. `motherduck_databases`, `motherduck_owned_shares`, `motherduck_shared_with_me`, and `motherduck_secrets` support a `name` filter for that reason. Use `motherduck_owned_share` when you need one owned share by name with typed attributes. Use broad catalog reads for audits and diagnostics, not as routine module inputs.
+Account-wide catalog data sources can return many rows in organizations with many databases or incoming shares. Scope them when possible before passing `rows_json` through reusable modules, outputs, or remote state. `motherduck_databases`, `motherduck_owned_shares`, `motherduck_shared_with_me`, and `motherduck_secrets` support a `name` filter for that reason. Use `motherduck_owned_share` when you need one owned share by name with typed attributes, and `motherduck_share` to describe a received share by URL, including its source database. Use broad catalog reads for audits and diagnostics, not as routine module inputs.
 
 Treat `rows_json` as infrastructure metadata. It can include object names, owner metadata, share URLs, and tenant or environment naming conventions even when it does not include secret bodies. The provider marks row-style `rows_json` attributes sensitive so raw catalog rows are masked in plans and outputs by default. Use `nonsensitive(...)` only after reducing the value to a safe aggregate such as a count or boolean.
 

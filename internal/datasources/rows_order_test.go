@@ -3,6 +3,7 @@ package datasources
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 
@@ -89,9 +90,13 @@ func TestUnpagedFunctionsSupportSQLPaging(t *testing.T) {
 		model rowsModel
 		want  string
 	}{
-		{"files", rowsModel{Path: types.StringValue("s3://bucket/"), Limit: types.Int64Value(5), Offset: types.Int64Null()}, "SELECT * FROM md_list_files('s3://bucket/') ORDER BY ALL LIMIT 5"},
+		{"files", rowsModel{Path: types.StringValue("s3://bucket/"), Limit: types.Int64Value(5), Offset: types.Int64Null()}, `SELECT * FROM md_list_files('s3://bucket/', "limit" := 5) ORDER BY CASE WHEN type = 'folder' THEN name || '/' ELSE name END LIMIT 5`},
+		{"files", rowsModel{Path: types.StringValue("s3://bucket/"), Limit: types.Int64Value(5), Offset: types.Int64Value(10)}, `SELECT * FROM md_list_files('s3://bucket/', "limit" := 15) ORDER BY CASE WHEN type = 'folder' THEN name || '/' ELSE name END LIMIT 5 OFFSET 10`},
+		{"files", rowsModel{Path: types.StringValue("s3://bucket/"), Limit: types.Int64Null(), Offset: types.Int64Value(10)}, `SELECT * FROM md_list_files('s3://bucket/') ORDER BY CASE WHEN type = 'folder' THEN name || '/' ELSE name END OFFSET 10`},
 		{"files", rowsModel{Path: types.StringValue("s3://bucket/"), Limit: types.Int64Null(), Offset: types.Int64Null()}, "SELECT * FROM md_list_files('s3://bucket/')"},
-		{"buckets_for_secret", rowsModel{SecretName: types.StringValue("s3"), Limit: types.Int64Value(2), Offset: types.Int64Value(4)}, "SELECT * FROM md_list_buckets_for_secret('s3') ORDER BY ALL LIMIT 2 OFFSET 4"},
+		{"files", rowsModel{Path: types.StringValue("s3://bucket/"), Limit: types.Int64Value(math.MaxInt64), Offset: types.Int64Value(1)}, `SELECT * FROM md_list_files('s3://bucket/') ORDER BY CASE WHEN type = 'folder' THEN name || '/' ELSE name END LIMIT 9223372036854775807 OFFSET 1`},
+		{"buckets_for_secret", rowsModel{SecretName: types.StringValue("s3"), Limit: types.Int64Value(2), Offset: types.Int64Value(4)}, `SELECT * FROM md_list_buckets_for_secret('s3', "limit" := 6) ORDER BY ALL LIMIT 2 OFFSET 4`},
+		{"buckets_for_secret", rowsModel{SecretName: types.StringValue("s3"), Limit: types.Int64Null(), Offset: types.Int64Null()}, "SELECT * FROM md_list_buckets_for_secret('s3')"},
 	}
 	for _, tc := range cases {
 		query, err := findSpec(t, tc.spec).build(tc.model)
