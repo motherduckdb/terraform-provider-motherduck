@@ -25,7 +25,7 @@ Declare the bridge and the provider in `Pulumi.yaml`, pinning both versions:
 packages:
   motherduck:
     source: terraform-provider
-    version: 1.4.0
+    version: 1.5.0
     parameters:
       - registry.terraform.io/motherduckdb/motherduck
       - 0.3.7
