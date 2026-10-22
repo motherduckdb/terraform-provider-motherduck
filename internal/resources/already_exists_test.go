@@ -63,3 +63,22 @@ func TestSecretWriteDiagnosticAlreadyExists(t *testing.T) {
 		t.Fatalf("secret diagnostic must not copy the raw error, got %q", got)
 	}
 }
+
+func TestDropErrorDetails(t *testing.T) {
+	schemaErr := &duckdb.Error{Type: duckdb.ErrorTypeDependency, Msg: "Dependency Error: Cannot drop entry \"s1\" because there are entries that depend on it.\ntable \"t1\" depends on schema \"s1\".\nUse DROP...CASCADE to drop all dependents."}
+	if got := schemaDropErrorDetail(schemaErr); !strings.Contains(got, "cascade_on_delete = true") {
+		t.Fatalf("schema drop detail should point to cascade_on_delete, got %q", got)
+	}
+	other := &duckdb.Error{Type: duckdb.ErrorTypePermission, Msg: "Permission Error: denied"}
+	if got := schemaDropErrorDetail(other); got != other.Error() {
+		t.Fatalf("schema drop detail for other errors should be unchanged, got %q", got)
+	}
+
+	databaseErr := &duckdb.Error{Type: duckdb.ErrorTypeInvalid, Msg: "Invalid Error: MDExternalException: Failed to drop the database because there are still database shares linked to it. Use DROP DATABASE <db_name> CASCADE to drop the database and all associated shares."}
+	if got := databaseDropErrorDetail(databaseErr); !strings.Contains(got, "Destroy the shares created from this database first") {
+		t.Fatalf("database drop detail should explain linked shares, got %q", got)
+	}
+	if got := databaseDropErrorDetail(other); got != other.Error() {
+		t.Fatalf("database drop detail for other errors should be unchanged, got %q", got)
+	}
+}

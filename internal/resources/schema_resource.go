@@ -2,7 +2,9 @@ package resources
 
 import (
 	"context"
+	"errors"
 
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -154,8 +156,19 @@ func (r *schemaResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 	query := "DROP SCHEMA IF EXISTS " + sqlbuild.QuoteQualifiedIdentifier(state.Database.ValueString(), state.Name.ValueString()) + schemaDropMode(state)
 	if err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) }); err != nil && !isDatabaseGone(err, state.Database.ValueString()) {
-		resp.Diagnostics.AddError("Unable to drop MotherDuck schema", err.Error())
+		resp.Diagnostics.AddError("Unable to drop MotherDuck schema", schemaDropErrorDetail(err))
 	}
+}
+
+// schemaDropErrorDetail explains a restrictive drop that failed because the
+// schema still contains objects. MotherDuck suggests DROP ... CASCADE, which
+// Terraform users reach through cascade_on_delete instead.
+func schemaDropErrorDetail(err error) string {
+	var duckErr *duckdb.Error
+	if !errors.As(err, &duckErr) || duckErr.Type != duckdb.ErrorTypeDependency {
+		return err.Error()
+	}
+	return err.Error() + "\n\nThe schema still contains objects that this configuration does not destroy first. Remove those objects, or set `cascade_on_delete = true` and apply that change before destroying the schema to drop it together with its contents."
 }
 
 func schemaDropMode(model schemaModel) string {

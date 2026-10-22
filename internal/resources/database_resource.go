@@ -365,8 +365,19 @@ func (r *databaseResource) Delete(ctx context.Context, req resource.DeleteReques
 	resetDefaultDatabaseIfCurrent(ctx, client, state.Name.ValueString())
 	query := "DROP DATABASE IF EXISTS " + sqlbuild.QuoteIdentifier(state.Name.ValueString())
 	if err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) }); err != nil {
-		resp.Diagnostics.AddError("Unable to drop MotherDuck database", err.Error())
+		resp.Diagnostics.AddError("Unable to drop MotherDuck database", databaseDropErrorDetail(err))
 	}
+}
+
+// databaseDropErrorDetail explains a drop that failed because shares still
+// point at the database. MotherDuck suggests DROP DATABASE ... CASCADE, which
+// this resource does not issue because it would also drop shares that other
+// configurations or users manage.
+func databaseDropErrorDetail(err error) string {
+	if !strings.Contains(strings.ToLower(err.Error()), "database shares linked to it") {
+		return err.Error()
+	}
+	return err.Error() + "\n\nThis resource does not drop shares. Destroy the shares created from this database first. When a `motherduck_share` in the same configuration creates the share, set its `source_database` to `motherduck_database.<name>.name` so that Terraform destroys the share before the database."
 }
 
 func (r *databaseResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
