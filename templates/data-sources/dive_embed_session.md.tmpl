@@ -7,7 +7,10 @@ description: |-
 
 # {{.Name}} ({{.Type}})
 
-Creates a short-lived Dive embed session for a service account.
+Creates a short-lived Dive embed session for a service account. The session is
+valid for 24 hours, and the lifetime cannot be changed. Embedding needs a
+Business plan or an active free trial, and `username` must be a service account
+in the same organization.
 
 ~> Prefer the `motherduck_dive_embed_session` ephemeral resource for new configurations. This data source creates a credential and persists it in Terraform state.
 

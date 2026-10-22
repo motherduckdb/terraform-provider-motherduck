@@ -41,6 +41,15 @@ func TestContractRESTInventoryEmptyAndRecovery(t *testing.T) {
 				users = []mdrest.User{{ID: "u2", Username: "svc_b", Roles: []string{"loader", "explorer"}, IsServiceAccount: true}, {ID: "u1", Username: "svc_a"}}
 			}
 			_ = json.NewEncoder(w).Encode(mdrest.ListUsersResponse{Users: users})
+		case "/v1/active_accounts":
+			accounts := []mdrest.ActiveAccount{}
+			if !empty.Load() {
+				accounts = []mdrest.ActiveAccount{
+					{Username: "svc_b", Ducklings: []mdrest.Duckling{{ID: "rw", Type: "read_write", Status: "active"}, {ID: "rs.0", Type: "read_scaling", Status: "cooldown"}}},
+					{Username: "svc_a", Ducklings: []mdrest.Duckling{}},
+				}
+			}
+			_ = json.NewEncoder(w).Encode(mdrest.ActiveAccountsResponse{Accounts: accounts})
 		default:
 			t.Errorf("unexpected inventory request: %s", r.URL)
 			http.Error(w, "unexpected route", 500)
@@ -50,6 +59,7 @@ func TestContractRESTInventoryEmptyAndRecovery(t *testing.T) {
 	config := contractProviderConfig(server.URL) + `
 data "motherduck_user_tokens" "test" { username = "svc" }
 data "motherduck_users" "test" {}
+data "motherduck_active_accounts" "test" {}
 `
 	populated := resource.ComposeAggregateTestCheckFunc(
 		resource.TestCheckResourceAttr("data.motherduck_user_tokens.test", "tokens.#", "2"),
@@ -62,6 +72,12 @@ data "motherduck_users" "test" {}
 		resource.TestCheckResourceAttr("data.motherduck_users.test", "users.0.roles.#", "0"),
 		resource.TestCheckNoResourceAttr("data.motherduck_users.test", "users.0.first_name"),
 		resource.TestCheckResourceAttr("data.motherduck_users.test", "users.1.roles.0", "explorer"),
+		resource.TestCheckResourceAttr("data.motherduck_active_accounts.test", "accounts.#", "2"),
+		resource.TestCheckResourceAttr("data.motherduck_active_accounts.test", "accounts.0.username", "svc_a"),
+		resource.TestCheckResourceAttr("data.motherduck_active_accounts.test", "accounts.0.ducklings.#", "0"),
+		resource.TestCheckResourceAttr("data.motherduck_active_accounts.test", "accounts.1.ducklings.0.id", "rs.0"),
+		resource.TestCheckResourceAttr("data.motherduck_active_accounts.test", "accounts.1.ducklings.0.type", "read_scaling"),
+		resource.TestCheckResourceAttr("data.motherduck_active_accounts.test", "accounts.1.ducklings.1.status", "active"),
 	)
 	noOp := resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}
 	resource.UnitTest(t, resource.TestCase{
@@ -72,6 +88,7 @@ data "motherduck_users" "test" {}
 				resource.TestCheckResourceAttr("data.motherduck_user_tokens.test", "tokens.#", "0"),
 				resource.TestCheckResourceAttr("data.motherduck_user_tokens.test", "tokens_json", "[]"),
 				resource.TestCheckResourceAttr("data.motherduck_users.test", "users.#", "0"),
+				resource.TestCheckResourceAttr("data.motherduck_active_accounts.test", "accounts.#", "0"),
 			)},
 			{Config: config, PreConfig: func() { denied.Store(true) }, ExpectError: regexp.MustCompile("inventory denied")},
 			{Config: config, PreConfig: func() { denied.Store(false); empty.Store(false) }, Check: populated, ConfigPlanChecks: noOp},

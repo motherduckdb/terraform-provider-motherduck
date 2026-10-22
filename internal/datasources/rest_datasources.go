@@ -30,6 +30,7 @@ type activeAccountsDataSource struct{ baseDataSource }
 
 type activeAccountsModel struct {
 	AccountsJSON types.String `tfsdk:"accounts_json"`
+	Accounts     types.List   `tfsdk:"accounts"`
 }
 
 func NewActiveAccountsDataSource() datasource.DataSource { return &activeAccountsDataSource{} }
@@ -47,8 +48,85 @@ func (d *activeAccountsDataSource) Schema(ctx context.Context, req datasource.Sc
 				Sensitive:           true,
 				MarkdownDescription: "Raw active-account inventory returned by the MotherDuck REST API. Sensitive because it can reveal account and Duckling metadata.",
 			},
+			"accounts": activeAccountsAttribute(),
 		},
 	}
+}
+
+// activeAccountsAttribute owns the object shape used by the schema and state conversion.
+func activeAccountsAttribute() schema.ListNestedAttribute {
+	return schema.ListNestedAttribute{
+		Computed:            true,
+		MarkdownDescription: "Accounts that have an active or cooling-down Duckling, sorted by username. It holds the same inventory as `accounts_json`, without the sensitive marking, so it can be used in expressions and outputs.",
+		NestedObject: schema.NestedAttributeObject{
+			Attributes: map[string]schema.Attribute{
+				"username": schema.StringAttribute{
+					Computed:            true,
+					MarkdownDescription: "Username of the user or service account.",
+				},
+				"ducklings": schema.ListNestedAttribute{
+					Computed:            true,
+					MarkdownDescription: "Active Ducklings of the account, sorted by ID.",
+					NestedObject: schema.NestedAttributeObject{
+						Attributes: map[string]schema.Attribute{
+							"id": schema.StringAttribute{
+								Computed:            true,
+								MarkdownDescription: "Duckling ID. `rw` is the read-write Duckling, and `rs.N` is read-scaling replica `N`.",
+							},
+							"type": schema.StringAttribute{
+								Computed:            true,
+								MarkdownDescription: "`read_write` or `read_scaling`.",
+							},
+							"status": schema.StringAttribute{
+								Computed:            true,
+								MarkdownDescription: "`active` or `cooldown`.",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// activeAccountsListValue sorts accounts by username and Ducklings by ID so
+// the listing does not depend on the order MotherDuck returns them in.
+func activeAccountsListValue(accounts []mdrest.ActiveAccount, diags *diag.Diagnostics) types.List {
+	accountType := activeAccountsAttribute().NestedObject.Type().(types.ObjectType)
+	ducklingType := accountType.AttrTypes["ducklings"].(types.ListType).ElemType.(types.ObjectType)
+	sorted := make([]mdrest.ActiveAccount, len(accounts))
+	copy(sorted, accounts)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Username < sorted[j].Username })
+	values := make([]attr.Value, 0, len(sorted))
+	for _, account := range sorted {
+		ducklings := make([]mdrest.Duckling, len(account.Ducklings))
+		copy(ducklings, account.Ducklings)
+		sort.SliceStable(ducklings, func(i, j int) bool { return ducklings[i].ID < ducklings[j].ID })
+		ducklingValues := make([]attr.Value, 0, len(ducklings))
+		for _, duckling := range ducklings {
+			ducklingValue, ducklingDiags := types.ObjectValue(ducklingType.AttrTypes, map[string]attr.Value{
+				"id":     types.StringValue(duckling.ID),
+				"type":   types.StringValue(duckling.Type),
+				"status": types.StringValue(duckling.Status),
+			})
+			diags.Append(ducklingDiags...)
+			ducklingValues = append(ducklingValues, ducklingValue)
+		}
+		ducklingList, listDiags := types.ListValue(ducklingType, ducklingValues)
+		diags.Append(listDiags...)
+		accountValue, accountDiags := types.ObjectValue(accountType.AttrTypes, map[string]attr.Value{
+			"username":  types.StringValue(account.Username),
+			"ducklings": ducklingList,
+		})
+		diags.Append(accountDiags...)
+		values = append(values, accountValue)
+	}
+	if diags.HasError() {
+		return types.ListNull(accountType)
+	}
+	listValue, listDiags := types.ListValue(accountType, values)
+	diags.Append(listDiags...)
+	return listValue
 }
 
 func (d *activeAccountsDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -66,7 +144,14 @@ func (d *activeAccountsDataSource) Read(ctx context.Context, req datasource.Read
 		resp.Diagnostics.AddError("Unable to encode active accounts", err.Error())
 		return
 	}
-	resp.Diagnostics.Append(resp.State.Set(ctx, activeAccountsModel{AccountsJSON: types.StringValue(string(payload))})...)
+	state := activeAccountsModel{
+		AccountsJSON: types.StringValue(string(payload)),
+		Accounts:     activeAccountsListValue(accounts.Accounts, &resp.Diagnostics),
+	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
 
 type userTokensDataSource struct{ baseDataSource }
@@ -268,11 +353,11 @@ func usersAttribute() schema.ListNestedAttribute {
 				},
 				"first_name": schema.StringAttribute{
 					Computed:            true,
-					MarkdownDescription: "First name. Null when MotherDuck has none, as for most service accounts.",
+					MarkdownDescription: "First name. Null when MotherDuck has none. Service accounts normally report `service`.",
 				},
 				"last_name": schema.StringAttribute{
 					Computed:            true,
-					MarkdownDescription: "Last name. Null when MotherDuck has none, as for most service accounts.",
+					MarkdownDescription: "Last name. Null when MotherDuck has none. Service accounts normally report `account`.",
 				},
 				"is_service_account": schema.BoolAttribute{
 					Computed:            true,
@@ -368,7 +453,7 @@ func (d *diveEmbedSessionDataSource) Metadata(ctx context.Context, req datasourc
 
 func (d *diveEmbedSessionDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Creates a short-lived Dive embed session for a service account.",
+		MarkdownDescription: "Creates a short-lived Dive embed session for a service account. The session is valid for 24 hours. Embedding needs a Business plan or an active free trial, and `username` must be a service account in the same organization.",
 		DeprecationMessage:  "Use the motherduck_dive_embed_session ephemeral resource instead. The data source creates a credential and persists it in Terraform state.",
 		Attributes: map[string]schema.Attribute{
 			"dive_id": schema.StringAttribute{

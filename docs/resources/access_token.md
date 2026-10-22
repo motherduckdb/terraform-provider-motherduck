@@ -34,9 +34,22 @@ resource "motherduck_access_token" "app" {
 Use `read_write` for provisioning and ingestion, and `read_scaling` for supported
 read-only serving connections. Two tokens for one account do not create separate
 data ownership. Read-scaling readers need account initialization and any share
-attachment through a read-write connection first.
+attachment through a read-write connection first. MotherDuck creates
+`read_scaling` tokens only for organizations on a Business plan or an active
+free trial, unless it has enabled read scaling for the organization.
 
-Token name, username, type, and TTL changes require replacement. MotherDuck
+MotherDuck creates tokens only for your own user or for a service account. A
+token for another human user fails.
+
+Token names must be unique among a user's unexpired tokens, and MotherDuck
+rejects a duplicate with a 409 conflict. A replacement that reuses the name
+therefore fails under `create_before_destroy`, because the new token is created
+while the old one still exists. Give each token generation a distinct name,
+for example with a rotation suffix.
+
+Token name, type, and TTL changes require replacement. A username change also
+requires replacement unless only its letter case changes, because MotherDuck
+compares usernames case-insensitively. MotherDuck
 cannot edit a token description, so changing a configured `description` also
 replaces the token. Omitting `description` keeps whatever MotherDuck reports,
 including a description set outside Terraform. The names `MotherDuck Extension`
@@ -60,6 +73,9 @@ See [authentication and rotation](../guides/authentication.md) and
 terraform import motherduck_access_token.app 'analytics_app/<token_id>'
 ```
 
+The token ID must be the UUID MotherDuck reports, for example from
+`motherduck_user_tokens`. A token name is not accepted.
+
 After import, run `terraform plan` with the token's name and type. Keep `ttl`
 omitted to adopt an existing token without requesting replacement. Import reads
 the description back, so either omit `description` or set it to the value
@@ -71,8 +87,8 @@ cannot recover the original lifetime or token secret.
 
 ### Required
 
-- `name` (String) Access token label. Must be non-blank and 1-255 characters. `MotherDuck Extension` and `MotherDuck Flights` are reserved.
-- `username` (String) User or service account username. Must be non-blank and 1-255 characters.
+- `name` (String) Access token label. Must be non-blank and 1-255 characters, counted in UTF-16 code units. It must be unique among the user's unexpired tokens. `MotherDuck Extension` and `MotherDuck Flights` are reserved.
+- `username` (String) Your own username or a service account username. MotherDuck refuses tokens for other human users. Must be non-blank and 1-255 characters. MotherDuck compares usernames case-insensitively, so a change in letter case updates the resource in place. Any other change replaces the token.
 
 ### Optional
 

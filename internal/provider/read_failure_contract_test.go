@@ -104,7 +104,7 @@ resource "motherduck_access_token" "test" {
 				},
 				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("motherduck_access_token.test", "id", "token-1"),
+					resource.TestCheckResourceAttr("motherduck_access_token.test", "id", contractTokenID1),
 					resource.TestCheckResourceAttr("motherduck_access_token.test", "token", "md_contract_secret_1"),
 				),
 			},
@@ -124,7 +124,7 @@ resource "motherduck_access_token" "test" {
 }
 `
 			checkToken := resource.ComposeAggregateTestCheckFunc(
-				resource.TestCheckResourceAttr("motherduck_access_token.test", "id", "token-1"),
+				resource.TestCheckResourceAttr("motherduck_access_token.test", "id", contractTokenID1),
 				resource.TestCheckResourceAttr("motherduck_access_token.test", "token", "md_contract_secret_1"),
 			)
 			resource.UnitTest(t, resource.TestCase{
@@ -140,7 +140,7 @@ resource "motherduck_access_token" "test" {
 				Steps: []resource.TestStep{
 					{Config: config, Check: checkToken, ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
 					{
-						Config: config, ResourceName: "motherduck_access_token.test", ImportState: true, ImportStateId: "contract_user/token-1", ImportStateVerify: true,
+						Config: config, ResourceName: "motherduck_access_token.test", ImportState: true, ImportStateId: "contract_user/" + contractTokenID1, ImportStateVerify: true,
 						// The one-time secret cannot be recovered by import.
 						ImportStateVerifyIgnore: []string{"token"},
 					},
@@ -158,7 +158,7 @@ resource "motherduck_access_token" "test" {
 						PreConfig: func() {
 							restClient.mu.Lock()
 							defer restClient.mu.Unlock()
-							if restClient.token == nil || restClient.token.ID != "token-1" || restClient.createCount != 1 {
+							if restClient.token == nil || restClient.token.ID != contractTokenID1 || restClient.createCount != 1 {
 								t.Fatal("malformed refresh changed remote token")
 							}
 							restClient.listBody = nil

@@ -59,5 +59,6 @@ run_invalid_import "motherduck_table.table" "valid_database..valid_table" "non-e
 run_invalid_import "motherduck_share_grant.grant" "bad.share/valid_user" "must not contain dots"
 run_invalid_import "motherduck_share_grant.grant" "valid_share/ valid_user" "Share grant username"
 run_invalid_import "motherduck_access_token.token" "valid_user/ bad_token_id" "access token ID import segments"
+run_invalid_import "motherduck_access_token.token" "valid_user/token_name" "must be a UUID"
 run_invalid_import "motherduck_dive.dive" " 123e4567-e89b-42d3-a456-426614174000" "must not include leading or trailing whitespace"
 run_invalid_import "motherduck_flight.flight" "not-a-uuid" "must be a UUID"

@@ -106,9 +106,9 @@ func (c *Client) Available() bool {
 	return c != nil && c.token != ""
 }
 
-func (c *Client) CreateServiceAccount(ctx context.Context, username string) (*ServiceAccount, error) {
+func (c *Client) CreateServiceAccount(ctx context.Context, req CreateServiceAccountRequest) (*ServiceAccount, error) {
 	var out ServiceAccount
-	err := c.do(ctx, http.MethodPost, "/v1/users", map[string]any{"username": username}, &out)
+	err := c.do(ctx, http.MethodPost, "/v1/users", req, &out)
 	return &out, err
 }
 
