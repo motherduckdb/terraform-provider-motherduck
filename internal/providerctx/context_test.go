@@ -30,3 +30,19 @@ func TestSQLClientRetriesAfterCanceledInitialization(t *testing.T) {
 		}
 	})
 }
+
+func TestHasSQLCredentials(t *testing.T) {
+	var nilContext *Context
+	if nilContext.HasSQLCredentials() {
+		t.Fatal("nil context reported SQL credentials")
+	}
+	if (&Context{}).HasSQLCredentials() {
+		t.Fatal("context without token or client reported SQL credentials")
+	}
+	if (&Context{SQLConfig: mdsql.Config{Token: "  "}}).HasSQLCredentials() {
+		t.Fatal("blank token reported SQL credentials")
+	}
+	if !(&Context{SQLConfig: mdsql.Config{Token: "token"}}).HasSQLCredentials() {
+		t.Fatal("configured token did not report SQL credentials")
+	}
+}

@@ -70,6 +70,14 @@ organization moves to a plan without scheduled runs. `schedule_status` then
 reads `DISABLED` while `schedule_cron` keeps its value. Terraform reports the
 status but does not manage it.
 
+Removing `schedule_cron` clears the schedule. MotherDuck keeps the cleared cron
+string and reports `schedule_status = "DISABLED"`, so Terraform reads a
+disabled schedule that the configuration does not set as no schedule. Import
+reads a Flight with a disabled schedule the same way. Setting `schedule_cron`
+again reactivates the schedule. `schedule_cron = ""` and an omitted
+`schedule_cron` both mean no schedule, and switching between them sends no
+update to MotherDuck.
+
 The provider validates at plan time that `source_code` is 1 to 204,800 bytes,
 that `requirements_txt` is at most 20,480 bytes, that `instance_type` is a
 MotherDuck size name (`F4`, `F8`, `F16`, or `F32`, case-sensitive), and that

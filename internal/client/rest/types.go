@@ -22,14 +22,32 @@ type APIError struct {
 	Issues     []struct {
 		Message string `json:"message"`
 	} `json:"issues,omitempty"`
-	Body          string `json:"-"`
-	BodyTruncated bool   `json:"-"`
+	// The MotherDuck gateway reports authentication failures with these
+	// fields instead of code and message.
+	GatewayMessage string `json:"errMessage"`
+	GatewayCode    string `json:"mdFriendlyStatusCode"`
+	Body           string `json:"-"`
+	BodyTruncated  bool   `json:"-"`
+}
+
+// IsAuthenticationError reports whether MotherDuck rejected the admin token.
+func (e APIError) IsAuthenticationError() bool {
+	return e.StatusCode == 401 || e.Code == "UNAUTHORIZED" || e.GatewayCode == "AUTHENTICATION_ERROR"
 }
 
 func (e APIError) Error() string {
+	if e.Code == "" {
+		e.Code = e.GatewayCode
+	}
 	message := e.Message
 	if message == "" {
+		message = e.GatewayMessage
+	}
+	if message == "" {
 		message = echoBody(e.Body)
+	}
+	if e.IsAuthenticationError() {
+		message = strings.TrimRight(message, ". ") + ". MotherDuck rejected the admin token. Check the provider `admin_token` argument or the MOTHERDUCK_ADMIN_TOKEN environment variable."
 	}
 	issueMessages := make([]string, 0, len(e.Issues))
 	for _, issue := range e.Issues {

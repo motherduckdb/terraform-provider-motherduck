@@ -28,8 +28,21 @@ These changes affect the values the column accepts. Review any replacement plan
 before applying because replacing a table removes its rows. To retain the live
 type and data, update the configured type to match it instead.
 
-The database, schema, and name also require replacement when changed. Destroy
-drops the table. Import uses `<database>.<schema>.<table>` and reads its existing
+The database, schema, and name also require replacement when changed. A change
+in the letter case of the database name only updates state because MotherDuck
+resolves database names case-insensitively. In the schema and table name,
+DuckDB folds only the ASCII letters A to Z, so a change in the case of those
+letters only updates state. Any other change, such as `Äpfel` to `äpfel`,
+names a different table and replaces it.
+
+If the provider cannot compare column types during planning, for example after
+a connection error, the plan fails instead of replacing the table. The provider
+resolves column types in the current database of its connection, not in the
+table's database. Qualify a type created with `CREATE TYPE` with its database
+and schema, such as `analytics.main.mood`, or write out its definition, such as
+`ENUM('ok', 'sad')`.
+
+Destroy drops the table. Import uses `<database>.<schema>.<table>` and reads its existing
 column definitions.
 
 See [the layered warehouse](../guides/warehouse-examples.md) for a table whose
@@ -66,9 +79,9 @@ resource "motherduck_table" "events" {
 ### Required
 
 - `columns` (Map of String) Map of column name to DuckDB SQL type. Column changes replace the table. Type aliases such as `INT` and `INTEGER` are compared semantically, so a change that only respells a type updates state in place without replacing the table.
-- `database` (String) Database that contains the table.
-- `name` (String) Table name.
-- `schema` (String) Schema that contains the table.
+- `database` (String) Database that contains the table. Changing only the letter case updates state in place.
+- `name` (String) Table name. Changing only the case of ASCII letters updates state in place. Any other change, including the case of a non-ASCII letter such as `Ä`, names a different table and replaces it.
+- `schema` (String) Schema that contains the table. Changing only the case of ASCII letters updates state in place. Any other change replaces the table.
 
 ### Read-Only
 

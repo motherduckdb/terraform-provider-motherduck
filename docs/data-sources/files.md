@@ -2,12 +2,12 @@
 page_title: "motherduck_files Data Source - motherduck"
 subcategory: "Catalog and storage"
 description: |-
-  Lists files and folders for an object-storage path through MotherDuck SQL. Rows are sorted by name. Set limit and offset to page through large listings. Paging follows object key order, where a folder sorts as its name followed by a slash, so pages are stable. MotherDuck stops listing once it has returned limit plus offset entries.
+  Lists files and folders for an object-storage path through MotherDuck SQL. Rows are sorted by name. Set limit and offset to page through large listings. Paging follows object key order, where a folder sorts as its name followed by a slash, so pages are stable. MotherDuck stops listing once it has returned one entry more than limit plus offset, or lists everything when that sum exceeds 4294967294.
 ---
 
 # motherduck_files (Data Source)
 
-Lists files and folders for an object-storage path through MotherDuck SQL. Rows are sorted by name. Set `limit` and `offset` to page through large listings. Paging follows object key order, where a folder sorts as its name followed by a slash, so pages are stable. MotherDuck stops listing once it has returned `limit` plus `offset` entries.
+Lists files and folders for an object-storage path through MotherDuck SQL. Rows are sorted by name. Set `limit` and `offset` to page through large listings. Paging follows object key order, where a folder sorts as its name followed by a slash, so pages are stable. MotherDuck stops listing once it has returned one entry more than `limit` plus `offset`, or lists everything when that sum exceeds 4294967294.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read

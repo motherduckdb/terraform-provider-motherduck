@@ -62,6 +62,18 @@ func (c *Context) SQLClient(ctx context.Context) (SQLClient, error) {
 	return c.SQL, nil
 }
 
+// HasSQLCredentials reports whether SQL operations can start: a client is
+// already initialized, or a token is configured to create one. It does not
+// open a connection, so plans can call it offline.
+func (c *Context) HasSQLCredentials() bool {
+	if c == nil {
+		return false
+	}
+	c.sqlMu.Lock()
+	defer c.sqlMu.Unlock()
+	return c.SQL != nil || strings.TrimSpace(c.SQLConfig.Token) != ""
+}
+
 // AvailableSQLClient returns the initialized SQL client when it can serve SQL
 // operations. A nil or unavailable client is treated like a missing token at
 // the provider boundary, while initialization errors retain their original

@@ -119,6 +119,7 @@ func DiveIDValidators() []validator.String {
 func UsernameValidators() []validator.String {
 	return []validator.String{
 		tfvalidators.StringLength("MotherDuck REST username", 1, 255),
+		tfvalidators.StringMaxUTF16Units("MotherDuck REST username", 255),
 		tfvalidators.RESTPathSegment("MotherDuck REST username"),
 	}
 }

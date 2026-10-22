@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -91,6 +92,7 @@ func New(baseURL, token string, opts ...Option) (*Client, error) {
 	if o.timeout > 0 {
 		httpClient.Timeout = o.timeout
 	}
+	httpClient.CheckRedirect = checkRedirect(httpClient.CheckRedirect)
 	return &Client{
 		baseURL: strings.TrimRight(parsed.String(), "/"),
 		// Trim once here: a token sourced from a file often carries a trailing
@@ -100,6 +102,47 @@ func New(baseURL, token string, opts ...Option) (*Client, error) {
 		userAgent:  o.userAgent,
 		httpClient: httpClient,
 	}, nil
+}
+
+// maxRedirects matches the limit net/http applies when CheckRedirect is nil.
+const maxRedirects = 10
+
+// errRedirectRefused marks a redirect that checkRedirect refused. Retrying
+// would only meet the same redirect, so the request fails at once.
+var errRedirectRefused = errors.New("refusing MotherDuck API redirect")
+
+// checkRedirect refuses a redirect that would send the admin token over
+// cleartext HTTP or to another host. net/http keeps the Authorization header
+// when a redirect changes only the scheme or the port, and also when it moves
+// to a subdomain. Only a plain HTTP request to a loopback host, as local tests
+// use, may follow a redirect over plain HTTP. A redirect policy on a client
+// passed with WithHTTPClient still applies after these checks.
+func checkRedirect(next func(*http.Request, []*http.Request) error) func(*http.Request, []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if len(via) == 0 {
+			return nil
+		}
+		original, target := via[0].URL, req.URL
+		if !strings.EqualFold(target.Scheme, "https") && (strings.EqualFold(original.Scheme, "https") || !isLoopbackHost(target.Hostname())) {
+			return fmt.Errorf("%w from %s to %s, because the admin token is sent only over HTTPS", errRedirectRefused, redirectEndpoint(original), redirectEndpoint(target))
+		}
+		if !strings.EqualFold(target.Host, original.Host) {
+			return fmt.Errorf("%w from %s to %s, because the admin token is sent only to the configured API host", errRedirectRefused, redirectEndpoint(original), redirectEndpoint(target))
+		}
+		if next != nil {
+			return next(req, via)
+		}
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("stopped after %d redirects", maxRedirects)
+		}
+		return nil
+	}
+}
+
+// redirectEndpoint names a redirect endpoint by scheme and host only. The path
+// and query can carry identifiers that do not belong in an error message.
+func redirectEndpoint(u *url.URL) string {
+	return u.Scheme + "://" + u.Host
 }
 
 func (c *Client) Available() bool {
@@ -204,8 +247,10 @@ func (c *Client) ListUsers(ctx context.Context, filter ListUsersFilter) ([]User,
 	return unique, nil
 }
 
+// collectPages starts from an empty slice, so a listing with no items encodes
+// as an empty JSON array instead of null.
 func collectPages[T any](basePath string, fetch func(string) ([]T, string, error)) ([]T, error) {
-	var result []T
+	result := make([]T, 0)
 	var cursor string
 	seen := map[string]struct{}{}
 	for {
@@ -334,7 +379,7 @@ func (c *Client) doWithRetry(ctx context.Context, req *http.Request) (*http.Resp
 			// A transport error can arrive after the server processed the
 			// request, so only idempotent methods are retried.
 			lastErr = err
-			if !idempotent || final {
+			if !idempotent || final || errors.Is(err, errRedirectRefused) {
 				return nil, err
 			}
 			if sleepErr := retry.Sleep(ctx, jitter(retryDelay(attempt+1))); sleepErr != nil {

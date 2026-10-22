@@ -35,7 +35,11 @@ therefore fails under `create_before_destroy`, because the new token is created
 while the old one still exists. Give each token generation a distinct name,
 for example with a rotation suffix.
 
-Token name, type, and TTL changes require replacement. A username change also
+Token name, type, and TTL changes require replacement. A new token is
+`read_write` when `token_type` is omitted. Once the token exists, an omitted
+`token_type` keeps the type MotherDuck reports, so removing it from the
+configuration or importing a `read_scaling` token without it plans no change.
+A username change also
 requires replacement unless only its letter case changes, because MotherDuck
 compares usernames case-insensitively. MotherDuck
 cannot edit a token description, so changing a configured `description` also
@@ -60,9 +64,11 @@ See [authentication and rotation](../guides/authentication.md) and
 {{codefile "shell" "examples/resources/motherduck_access_token/import.sh"}}
 
 The token ID must be the UUID MotherDuck reports, for example from
-`motherduck_user_tokens`. A token name is not accepted.
+`motherduck_user_tokens`. A token name is not accepted. The UUID may be in upper
+or lower case, and Terraform records it in lower case.
 
-After import, run `terraform plan` with the token's name and type. Keep `ttl`
+After import, run `terraform plan` with the token's name, and either its type
+or no `token_type`. Keep `ttl`
 omitted to adopt an existing token without requesting replacement. Import reads
 the description back, so either omit `description` or set it to the value
 MotherDuck reports. Terraform

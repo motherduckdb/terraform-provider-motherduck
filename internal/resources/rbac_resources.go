@@ -85,7 +85,7 @@ func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 	if err := client.Exec(ctx, "CREATE ROLE "+sqlbuild.QuoteIdentifier(plan.Name.ValueString())); err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck role", err.Error())
+		resp.Diagnostics.AddError("Unable to create MotherDuck role", createErrorDetail(err, rolePermissionErrorDetail(err, err.Error()), "role", plan.Name.ValueString()))
 		return
 	}
 	plan.ID = types.StringValue(plan.Name.ValueString())
@@ -137,7 +137,7 @@ func (r *roleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	if err := retry.SQL(ctx, func() error {
 		return client.Exec(ctx, "DROP ROLE IF EXISTS "+sqlbuild.QuoteIdentifier(state.Name.ValueString()))
 	}); err != nil {
-		resp.Diagnostics.AddError("Unable to drop MotherDuck role", err.Error())
+		resp.Diagnostics.AddError("Unable to drop MotherDuck role", rolePermissionErrorDetail(err, err.Error()))
 	}
 }
 
@@ -165,7 +165,7 @@ func (r *roleResource) readRole(ctx context.Context, model *roleModel, diags *di
 		if mdsql.IsUnsupportedCommand(err) {
 			diags.AddError(
 				"MotherDuck SQL command unavailable",
-				"SHOW ALL ROLES is not supported by the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_role resource.",
+				"SHOW ALL ROLES is not supported by the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_role resource. MotherDuck reported: "+err.Error(),
 			)
 			return false
 		}
@@ -268,8 +268,8 @@ func (r *roleGrantResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			"grantee_name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "User, service-account, or role principal receiving the role.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "User, service-account, or role principal receiving the role. MotherDuck resolves principals case-insensitively, so changing only the letter case updates state in place instead of revoking and granting the same principal.",
+				PlanModifiers:       identifierRequiresReplace(),
 				Validators:          shareGrantPrincipalValidators(),
 			},
 			"grantee_type": schema.StringAttribute{
@@ -300,7 +300,7 @@ func (r *roleGrantResource) Create(ctx context.Context, req resource.CreateReque
 	}
 	query := roleGrantStatement("GRANT", plan.RoleName.ValueString(), "TO", plan.GranteeType.ValueString(), plan.GranteeName.ValueString())
 	if err := client.Exec(ctx, query); err != nil {
-		resp.Diagnostics.AddError("Unable to grant MotherDuck role", roleAssignmentErrorDetail(err, false))
+		resp.Diagnostics.AddError("Unable to grant MotherDuck role", rolePermissionErrorDetail(err, roleAssignmentErrorDetail(err, false)))
 		return
 	}
 	plan.ID = roleGrantID(plan)
@@ -331,8 +331,23 @@ func (r *roleGrantResource) Read(ctx context.Context, req resource.ReadRequest, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update runs only when the principal changes letter case, because any other
+// change replaces the grant. MotherDuck resolves principals case-insensitively,
+// so the grant is unchanged and only state is updated.
 func (r *roleGrantResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Role grant updates are not supported", "Replace the grant to change its role or principal.")
+	var plan, state roleGrantModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if plan.RoleName.ValueString() != state.RoleName.ValueString() || plan.GranteeType.ValueString() != state.GranteeType.ValueString() || !strings.EqualFold(plan.GranteeName.ValueString(), state.GranteeName.ValueString()) {
+		resp.Diagnostics.AddError("Role grant updates are not supported", "Replace the grant to change its role or principal.")
+		return
+	}
+	plan.ID = roleGrantID(plan)
+	plan.GrantedAt = state.GrantedAt
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *roleGrantResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -347,7 +362,7 @@ func (r *roleGrantResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 	query := roleGrantStatement("REVOKE", state.RoleName.ValueString(), "FROM", state.GranteeType.ValueString(), state.GranteeName.ValueString())
 	if err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) }); err != nil && !isNotFound(err) {
-		resp.Diagnostics.AddError("Unable to revoke MotherDuck role", roleAssignmentErrorDetail(err, true))
+		resp.Diagnostics.AddError("Unable to revoke MotherDuck role", rolePermissionErrorDetail(err, roleAssignmentErrorDetail(err, true)))
 	}
 }
 
@@ -389,7 +404,7 @@ func (r *roleGrantResource) readRoleGrant(ctx context.Context, model *roleGrantM
 		if mdsql.IsUnsupportedCommand(err) {
 			diags.AddError(
 				"MotherDuck SQL command unavailable",
-				"SHOW ROLES TO USER/ROLE is not supported by the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_role_grant resource.",
+				"SHOW ROLES TO USER/ROLE is not supported by the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_role_grant resource. MotherDuck reported: "+err.Error(),
 			)
 			return false
 		}
@@ -419,6 +434,17 @@ func roleAssignmentErrorDetail(err error, revoke bool) string {
 		detail += " MotherDuck kept the grant, so Terraform keeps it in state. To stop managing the grant without revoking it, run `terraform state rm` on this resource."
 	}
 	return detail
+}
+
+// rolePermissionErrorDetail explains a role write that MotherDuck refused
+// because the SQL identity lacks the platform privilege for it. The raw error
+// names an internal request type, and users often expect admin_token to
+// authorize SQL role management.
+func rolePermissionErrorDetail(err error, detail string) string {
+	if !strings.Contains(strings.ToLower(err.Error()), "lacks platform authorization") {
+		return detail
+	}
+	return detail + "\n\nThe SQL identity in the provider `token` argument or MOTHERDUCK_TOKEN does not have permission to manage roles. Use a SQL token for a user or service account whose role allows managing custom roles and role assignments. The `admin_token` argument does not authorize SQL role management."
 }
 
 func showRolesToStatement(granteeType, granteeName string) string {

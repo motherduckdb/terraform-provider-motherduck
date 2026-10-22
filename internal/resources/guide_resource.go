@@ -346,7 +346,7 @@ func (r *guideResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 
 	versionChanged := !plan.Content.Equal(state.Content) ||
-		!optionalListValuesEqual(plan.References, state.References) ||
+		!guideReferencesEquivalent(ctx, plan.References, state.References) ||
 		!plan.ChangeComment.Equal(state.ChangeComment) ||
 		!plan.ExternalID.Equal(state.ExternalID)
 	if versionChanged {
@@ -799,8 +799,14 @@ func guideReferencesFromJSON(ctx context.Context, current types.List, raw stdsql
 	if len(references) == 0 && current.IsNull() {
 		return types.ListNull(types.ObjectType{AttrTypes: guideReferenceAttrTypes()})
 	}
+	var priorItems []guideReferenceModel
+	if !current.IsNull() && !current.IsUnknown() {
+		if current.ElementsAs(ctx, &priorItems, false).HasError() {
+			priorItems = nil
+		}
+	}
 	models := make([]guideReferenceModel, 0, len(references))
-	for _, reference := range references {
+	for i, reference := range references {
 		uuid := reference.GuideID
 		switch reference.Type {
 		case "dive":
@@ -808,7 +814,7 @@ func guideReferencesFromJSON(ctx context.Context, current types.List, raw stdsql
 		case "flight":
 			uuid = reference.FlightID
 		}
-		models = append(models, guideReferenceModel{
+		model := guideReferenceModel{
 			Type:        types.StringValue(reference.Type),
 			URL:         nullableGuideString(reference.URL),
 			Schema:      nullableGuideString(reference.Schema),
@@ -818,7 +824,12 @@ func guideReferencesFromJSON(ctx context.Context, current types.List, raw stdsql
 			Macro:       nullableGuideString(reference.Macro),
 			UUID:        nullableGuideString(uuid),
 			Description: nullableGuideString(reference.Description),
-		})
+		}
+		if i < len(priorItems) && priorItems[i].Type.Equal(model.Type) {
+			model.URL = guideReferenceURLFromLive(priorItems[i].URL, model.URL)
+			model.UUID = guideReferenceUUIDFromLive(priorItems[i].UUID, model.UUID)
+		}
+		models = append(models, model)
 	}
 	value, valueDiags := types.ListValueFrom(ctx, types.ObjectType{AttrTypes: guideReferenceAttrTypes()}, models)
 	diags.Append(valueDiags...)
@@ -826,6 +837,62 @@ func guideReferencesFromJSON(ctx context.Context, current types.List, raw stdsql
 		return current
 	}
 	return value
+}
+
+// guideReferencesEquivalent reports whether two reference lists name the same
+// objects, so an imported Guide whose references MotherDuck reads back in a
+// canonical spelling does not append a version. Catalog URLs compare like Dive
+// mount URLs and UUIDs compare ignoring case. Other fields compare exactly.
+func guideReferencesEquivalent(ctx context.Context, left, right types.List) bool {
+	if left.IsNull() || right.IsNull() {
+		return left.IsNull() && right.IsNull()
+	}
+	if left.IsUnknown() || right.IsUnknown() {
+		return false
+	}
+	var leftItems, rightItems []guideReferenceModel
+	if left.ElementsAs(ctx, &leftItems, false).HasError() || right.ElementsAs(ctx, &rightItems, false).HasError() || len(leftItems) != len(rightItems) {
+		return false
+	}
+	for i := range leftItems {
+		l, r := leftItems[i], rightItems[i]
+		if !l.Type.Equal(r.Type) || !l.Schema.Equal(r.Schema) || !l.Table.Equal(r.Table) || !l.Column.Equal(r.Column) ||
+			!l.View.Equal(r.View) || !l.Macro.Equal(r.Macro) || !l.Description.Equal(r.Description) {
+			return false
+		}
+		// The FromLive helpers return the left value only when the right value
+		// names the same object.
+		if !guideReferenceURLFromLive(l.URL, r.URL).Equal(l.URL) || !guideReferenceUUIDFromLive(l.UUID, r.UUID).Equal(l.UUID) {
+			return false
+		}
+	}
+	return true
+}
+
+// guideReferenceURLFromLive keeps the prior spelling of a catalog URL that
+// names the same database or share as the live URL. MotherDuck stores a
+// catalog reference by id and renders it as md:<database name> or
+// md:_share/<share name>/<token>.
+func guideReferenceURLFromLive(prior, live types.String) types.String {
+	if prior.IsNull() || prior.IsUnknown() || live.IsNull() {
+		return live
+	}
+	if diveResourceURLsEquivalent(prior.ValueString(), live.ValueString()) {
+		return prior
+	}
+	return live
+}
+
+// guideReferenceUUIDFromLive keeps the prior spelling of a reference UUID that
+// matches the live UUID ignoring case. MotherDuck returns UUIDs in lowercase.
+func guideReferenceUUIDFromLive(prior, live types.String) types.String {
+	if prior.IsNull() || prior.IsUnknown() || live.IsNull() {
+		return live
+	}
+	if strings.EqualFold(prior.ValueString(), live.ValueString()) {
+		return prior
+	}
+	return live
 }
 
 func nullableGuideString(value *string) types.String {

@@ -2,9 +2,7 @@ package resources
 
 import (
 	"context"
-	stdsql "database/sql"
 	"encoding/json"
-	"errors"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -47,25 +45,25 @@ func (r *viewResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
-				PlanModifiers:       stringUseStateForUnknown(),
+				PlanModifiers:       identifierID("database", "schema", "name"),
 				MarkdownDescription: "View resource ID in `<database>.<schema>.<view>` form.",
 			},
 			"database": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Database that contains the view.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Database that contains the view. Changing only the letter case updates state in place.",
+				PlanModifiers:       databaseIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"schema": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Schema that contains the view.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Schema that contains the view. Changing only the case of ASCII letters updates state in place. Any other change replaces the view.",
+				PlanModifiers:       catalogIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "View name.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "View name. Changing only the case of ASCII letters updates state in place. Any other change, including the case of a non-ASCII letter such as `Ä`, names a different view and replaces it.",
+				PlanModifiers:       catalogIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"query": schema.StringAttribute{
@@ -139,6 +137,19 @@ func (r *viewResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 }
 
 func (r *viewResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan, state viewModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if plan.Query.Equal(state.Query) {
+		// Only the letter case of an identifier changed. The view is the same
+		// object, so record the new spelling without running SQL.
+		plan.ID = types.StringValue(qualifiedObjectID(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString()))
+		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+		return
+	}
 	r.writeView(ctx, req.Plan, &resp.State, resp.Private, true, &resp.Diagnostics)
 }
 
@@ -169,7 +180,7 @@ func (r *viewResource) writeView(ctx context.Context, getter stateGetter, setter
 	}
 	id := qualifiedObjectID(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString())
 	if err := client.AttachDatabase(ctx, plan.Database.ValueString()); err != nil {
-		diags.AddError("Unable to attach MotherDuck database", err.Error())
+		diags.AddError("Unable to attach MotherDuck database", attachErrorDetail(err, plan.Database.ValueString()))
 		return
 	}
 	createKeyword := "CREATE VIEW "
@@ -178,7 +189,7 @@ func (r *viewResource) writeView(ctx context.Context, getter stateGetter, setter
 	}
 	query := createKeyword + sqlbuild.QuoteQualifiedIdentifier(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString()) + " AS " + plan.Query.ValueString()
 	if err := client.Exec(ctx, query); err != nil {
-		diags.AddError("Unable to create MotherDuck view", err.Error())
+		diags.AddError("Unable to create MotherDuck view", schemaCreateErrorDetail(err, createErrorDetail(err, err.Error(), "view", id), plan.Schema.ValueString()))
 		return
 	}
 	plan.ID = types.StringValue(id)
@@ -198,27 +209,29 @@ func (r *viewResource) writeView(ctx context.Context, getter stateGetter, setter
 }
 
 func readViewServerDefinition(ctx context.Context, client providerctx.SQLClient, database, schemaName, name string, diags *diag.Diagnostics) (string, bool) {
-	var definition stdsql.NullString
+	var rows [][]string
 	err := retry.SQL(ctx, func() error {
 		if err := client.AttachDatabase(ctx, database); err != nil {
 			return err
 		}
-		return client.QueryRow(ctx, `SELECT view_definition FROM information_schema.views WHERE table_catalog = ? AND table_schema = ? AND table_name = ?`, database, schemaName, name).Scan(&definition)
+		var queryErr error
+		rows, queryErr = queryCatalogRows(ctx, client, []string{"table_catalog", "table_schema", "table_name", "view_definition"},
+			`SELECT table_catalog, table_schema, table_name, view_definition FROM information_schema.views WHERE lower(table_catalog) = lower(?) AND lower(table_schema) = lower(?) AND lower(table_name) = lower(?)`,
+			database, schemaName, name)
+		return queryErr
 	})
 	if err != nil && isNotFoundFor(err, database, schemaName, name) {
-		return "", false
-	}
-	if errors.Is(err, stdsql.ErrNoRows) {
 		return "", false
 	}
 	if err != nil {
 		diags.AddError("Unable to read MotherDuck view definition", err.Error())
 		return "", false
 	}
-	if !definition.Valid {
+	match := matchCatalogRow(rows, database, schemaName, name)
+	if match < 0 || rows[match][3] == "" {
 		return "", false
 	}
-	return definition.String, true
+	return rows[match][3], true
 }
 
 func storeViewServerDefinition(ctx context.Context, private privateState, definition string, diags *diag.Diagnostics) {

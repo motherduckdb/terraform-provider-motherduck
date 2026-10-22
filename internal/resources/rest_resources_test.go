@@ -85,7 +85,8 @@ func TestServiceAccountImportRejectsInvalidUsername(t *testing.T) {
 	tests := map[string]string{
 		"blank":         " ",
 		"leading space": " svc_reader",
-		"hyphen":        "svc-reader",
+		"dot segment":   "..",
+		"too long":      strings.Repeat("a", 256),
 	}
 	for name, id := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -310,11 +311,16 @@ func TestServiceAccountUsernameValidator(t *testing.T) {
 		"non-ascii digit": {value: types.StringValue("reader١"), wantErr: true},
 		"starts digit":    {value: types.StringValue("1_reader"), wantErr: true},
 		"starts _":        {value: types.StringValue("_reader"), wantErr: true},
-		"hyphen":          {value: types.StringValue("svc-reader"), wantErr: true},
-		"space":           {value: types.StringValue("svc reader"), wantErr: true},
-		"emoji":           {value: types.StringValue("svc🦆reader"), wantErr: true},
-		"blank":           {value: types.StringValue(" "), wantErr: true},
-		"unknown":         {value: types.StringUnknown(), wantErr: false},
+		// An existing account can carry a legacy username. ModifyPlan refuses
+		// these characters when it would create an account.
+		"legacy hyphen and at sign": {value: types.StringValue("mdw-writer@motherduck-com"), wantErr: false},
+		"legacy period":             {value: types.StringValue("svc.reader"), wantErr: false},
+		"legacy starts hyphen":      {value: types.StringValue("-reader"), wantErr: true},
+		"space":                     {value: types.StringValue("svc reader"), wantErr: true},
+		"slash":                     {value: types.StringValue("svc/reader"), wantErr: true},
+		"emoji":                     {value: types.StringValue("svc🦆reader"), wantErr: true},
+		"blank":                     {value: types.StringValue(" "), wantErr: true},
+		"unknown":                   {value: types.StringUnknown(), wantErr: false},
 	}
 
 	for name, tc := range tests {

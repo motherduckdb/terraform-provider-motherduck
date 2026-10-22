@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -152,5 +153,37 @@ func TestClientListUsersWalksPageTokensAndDropsRepeats(t *testing.T) {
 	}
 	if !reflect.DeepEqual(requests, wantRequests) {
 		t.Fatalf("requests = %v, want %v", requests, wantRequests)
+	}
+}
+
+// TestCollectPagesEmptyListingEncodesAsEmptyArray keeps an empty listing from
+// encoding as JSON null in data source outputs such as accounts_json.
+func TestCollectPagesEmptyListingEncodesAsEmptyArray(t *testing.T) {
+	for name, body := range map[string]string{
+		"missing items": `{}`,
+		"null items":    `{"accounts":null}`,
+		"empty items":   `{"accounts":[]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(body))
+			}))
+			defer server.Close()
+			client, err := New(server.URL, "admin-token")
+			if err != nil {
+				t.Fatal(err)
+			}
+			accounts, err := client.ActiveAccounts(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := json.Marshal(accounts.Accounts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(encoded) != "[]" {
+				t.Fatalf("empty listing encodes as %s, want []", encoded)
+			}
+		})
 	}
 }

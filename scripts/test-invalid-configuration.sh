@@ -49,6 +49,11 @@ validate_fixture invalid-configuration \
   'Invalid MotherDuck SQL identifier' \
   'leading or trailing whitespace' \
   'Invalid MotherDuck database type' \
+  'Invalid MotherDuck database name' \
+  'must not contain a forward slash' \
+  'must be at most 254 characters' \
+  'Invalid MotherDuck share name' \
+  'Invalid MotherDuck secret name' \
   'Invalid MotherDuck snapshot retention days' \
   'lowercase canonical' \
   'lowercase bare SQL option word' \

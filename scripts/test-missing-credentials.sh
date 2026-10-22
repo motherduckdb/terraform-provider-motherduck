@@ -18,6 +18,7 @@ run_case() {
   local case_name="$1"
   local expected_summary="$2"
   local expected_detail="$3"
+  local expected_plan_warning="${4:-}"
   local fixture_dir="${ROOT_DIR}/test-fixtures/${case_name}"
   local work_dir="${ROOT_DIR}/test-results/${case_name}-${RUN_ID}"
 
@@ -34,6 +35,24 @@ run_case() {
 
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" init -backend=false -input=false >/dev/null
   TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" validate >/dev/null
+
+  # Data sources are read during plan, so those cases fail at plan. A plan
+  # that only manages resources still succeeds offline, but must warn before
+  # apply that the missing credential will make apply fail.
+  if [[ -n "${expected_plan_warning}" ]]; then
+    plan_output="$(
+      (
+        unset MOTHERDUCK_TOKEN
+        unset MOTHERDUCK_ADMIN_TOKEN
+        TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -input=false -no-color
+      ) 2>&1
+    )"
+    if [[ "${plan_output}" != *"${expected_plan_warning}"* ]]; then
+      echo "Expected ${case_name} plan to warn with ${expected_plan_warning}, got:" >&2
+      printf '%s\n' "${plan_output}" >&2
+      exit 1
+    fi
+  fi
 
   set +e
   apply_output="$(
@@ -59,3 +78,5 @@ run_case() {
 
 run_case "missing-sql-token" "MotherDuck token required" "MotherDuck SQL operations require token or MOTHERDUCK_TOKEN"
 run_case "missing-admin-token" "MotherDuck admin token required" "MotherDuck REST operations require admin_token or MOTHERDUCK_ADMIN_TOKEN"
+run_case "missing-sql-token-resource" "MotherDuck token required" "MotherDuck SQL operations require token or MOTHERDUCK_TOKEN" "MotherDuck token not configured"
+run_case "missing-admin-token-resource" "MotherDuck admin token required" "MotherDuck REST operations require admin_token or MOTHERDUCK_ADMIN_TOKEN" "MotherDuck admin token not configured"

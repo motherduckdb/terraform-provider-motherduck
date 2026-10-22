@@ -119,6 +119,9 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 					continue
 				}
 			}
+			if isAuthenticationFailure(err) {
+				return fmt.Errorf("MotherDuck rejected the SQL token. Check the provider `token` argument or the MOTHERDUCK_TOKEN environment variable, and confirm the token has not expired or been revoked. MotherDuck reported: %s", redactToken(err.Error(), i.token))
+			}
 			return fmt.Errorf("running boot query %q: %s%s", redactToken(query, i.token), redactToken(err.Error(), i.token), connectionFailureHint(err))
 		}
 		i.next++
@@ -137,6 +140,14 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 // connectionFailureHint explains a boot failure in which the MotherDuck
 // extension could not reach MotherDuck at all. Without it, users tend to
 // replace a working token, which cannot help.
+// isAuthenticationFailure reports whether MotherDuck refused the SQL token
+// while connecting, as opposed to a network failure or a later SQL error.
+func isAuthenticationFailure(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "request is not authenticated") ||
+		strings.Contains(msg, "check your motherduck token")
+}
+
 func connectionFailureHint(err error) string {
 	if !strings.Contains(strings.ToLower(err.Error()), "could not connect to motherduck") {
 		return ""

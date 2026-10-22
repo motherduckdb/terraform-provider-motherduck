@@ -2,7 +2,6 @@ package datasources
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/guideref"
@@ -22,12 +21,15 @@ type rowSpec struct {
 	// permissionHint, when set, replaces the generic read error for
 	// MotherDuck functions that only organization admins can call.
 	permissionHint string
-	// uint32Paging caps limit and offset at the UINTEGER maximum, for
-	// functions that take them as UINTEGER, so a larger value fails at plan
-	// time instead of in MotherDuck.
-	uint32Paging bool
-	build        func(rowsModel) (string, error)
-	postProcess  func([]map[string]any) []map[string]any
+	// pagingMax caps limit and offset at the largest value the MotherDuck
+	// function accepts, so a larger value fails at plan time instead of in
+	// MotherDuck. Zero leaves them uncapped.
+	pagingMax int64
+	// validate, when set, checks a configuration at plan time beyond what
+	// the attribute validators can see.
+	validate    func(rowsModel) error
+	build       func(rowsModel) (string, error)
+	postProcess func([]map[string]any) []map[string]any
 }
 
 type typedRowAttribute struct {
@@ -142,7 +144,7 @@ func rowSpecs() []rowSpec {
 			}
 			return appendRowLimitOffset(query+" ORDER BY name", m), nil
 		}},
-		{name: "buckets_for_secret", description: "Lists object-storage buckets accessible through a MotherDuck secret. Rows are sorted by bucket name. Set `limit` and `offset` to page through large listings. Paging follows bucket name order, so pages are stable, and MotherDuck stops listing once it has returned `limit` plus `offset` buckets.", requiredFunction: "md_list_buckets_for_secret", attrs: []string{"secret_name", "limit", "offset"}, requiredAttrs: []string{"secret_name"}, typedRows: []typedRowAttribute{
+		{name: "buckets_for_secret", description: "Lists object-storage buckets accessible through a MotherDuck secret. Rows are sorted by bucket name. Set `limit` and `offset` to page through large listings. Paging follows bucket name order, so pages are stable. Paging reads the full bucket listing, because MotherDuck filters buckets by the secret scope after listing them and cannot stop the listing early.", requiredFunction: "md_list_buckets_for_secret", attrs: []string{"secret_name", "limit", "offset"}, requiredAttrs: []string{"secret_name"}, typedRows: []typedRowAttribute{
 			{name: "name", description: "Bucket name."},
 			{name: "creation_date", description: "Bucket creation date reported by the object store."},
 			{name: "region", description: "Bucket region."},
@@ -151,9 +153,9 @@ func rowSpecs() []rowSpec {
 			if m.SecretName.IsNull() {
 				return "", fmt.Errorf("secret_name is required")
 			}
-			return appendOrderedRowLimitOffset("SELECT * FROM md_list_buckets_for_secret("+sqlbuild.StringLiteral(m.SecretName.ValueString())+nativeListLimit(m)+")", "ALL", m), nil
+			return appendOrderedRowLimitOffset("SELECT * FROM md_list_buckets_for_secret("+sqlbuild.StringLiteral(m.SecretName.ValueString())+")", "ALL", m), nil
 		}},
-		{name: "files", description: "Lists files and folders for an object-storage path through MotherDuck SQL. Rows are sorted by name. Set `limit` and `offset` to page through large listings. Paging follows object key order, where a folder sorts as its name followed by a slash, so pages are stable. MotherDuck stops listing once it has returned `limit` plus `offset` entries.", requiredFunction: "md_list_files", attrs: []string{"path", "limit", "offset"}, requiredAttrs: []string{"path"}, typedRows: []typedRowAttribute{
+		{name: "files", description: "Lists files and folders for an object-storage path through MotherDuck SQL. Rows are sorted by name. Set `limit` and `offset` to page through large listings. Paging follows object key order, where a folder sorts as its name followed by a slash, so pages are stable. MotherDuck stops listing once it has returned one entry more than `limit` plus `offset`, or lists everything when that sum exceeds 4294967294.", requiredFunction: "md_list_files", attrs: []string{"path", "limit", "offset"}, requiredAttrs: []string{"path"}, typedRows: []typedRowAttribute{
 			{name: "name", description: "File or folder name relative to `path`."},
 			{name: "type", description: "Entry type: `file` or `folder`."},
 			{name: "size", description: "File size in bytes. Null for folders."},
@@ -197,20 +199,15 @@ func rowSpecs() []rowSpec {
 			}
 			return "SHOW ROLES TO ROLE " + sqlbuild.QuoteIdentifier(m.RoleName.ValueString()), nil
 		}},
-		{name: "dives", description: "Lists MotherDuck Dives available to the current account. Rows in the returned page are sorted by Dive ID.", requiredFunction: "md_list_dives", attrs: []string{"limit", "offset", "include_org_shares"}, typedRows: diveSummaryRows(), postProcess: sortRowsByKeys(rowSortKey{field: "id"}), build: func(m rowsModel) (string, error) {
+		{name: "dives", description: "Lists MotherDuck Dives available to the current account. Rows in the returned page are sorted by Dive ID.", requiredFunction: "md_list_dives", pagingMax: maxInteger, attrs: []string{"limit", "offset", "include_org_shares"}, typedRows: diveSummaryRows(), postProcess: sortRowsByKeys(rowSortKey{field: "id"}), build: func(m rowsModel) (string, error) {
 			args := map[string]string{}
-			if !m.Limit.IsNull() {
-				args[`"limit"`] = fmt.Sprintf("%d", m.Limit.ValueInt64())
-			}
-			if !m.Offset.IsNull() {
-				args[`"offset"`] = fmt.Sprintf("%d", m.Offset.ValueInt64())
-			}
+			suffix := nativePaging(args, `"limit"`, `"offset"`, m)
 			if !m.IncludeOrgShares.IsNull() {
 				args["include_org_shares"] = sqlbuild.BoolLiteral(m.IncludeOrgShares.ValueBool())
 			}
-			return "SELECT * FROM MD_LIST_DIVES" + sqlbuild.NamedArgs(args), nil
+			return "SELECT * FROM MD_LIST_DIVES" + sqlbuild.NamedArgs(args) + suffix, nil
 		}},
-		{name: "dive", description: "Reads metadata for one MotherDuck Dive, including its current version and content.", requiredFunction: "md_get_dive", attrs: []string{"dive_id"}, requiredAttrs: []string{"dive_id"}, typedRows: append(diveSummaryRows(),
+		{name: "dive", description: "Reads metadata for one MotherDuck Dive, including its current version and content.", requiredFunction: "md_get_dive", attrs: []string{"dive_id"}, requiredAttrs: []string{"dive_id"}, typedRows: append(diveRowsWithRequiredResourcesFrom("version_required_resources"),
 			typedRowAttribute{name: "version_id", description: "ID of the current Dive version."},
 			typedRowAttribute{name: "version_storage_url", description: "Storage URL of the current Dive version. Sensitive because it locates the Dive content.", sensitive: true},
 			typedRowAttribute{name: "version_description", description: "Description of the current Dive version."},
@@ -224,7 +221,7 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_GET_DIVE(id := " + sqlbuild.StringLiteral(m.DiveID.ValueString()) + "::UUID)", nil
 		}},
-		{name: "dive_versions", description: "Lists versions for one MotherDuck Dive. Set `limit` and `offset` to page through the version history. Rows in the returned page are sorted newest version first.", requiredFunction: "md_list_dive_versions", uint32Paging: true, attrs: []string{"dive_id", "limit", "offset"}, requiredAttrs: []string{"dive_id"}, typedRows: []typedRowAttribute{
+		{name: "dive_versions", description: "Lists versions for one MotherDuck Dive. Set `limit` and `offset` to page through the version history. Rows in the returned page are sorted newest version first.", requiredFunction: "md_list_dive_versions", pagingMax: maxInteger, attrs: []string{"dive_id", "limit", "offset"}, requiredAttrs: []string{"dive_id"}, typedRows: []typedRowAttribute{
 			{name: "id", description: "Dive ID."},
 			{name: "version", description: "Dive version number."},
 			{name: "storage_url", description: "Storage URL of the version. Sensitive because it locates the Dive content.", sensitive: true},
@@ -237,26 +234,21 @@ func rowSpecs() []rowSpec {
 				return "", fmt.Errorf("dive_id is required")
 			}
 			args := map[string]string{"id": sqlbuild.StringLiteral(m.DiveID.ValueString()) + "::UUID"}
-			if !m.Limit.IsNull() {
-				args[`"limit"`] = fmt.Sprintf("%d", m.Limit.ValueInt64())
+			// MotherDuck fails a page that holds no versions, so the offset
+			// is applied in SQL and a page past the last version is empty.
+			suffix, err := windowedPaging(args, `"limit"`, 0, maxInteger, "version DESC", m)
+			if err != nil {
+				return "", err
 			}
-			if !m.Offset.IsNull() {
-				args[`"offset"`] = fmt.Sprintf("%d", m.Offset.ValueInt64())
-			}
-			return "SELECT * FROM MD_LIST_DIVE_VERSIONS" + sqlbuild.NamedArgs(args), nil
+			return "SELECT * FROM MD_LIST_DIVE_VERSIONS" + sqlbuild.NamedArgs(args) + suffix, nil
 		}},
-		{name: "flights", description: "Lists MotherDuck Flights available to the current account. Callers with organization-wide Flight visibility can restrict results to their own Flights. MotherDuck returns up to 5,000 Flights when `limit` is omitted. Set `limit` and `offset` to page through larger accounts. Rows in the returned page are sorted by Flight ID.", requiredFunction: "md_list_flights", attrs: []string{"limit", "offset", "owner_only"}, typedRows: flightSummaryRows(), postProcess: sortRowsByKeys(rowSortKey{field: "flight_id"}), build: func(m rowsModel) (string, error) {
+		{name: "flights", description: "Lists MotherDuck Flights available to the current account. Callers with organization-wide Flight visibility can restrict results to their own Flights. MotherDuck returns up to 5,000 Flights when `limit` is omitted. Set `limit` and `offset` to page through larger accounts. Rows in the returned page are sorted by Flight ID.", requiredFunction: "md_list_flights", pagingMax: maxUInteger, attrs: []string{"limit", "offset", "owner_only"}, typedRows: flightSummaryRows(), postProcess: sortRowsByKeys(rowSortKey{field: "flight_id"}), build: func(m rowsModel) (string, error) {
 			args := map[string]string{}
-			if !m.Limit.IsNull() {
-				args[`"LIMIT"`] = fmt.Sprintf("%d", m.Limit.ValueInt64())
-			}
-			if !m.Offset.IsNull() {
-				args[`"OFFSET"`] = fmt.Sprintf("%d", m.Offset.ValueInt64())
-			}
+			suffix := nativePaging(args, `"LIMIT"`, `"OFFSET"`, m)
 			if !m.OwnerOnly.IsNull() {
 				args["owner_only"] = fmt.Sprintf("%t", m.OwnerOnly.ValueBool())
 			}
-			return "SELECT * FROM MD_LIST_FLIGHTS" + sqlbuild.NamedArgs(args), nil
+			return "SELECT * FROM MD_LIST_FLIGHTS" + sqlbuild.NamedArgs(args) + suffix, nil
 		}},
 		{name: "flight", description: "Reads metadata for one MotherDuck Flight.", requiredFunction: "md_get_flight", attrs: []string{"flight_id"}, requiredAttrs: []string{"flight_id"}, typedRows: flightSummaryRows(), build: func(m rowsModel) (string, error) {
 			if m.FlightID.IsNull() {
@@ -264,7 +256,7 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_GET_FLIGHT(flight_id := " + sqlbuild.StringLiteral(m.FlightID.ValueString()) + "::UUID)", nil
 		}},
-		{name: "flight_versions", description: "Lists versions for one MotherDuck Flight. MotherDuck returns up to 5,000 versions when `limit` is omitted. Set `limit` and `offset` to page through more. Rows in the returned page are sorted newest version first and include the `instance_type` of each version.", requiredFunction: "md_list_flight_versions", attrs: []string{"flight_id", "limit", "offset"}, requiredAttrs: []string{"flight_id"}, typedRows: []typedRowAttribute{
+		{name: "flight_versions", description: "Lists versions for one MotherDuck Flight. MotherDuck returns up to 5,000 versions when `limit` is omitted. Set `limit` and `offset` to page through more. Rows in the returned page are sorted newest version first and include the `instance_type` of each version.", requiredFunction: "md_list_flight_versions", pagingMax: maxUInteger, attrs: []string{"flight_id", "limit", "offset"}, requiredAttrs: []string{"flight_id"}, typedRows: []typedRowAttribute{
 			{name: "version_id", description: "Flight version ID."},
 			{name: "flight_id", description: "Flight ID."},
 			{name: "flight_version", description: "Flight version number."},
@@ -279,15 +271,10 @@ func rowSpecs() []rowSpec {
 				return "", fmt.Errorf("flight_id is required")
 			}
 			args := map[string]string{"flight_id": sqlbuild.StringLiteral(m.FlightID.ValueString()) + "::UUID"}
-			if !m.Limit.IsNull() {
-				args[`"LIMIT"`] = fmt.Sprintf("%d", m.Limit.ValueInt64())
-			}
-			if !m.Offset.IsNull() {
-				args[`"OFFSET"`] = fmt.Sprintf("%d", m.Offset.ValueInt64())
-			}
-			return "SELECT * FROM MD_LIST_FLIGHT_VERSIONS" + sqlbuild.NamedArgs(args), nil
+			suffix := nativePaging(args, `"LIMIT"`, `"OFFSET"`, m)
+			return "SELECT * FROM MD_LIST_FLIGHT_VERSIONS" + sqlbuild.NamedArgs(args) + suffix, nil
 		}},
-		{name: "flight_runs", description: "Lists runs for one MotherDuck Flight. MotherDuck returns the 50 newest runs when `limit` is omitted, so set `limit` and `offset` to read more. Rows in the returned page are sorted newest run first.", requiredFunction: "md_list_flight_runs", attrs: []string{"flight_id", "limit", "offset"}, requiredAttrs: []string{"flight_id"}, typedRows: []typedRowAttribute{
+		{name: "flight_runs", description: "Lists runs for one MotherDuck Flight. MotherDuck returns the 50 newest runs when `limit` is omitted, so set `limit` and `offset` to read more. MotherDuck reads the newest `limit` plus `offset` runs, so that sum must not exceed 4294967295, counting an unset `limit` as 50. Rows in the returned page are sorted newest run first.", requiredFunction: "md_list_flight_runs", pagingMax: maxUInteger, validate: validateFlightRunsWindow, attrs: []string{"flight_id", "limit", "offset"}, requiredAttrs: []string{"flight_id"}, typedRows: []typedRowAttribute{
 			{name: "run_id", description: "Flight run ID."},
 			{name: "flight_id", description: "Flight ID."},
 			{name: "flight_name", description: "Flight name."},
@@ -307,20 +294,20 @@ func rowSpecs() []rowSpec {
 				return "", fmt.Errorf("flight_id is required")
 			}
 			args := map[string]string{"flight_id": sqlbuild.StringLiteral(m.FlightID.ValueString()) + "::UUID"}
-			if !m.Limit.IsNull() {
-				args[`"LIMIT"`] = fmt.Sprintf("%d", m.Limit.ValueInt64())
+			// MotherDuck returns short pages for a nonzero offset, so read the
+			// newest limit plus offset runs and apply the offset in SQL.
+			suffix, err := windowedPaging(args, `"LIMIT"`, flightRunsDefaultLimit, maxUInteger, "run_number DESC", m)
+			if err != nil {
+				return "", err
 			}
-			if !m.Offset.IsNull() {
-				args[`"OFFSET"`] = fmt.Sprintf("%d", m.Offset.ValueInt64())
-			}
-			return "SELECT * FROM MD_LIST_FLIGHT_RUNS" + sqlbuild.NamedArgs(args), nil
+			return "SELECT * FROM MD_LIST_FLIGHT_RUNS" + sqlbuild.NamedArgs(args) + suffix, nil
 		}},
-		{name: "flight_logs", description: "Reads line-oriented logs for one MotherDuck Flight run, in ascending line order. Without `limit`, MotherDuck returns only the most recent 1,000 lines. Set `limit` to read a window of lines from the start of the log, add `offset` to skip lines, and set `order = \"desc\"` to count the window from the end of the log instead. MotherDuck applies the window on the server, so large logs are not transferred in full. An `offset` without `limit` skips lines within the most recent 1,000.", requiredFunction: "md_get_flight_logs", attrs: []string{"flight_id", "run_number", "limit", "offset", "order"}, requiredAttrs: []string{"flight_id", "run_number"}, typedRows: []typedRowAttribute{
+		{name: "flight_logs", description: "Reads line-oriented logs for one MotherDuck Flight run, in ascending line order. Without `limit`, MotherDuck returns only the most recent 1,000 lines. Set `limit` to read a window of lines from the start of the log, add `offset` to skip lines, and set `order = \"desc\"` to count the window from the end of the log instead. MotherDuck applies the window on the server, so large logs are not transferred in full. An `offset` without `limit` skips lines within the most recent 1,000.", requiredFunction: "md_get_flight_logs", pagingMax: maxUInteger, attrs: []string{"flight_id", "run_number", "limit", "offset", "order"}, requiredAttrs: []string{"flight_id", "run_number"}, typedRows: []typedRowAttribute{
 			{name: "line_number", description: "Absolute zero-based position of the line in the Flight run log."},
 			{name: "reported_at", description: "Timestamp reported for the Flight log line."},
 			{name: "line", description: "Flight stdout or stderr line.", sensitive: true},
 		}, build: flightLogsQuery},
-		{name: "guides", description: "Lists MotherDuck Guides visible to the current account, optionally filtered by topic or referenced object. Rows in the returned page are sorted by Guide ID.", requiredFunction: "md_list_guides", postProcess: sortRowsByKeys(rowSortKey{field: "id"}), attrs: []string{"topic", "reference_type", "reference_url", "reference_schema", "reference_table", "reference_column", "reference_view", "reference_macro", "reference_uuid", "limit", "offset"}, typedRows: guideSummaryRows(), build: func(m rowsModel) (string, error) {
+		{name: "guides", description: "Lists MotherDuck Guides visible to the current account, optionally filtered by topic or referenced object. Rows in the returned page are sorted by Guide ID.", requiredFunction: "md_list_guides", pagingMax: maxUInteger, postProcess: sortRowsByKeys(rowSortKey{field: "id"}), attrs: []string{"topic", "reference_type", "reference_url", "reference_schema", "reference_table", "reference_column", "reference_view", "reference_macro", "reference_uuid", "limit", "offset"}, typedRows: guideSummaryRows(), build: func(m rowsModel) (string, error) {
 			args := map[string]string{}
 			if !m.Topic.IsNull() {
 				args["topic"] = sqlbuild.StringLiteral(m.Topic.ValueString())
@@ -332,13 +319,8 @@ func rowSpecs() []rowSpec {
 			if hasReference {
 				args["reference"] = reference
 			}
-			if !m.Limit.IsNull() {
-				args[`"limit"`] = fmt.Sprintf("%d", m.Limit.ValueInt64())
-			}
-			if !m.Offset.IsNull() {
-				args[`"offset"`] = fmt.Sprintf("%d", m.Offset.ValueInt64())
-			}
-			return "SELECT * FROM MD_LIST_GUIDES" + sqlbuild.NamedArgs(args), nil
+			suffix := nativePaging(args, `"limit"`, `"offset"`, m)
+			return "SELECT * FROM MD_LIST_GUIDES" + sqlbuild.NamedArgs(args) + suffix, nil
 		}},
 		{name: "guide", description: "Reads one MotherDuck Guide, including its content and references. Reads the current version unless `version` is set.", requiredFunction: "md_get_guide", attrs: []string{"guide_id", "version"}, requiredAttrs: []string{"guide_id"}, typedRows: append(guideSummaryRows(),
 			typedRowAttribute{name: "version", description: "Guide version returned in this row."},
@@ -357,7 +339,7 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_GET_GUIDE" + sqlbuild.NamedArgs(args), nil
 		}},
-		{name: "guide_versions", description: "Lists version history for one MotherDuck Guide without returning content. Rows in the returned page are sorted newest version first.", requiredFunction: "md_list_guide_versions", attrs: []string{"guide_id", "limit", "offset"}, requiredAttrs: []string{"guide_id"}, typedRows: []typedRowAttribute{
+		{name: "guide_versions", description: "Lists version history for one MotherDuck Guide without returning content. Rows in the returned page are sorted newest version first.", requiredFunction: "md_list_guide_versions", pagingMax: maxUInteger, attrs: []string{"guide_id", "limit", "offset"}, requiredAttrs: []string{"guide_id"}, typedRows: []typedRowAttribute{
 			{name: "version", description: "Guide version number."},
 			{name: "change_comment", description: "Version change comment."},
 			{name: "external_id", description: "External ID recorded for the version."},
@@ -367,13 +349,8 @@ func rowSpecs() []rowSpec {
 				return "", fmt.Errorf("guide_id is required")
 			}
 			args := map[string]string{"id": sqlbuild.StringLiteral(m.GuideID.ValueString()) + "::UUID"}
-			if !m.Limit.IsNull() {
-				args[`"limit"`] = fmt.Sprintf("%d", m.Limit.ValueInt64())
-			}
-			if !m.Offset.IsNull() {
-				args[`"offset"`] = fmt.Sprintf("%d", m.Offset.ValueInt64())
-			}
-			return "SELECT * FROM MD_LIST_GUIDE_VERSIONS" + sqlbuild.NamedArgs(args), nil
+			suffix := nativePaging(args, `"limit"`, `"offset"`, m)
+			return "SELECT * FROM MD_LIST_GUIDE_VERSIONS" + sqlbuild.NamedArgs(args) + suffix, nil
 		}},
 		// Role-scoped Guide access is not in production. Its planned design adds
 		// role_names to MD_SET_GUIDE_ACCESS and access_role_names to Guide rows.
@@ -422,8 +399,15 @@ func rowSpecs() []rowSpec {
 	}
 }
 
-// diveSummaryRows mirrors the columns MD_LIST_DIVES and MD_GET_DIVE share.
+// diveSummaryRows mirrors the summary columns of MD_LIST_DIVES.
 func diveSummaryRows() []typedRowAttribute {
+	return diveRowsWithRequiredResourcesFrom("")
+}
+
+// diveRowsWithRequiredResourcesFrom returns the Dive summary rows with
+// required_resources read from the source column. MD_GET_DIVE reports the
+// resources of the current version only as version_required_resources.
+func diveRowsWithRequiredResourcesFrom(source string) []typedRowAttribute {
 	return []typedRowAttribute{
 		{name: "id", description: "Dive ID."},
 		{name: "title", description: "Dive title."},
@@ -437,7 +421,7 @@ func diveSummaryRows() []typedRowAttribute {
 		{name: "status_applies_to_version", description: "Dive version the status applies to."},
 		{name: "created_at", description: "Dive creation timestamp."},
 		{name: "updated_at", description: "Dive update timestamp."},
-		{name: "required_resources", description: "JSON list of resources the current Dive version requires. Sensitive because entries can include share URLs.", sensitive: true},
+		{name: "required_resources", source: source, description: "JSON list of resources the current Dive version requires. Sensitive because entries can include share URLs.", sensitive: true},
 	}
 }
 
@@ -537,22 +521,118 @@ func newestVersionFirst() []rowSortKey {
 // and a natively limited listing holds exactly the first rows of the full one.
 const objectKeyOrder = "CASE WHEN type = 'folder' THEN name || '/' ELSE name END"
 
-// nativeListLimit passes the paging window to listing functions whose `limit`
+// nativeListLimit passes the paging window to MD_LIST_FILES, whose `limit`
 // argument stops the object-store listing early. The server cannot skip rows,
 // so the native limit covers the offset too and SQL paging trims the window.
-// Without a limit the whole listing is needed and nothing is pushed down.
+//
+// The window holds one entry more than the page needs. The server drops the
+// key named exactly like the listed prefix and ends the listing at the first
+// object-store page that yields no rows, so a first page of only that key
+// would end the listing early. Keys are unique and that key sorts first, so it
+// is the only one dropped and later pages always yield rows. A window above
+// the UINTEGER maximum is not pushed down, because the server narrows it to
+// UINTEGER. Without a limit the whole listing is needed and nothing is pushed.
 func nativeListLimit(model rowsModel) string {
-	if model.Limit.IsNull() || model.Limit.IsUnknown() {
+	if !pagingSet(model.Limit) {
 		return ""
 	}
-	window := model.Limit.ValueInt64()
-	if !model.Offset.IsNull() && !model.Offset.IsUnknown() {
-		if model.Offset.ValueInt64() > math.MaxInt64-window {
-			return ""
-		}
-		window += model.Offset.ValueInt64()
+	limit, offset := model.Limit.ValueInt64(), int64(0)
+	if pagingSet(model.Offset) {
+		offset = model.Offset.ValueInt64()
 	}
-	return fmt.Sprintf(`, "limit" := %d`, window)
+	if limit > maxUInteger-1 || offset > maxUInteger-1-limit {
+		return ""
+	}
+	return fmt.Sprintf(`, "limit" := %d`, limit+offset+1)
+}
+
+func pagingSet(value types.Int64) bool {
+	return !value.IsNull() && !value.IsUnknown()
+}
+
+// nativePaging passes limit and offset to a MotherDuck function that applies
+// both on the server, and returns the SQL suffix the query needs. These
+// functions read a zero limit as no limit or reject it, so a zero limit reads
+// one row and SQL returns none.
+func nativePaging(args map[string]string, limitArg, offsetArg string, model rowsModel) string {
+	if pagingSet(model.Limit) && model.Limit.ValueInt64() == 0 {
+		args[limitArg] = "1"
+		return " LIMIT 0"
+	}
+	if pagingSet(model.Limit) {
+		args[limitArg] = fmt.Sprintf("%d", model.Limit.ValueInt64())
+	}
+	if pagingSet(model.Offset) {
+		args[offsetArg] = fmt.Sprintf("%d", model.Offset.ValueInt64())
+	}
+	return ""
+}
+
+// flightRunsDefaultLimit is the number of runs MD_LIST_FLIGHT_RUNS returns
+// without a limit.
+const flightRunsDefaultLimit = 50
+
+// pagingWindow returns limit plus offset, the number of leading rows a page
+// needs, counting an unset limit as defaultLimit. It reports false when no
+// nonzero offset is set, because the server can then apply limit itself.
+func pagingWindow(model rowsModel, defaultLimit int64) (int64, bool) {
+	if !pagingSet(model.Offset) || model.Offset.ValueInt64() == 0 {
+		return 0, false
+	}
+	limit := defaultLimit
+	if pagingSet(model.Limit) {
+		limit = model.Limit.ValueInt64()
+	}
+	return limit + model.Offset.ValueInt64(), true
+}
+
+// windowedPaging pages a MotherDuck function whose own offset is unreliable.
+// It reads the leading limit plus offset rows natively and applies the offset
+// in SQL over orderBy, which must match the server order. defaultLimit is the
+// number of rows the function returns without a limit, or zero when it then
+// returns every row. A window above maxWindow is not pushed down when the
+// function can return every row, and is an error otherwise. A zero limit is
+// never passed, because these functions read it as no limit or reject it.
+func windowedPaging(args map[string]string, limitArg string, defaultLimit, maxWindow int64, orderBy string, model rowsModel) (string, error) {
+	if pagingSet(model.Limit) && model.Limit.ValueInt64() == 0 {
+		args[limitArg] = "1"
+		return " LIMIT 0", nil
+	}
+	window, offset := pagingWindow(model, defaultLimit)
+	if !offset {
+		if pagingSet(model.Limit) {
+			args[limitArg] = fmt.Sprintf("%d", model.Limit.ValueInt64())
+		}
+		return "", nil
+	}
+	if err := checkPagingWindow(model, defaultLimit, maxWindow); err != nil {
+		return "", err
+	}
+	if window <= maxWindow && (pagingSet(model.Limit) || defaultLimit > 0) {
+		args[limitArg] = fmt.Sprintf("%d", window)
+	}
+	suffix := " ORDER BY " + orderBy
+	if pagingSet(model.Limit) {
+		suffix += fmt.Sprintf(" LIMIT %d", model.Limit.ValueInt64())
+	}
+	return suffix + fmt.Sprintf(" OFFSET %d", model.Offset.ValueInt64()), nil
+}
+
+// checkPagingWindow rejects a window the server cannot read when the function
+// has a default limit, so it cannot fall back to returning every row.
+func checkPagingWindow(model rowsModel, defaultLimit, maxWindow int64) error {
+	window, offset := pagingWindow(model, defaultLimit)
+	if !offset || defaultLimit == 0 || window <= maxWindow {
+		return nil
+	}
+	if pagingSet(model.Limit) {
+		return fmt.Errorf("limit plus offset is %d, which exceeds %d, the largest number of rows MotherDuck can read for one page", window, maxWindow)
+	}
+	return fmt.Errorf("offset plus the default limit of %d is %d, which exceeds %d, the largest number of rows MotherDuck can read for one page", defaultLimit, window, maxWindow)
+}
+
+func validateFlightRunsWindow(model rowsModel) error {
+	return checkPagingWindow(model, flightRunsDefaultLimit, maxUInteger)
 }
 
 // appendOrderedRowLimitOffset applies SQL paging to a table function that has

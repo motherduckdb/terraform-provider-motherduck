@@ -48,8 +48,8 @@ func (r *snapshotResource) Schema(ctx context.Context, req resource.SchemaReques
 			},
 			"database": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Database to snapshot.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Database to snapshot. Changing only the letter case updates state in place.",
+				PlanModifiers:       databaseIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"name": schema.StringAttribute{
@@ -92,7 +92,7 @@ func (r *snapshotResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	if err := client.AttachDatabase(ctx, plan.Database.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Unable to attach MotherDuck database", err.Error())
+		resp.Diagnostics.AddError("Unable to attach MotherDuck database", attachErrorDetail(err, plan.Database.ValueString()))
 		return
 	}
 	query := "CREATE SNAPSHOT " + sqlbuild.QuoteIdentifier(plan.Name.ValueString()) + " OF " + sqlbuild.QuoteIdentifier(plan.Database.ValueString())
@@ -365,7 +365,7 @@ func (r *snapshotResource) readSnapshotByID(ctx context.Context, client provider
 			}
 			databaseGone = true
 		}
-		return client.QueryRow(ctx, `SELECT snapshot_name, created_ts::VARCHAR FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE database_name = ? AND snapshot_id::VARCHAR = ?`, model.Database.ValueString(), model.ID.ValueString()).Scan(&name, &created)
+		return client.QueryRow(ctx, `SELECT snapshot_name, created_ts::VARCHAR FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE lower(database_name) = lower(?) AND snapshot_id::VARCHAR = ?`, model.Database.ValueString(), model.ID.ValueString()).Scan(&name, &created)
 	})
 	if err != nil && isNotFoundFor(err, model.Database.ValueString(), model.ID.ValueString()) {
 		return false, true, databaseGone
@@ -399,7 +399,9 @@ func (r *snapshotResource) readSnapshotByName(ctx context.Context, client provid
 			}
 			databaseGone = true
 		}
-		return client.QueryRow(ctx, `SELECT snapshot_id::VARCHAR, created_ts::VARCHAR, count(*) OVER () FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE database_name = ? AND snapshot_name = ?`, model.Database.ValueString(), model.Name.ValueString()).Scan(&id, &created, &matches)
+		// CREATE SNAPSHOT resolves the database name case-insensitively, but the
+		// catalog reports the spelling the database was created with.
+		return client.QueryRow(ctx, `SELECT snapshot_id::VARCHAR, created_ts::VARCHAR, count(*) OVER () FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE lower(database_name) = lower(?) AND snapshot_name = ?`, model.Database.ValueString(), model.Name.ValueString()).Scan(&id, &created, &matches)
 	})
 	if err != nil && isNotFoundFor(err, model.Database.ValueString(), model.Name.ValueString()) {
 		return false, databaseGone

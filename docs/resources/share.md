@@ -23,9 +23,9 @@ Consumers attach using the share's URL. An already connected consumer can run
 `REFRESH DATABASES` to read the published update. Automatic publication also has
 replication delay. See [updating shares](https://motherduck.com/docs/key-tasks/sharing-data/updating-shares/).
 
-Name, source database, access mode, visibility, and update mode are replacement-only. `include_pattern` updates in place with `ALTER SHARE`.
+Name, source database, access mode, visibility, and update mode are replacement-only. MotherDuck resolves share and database names case-insensitively, so a change in the letter case of `name` or `source_database` only updates state and keeps the share URL. `include_pattern` updates in place with `ALTER SHARE`.
 
-`include_pattern` creates a filtered share that exposes only the matching schemas and tables. Filtered shares are available on the Business plan and during an active free trial. Only standard MotherDuck databases can be filtered. DuckLake and Iceberg consumers read data files directly, so MotherDuck rejects include patterns on shares of those databases.
+`include_pattern` creates a filtered share that exposes only the matching schemas and tables. Filtered shares are available on the Business plan and during an active free trial. Only standard MotherDuck databases can be filtered. DuckLake and Iceberg consumers read data files directly, so MotherDuck rejects include patterns on shares of those databases. MotherDuck trims each pattern and drops blank ones, so Terraform rejects blank entries and entries with leading or trailing whitespace.
 
 Access, visibility, and update mode are optional and computed. If omitted, Terraform discovers and records live values during refresh and import. Explicit values are enforced. Drift on them plans replacement. Removing an explicit value adopts the live value instead of resetting it, and
 omitted options never force replacement when another attribute changes.
@@ -94,8 +94,8 @@ terraform import motherduck_share.analytics 'analytics_share'
 
 ### Required
 
-- `name` (String) Share name.
-- `source_database` (String) Database to share.
+- `name` (String) Share name of at most 254 characters without a forward slash. MotherDuck compares share names case-insensitively, so changing only the letter case updates state in place instead of replacing the share.
+- `source_database` (String) Database to share. Terraform keeps the configured spelling when MotherDuck reports the same database name in a different letter case, and changing only the letter case updates state in place.
 
 ### Optional
 

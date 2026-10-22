@@ -30,7 +30,9 @@ compute must be isolated.
 - Use `transient = true` for a transient database, not a database type named
   `transient`.
 - Snapshot retention updates in place. Name and create-only storage options
-  require replacement.
+  require replacement. MotherDuck compares database names case-insensitively,
+  so a change in the letter case of `name` only updates state and does not
+  drop the database.
 - Destroy drops the database and its contents, including data loaded outside
   Terraform. Add `lifecycle { prevent_destroy = true }` for an important
   database while its resource block remains managed.
@@ -125,7 +127,7 @@ resource "motherduck_database" "lakehouse" {
 
 ### Required
 
-- `name` (String) Database name. Must be a single MotherDuck SQL identifier.
+- `name` (String) Database name. Must be a single MotherDuck SQL identifier of at most 254 characters without a forward slash. MotherDuck compares database names case-insensitively, so changing only the letter case updates state in place instead of replacing the database.
 
 ### Optional
 

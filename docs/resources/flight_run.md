@@ -20,6 +20,68 @@ for recurring execution.
 Refresh reads the run's status, timing, and `exit_code`. `started_at`,
 `ended_at`, and `exit_code` stay null until the run starts or finishes.
 
+## Waiting for the run
+
+When `wait_for_status` is set, the provider polls the run until it succeeds.
+A run that reaches a failure status fails the apply. If `timeout_seconds`
+passes, or the apply is interrupted, before the run succeeds, the provider
+stops waiting with a warning and the apply succeeds:
+
+- The run keeps running in MotherDuck and stays in state, so the next apply
+  does not start a second run.
+- `status` holds the last value the provider observed, such as `RUNNING`. The
+  next refresh reads the current value. A successful run reports `SUCCEEDED`.
+- Resources that depend on the run are not held back. Terraform creates or
+  updates them in the same apply, before the run finishes or even if it
+  later fails.
+
+To check the run after a warning, refresh state with
+`terraform apply -refresh-only` and read `status` with `terraform state show`.
+
+To keep a dependent resource from changing until the run succeeds, add a
+`lifecycle` `precondition` to the dependent resource that checks the run's
+`status`. When the wait stops early, the precondition fails the dependent
+resource instead of applying it. Until the run succeeds, plans that include the
+dependent resource fail with the precondition error. Once it succeeds, the next
+apply refreshes `status` and applies the dependent resource.
+
+```terraform
+resource "motherduck_flight" "load_orders" {
+  name = "load_orders"
+
+  source_code = <<-PY
+    def main():
+        print("loading orders")
+
+    if __name__ == "__main__":
+        main()
+  PY
+}
+
+resource "motherduck_flight_run" "load_orders" {
+  flight_id = motherduck_flight.load_orders.id
+
+  wait_for_status = "succeeded"
+  timeout_seconds = 1800
+}
+
+# If the wait times out or is interrupted, the apply still succeeds. The
+# precondition keeps this view from being created until the run succeeds.
+resource "motherduck_view" "recent_orders" {
+  database = "analytics"
+  schema   = "main"
+  name     = "recent_orders"
+  query    = "SELECT * FROM analytics.main.orders WHERE ordered_at > now() - INTERVAL 7 DAY"
+
+  lifecycle {
+    precondition {
+      condition     = motherduck_flight_run.load_orders.status == "SUCCEEDED"
+      error_message = "Flight run ${motherduck_flight_run.load_orders.run_number} has status ${motherduck_flight_run.load_orders.status}. Wait for it to succeed, then apply again."
+    }
+  }
+}
+```
+
 ## Access to the Flight
 
 Run Terraform as the Flight owner, or as a principal that can see the Flight.
@@ -79,7 +141,7 @@ resource "motherduck_flight_run" "heartbeat" {
 - `config` (Map of String) Optional string configuration for this on-demand Flight run. Keys must already exist on the Flight definition and must be valid Flight config names.
 - `poll_interval_seconds` (Number) Polling interval in seconds when `wait_for_status` is set. Defaults to 10 seconds.
 - `timeout_seconds` (Number) Maximum number of seconds to wait when `wait_for_status` is set. Defaults to 600 seconds.
-- `wait_for_status` (String) Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`. If the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`.
+- `wait_for_status` (String) Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`. If the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`. If `timeout_seconds` passes or the apply is interrupted first, the provider stops waiting with a warning and the apply succeeds. The run keeps running, `status` holds the last observed value, and the next apply does not start another run. Resources that depend on the run are not held back in that case. To gate them on success, add a `lifecycle` `precondition` to each dependent resource that checks `status == "SUCCEEDED"`.
 
 ### Read-Only
 
@@ -93,7 +155,7 @@ resource "motherduck_flight_run" "heartbeat" {
 - `run_number` (Number) MotherDuck run number assigned to this Flight run.
 - `scheduled_at` (String) Timestamp MotherDuck scheduled the run for. On-demand runs also report one, set when the run was queued.
 - `started_at` (String) Timestamp when the run started executing, or null while it is queued.
-- `status` (String) Latest Flight run status observed by the provider.
+- `status` (String) Latest Flight run status observed by the provider, as MotherDuck reports it, for example `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, or `CANCELLED`. A successful run reports `SUCCEEDED`.
 
 ## Import
 

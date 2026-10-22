@@ -47,7 +47,11 @@ therefore fails under `create_before_destroy`, because the new token is created
 while the old one still exists. Give each token generation a distinct name,
 for example with a rotation suffix.
 
-Token name, type, and TTL changes require replacement. A username change also
+Token name, type, and TTL changes require replacement. A new token is
+`read_write` when `token_type` is omitted. Once the token exists, an omitted
+`token_type` keeps the type MotherDuck reports, so removing it from the
+configuration or importing a `read_scaling` token without it plans no change.
+A username change also
 requires replacement unless only its letter case changes, because MotherDuck
 compares usernames case-insensitively. MotherDuck
 cannot edit a token description, so changing a configured `description` also
@@ -74,9 +78,11 @@ terraform import motherduck_access_token.app 'analytics_app/<token_id>'
 ```
 
 The token ID must be the UUID MotherDuck reports, for example from
-`motherduck_user_tokens`. A token name is not accepted.
+`motherduck_user_tokens`. A token name is not accepted. The UUID may be in upper
+or lower case, and Terraform records it in lower case.
 
-After import, run `terraform plan` with the token's name and type. Keep `ttl`
+After import, run `terraform plan` with the token's name, and either its type
+or no `token_type`. Keep `ttl`
 omitted to adopt an existing token without requesting replacement. Import reads
 the description back, so either omit `description` or set it to the value
 MotherDuck reports. Terraform
@@ -93,7 +99,7 @@ cannot recover the original lifetime or token secret.
 ### Optional
 
 - `description` (String) Optional free-form notes on the token's purpose. Must be non-blank and 1-1000 characters. MotherDuck cannot edit a description, so changing a configured value replaces the token. When omitted, Terraform keeps whatever description MotherDuck reports, including one set outside Terraform.
-- `token_type` (String) `read_write` or `read_scaling`. Defaults to `read_write`. Changing this value replaces the token.
+- `token_type` (String) `read_write` or `read_scaling`. A new token is `read_write` when this is omitted. Changing a configured value replaces the token. When omitted, Terraform keeps the type MotherDuck reports, so removing it from the configuration or importing a `read_scaling` token without it plans no change.
 - `ttl` (Number) Optional token lifetime in seconds. Must be between 300 and 31536000. Changing this value replaces the token.
 
 ### Read-Only

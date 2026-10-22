@@ -57,6 +57,21 @@ type diveVersionContractSQL struct {
 	noContentUpdate bool
 	// failContentWrites fails that many MD_UPDATE_DIVE_CONTENT calls.
 	failContentWrites int
+	// canonicalMountURLs stores database mount URLs under the lowercase
+	// database name, as MotherDuck renders them.
+	canonicalMountURLs bool
+}
+
+func (c *diveVersionContractSQL) storeMounts(query string) {
+	c.mounts = diveContractMounts(query)
+	if !c.canonicalMountURLs {
+		return
+	}
+	for i := range c.mounts {
+		if c.mounts[i].ResourceType == "database" {
+			c.mounts[i].URL = strings.ToLower(c.mounts[i].URL)
+		}
+	}
 }
 
 func (c *diveVersionContractSQL) Exists(_ context.Context, query string, args ...any) (bool, error) {
@@ -122,7 +137,7 @@ func (c *diveVersionContractSQL) QueryRow(_ context.Context, query string, args 
 		c.version = 1
 		c.apiVersion = diveContractAPIVersion(query, 1)
 		c.versionDescription = nil
-		c.mounts = diveContractMounts(query)
+		c.storeMounts(query)
 		return flightDependencyRow{values: []any{contractDiveID}}
 	case strings.Contains(query, "FROM MD_GET_DIVE("):
 		if !c.exists {
@@ -162,7 +177,7 @@ func (c *diveVersionContractSQL) QueryRowsJSON(_ context.Context, query string, 
 		if description, ok := diveContractString(diveContractDescriptionArg, query); ok && description != "" {
 			c.versionDescription = &description
 		}
-		c.mounts = diveContractMounts(query)
+		c.storeMounts(query)
 	case strings.Contains(query, "FROM MD_UPDATE_DIVE_METADATA("):
 		if title, ok := diveContractString(diveContractTitleArg, query); ok {
 			c.title = title

@@ -28,8 +28,8 @@ data "motherduck_flights" "recent" {
 
 ### Optional
 
-- `limit` (Number) Maximum number of rows to return when the underlying MotherDuck catalog function supports limits.
-- `offset` (Number) Number of rows to skip when the underlying MotherDuck catalog function supports offsets.
+- `limit` (Number) Maximum number of rows to return. Must be between 0 and 4294967295. A limit of 0 returns no rows.
+- `offset` (Number) Number of rows to skip. Must be between 0 and 4294967295.
 - `owner_only` (Boolean) Whether to restrict Flight listings to Flights owned by the current user. Ignored for callers who can only view their own Flights.
 
 ### Read-Only

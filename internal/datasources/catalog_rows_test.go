@@ -177,22 +177,26 @@ func TestFlightVersionsSortNewestFirst(t *testing.T) {
 	}
 }
 
-func TestDiveVersionsPassesPagingNatively(t *testing.T) {
+func TestDiveVersionsPassesPagingWindowNatively(t *testing.T) {
 	spec := findSpec(t, "dive_versions")
 	id := "123e4567-e89b-42d3-a456-426614174000"
 	query, err := spec.build(rowsModel{DiveID: types.StringValue(id), Limit: types.Int64Null(), Offset: types.Int64Null()})
 	if err != nil || query != "SELECT * FROM MD_LIST_DIVE_VERSIONS(id := '"+id+"'::UUID)" {
 		t.Fatalf("unpaged dive_versions = %q, %v", query, err)
 	}
+	query, err = spec.build(rowsModel{DiveID: types.StringValue(id), Limit: types.Int64Value(5), Offset: types.Int64Null()})
+	if err != nil || query != `SELECT * FROM MD_LIST_DIVE_VERSIONS("limit" := 5, id := '`+id+`'::UUID)` {
+		t.Fatalf("limited dive_versions = %q, %v", query, err)
+	}
 	query, err = spec.build(rowsModel{DiveID: types.StringValue(id), Limit: types.Int64Value(5), Offset: types.Int64Value(10)})
-	if err != nil || query != `SELECT * FROM MD_LIST_DIVE_VERSIONS("limit" := 5, "offset" := 10, id := '`+id+`'::UUID)` {
+	if err != nil || query != `SELECT * FROM MD_LIST_DIVE_VERSIONS("limit" := 15, id := '`+id+`'::UUID) ORDER BY version DESC LIMIT 5 OFFSET 10` {
 		t.Fatalf("paged dive_versions = %q, %v", query, err)
 	}
 }
 
-// TestDiveVersionsPagingFitsUInteger rejects a limit or offset that does not
-// fit the UINTEGER parameter of MD_LIST_DIVE_VERSIONS at plan time.
-func TestDiveVersionsPagingFitsUInteger(t *testing.T) {
+// TestDiveVersionsPagingFitsInteger rejects a limit or offset that does not
+// fit the INTEGER parameter of MD_LIST_DIVE_VERSIONS at plan time.
+func TestDiveVersionsPagingFitsInteger(t *testing.T) {
 	var resp datasource.SchemaResponse
 	(&rowsDataSource{spec: findSpec(t, "dive_versions")}).Schema(t.Context(), datasource.SchemaRequest{}, &resp)
 	for _, name := range []string{"limit", "offset"} {
@@ -200,7 +204,7 @@ func TestDiveVersionsPagingFitsUInteger(t *testing.T) {
 		if !ok || len(attr.Validators) != 1 {
 			t.Fatalf("%s = %#v, want one Int64 validator", name, resp.Schema.Attributes[name])
 		}
-		for value, wantErr := range map[int64]bool{0: false, 4294967295: false, 4294967296: true, -1: true} {
+		for value, wantErr := range map[int64]bool{0: false, 2147483647: false, 2147483648: true, 4294967295: true, -1: true} {
 			var vresp validator.Int64Response
 			attr.Validators[0].ValidateInt64(t.Context(), validator.Int64Request{Path: path.Root(name), ConfigValue: types.Int64Value(value)}, &vresp)
 			if vresp.Diagnostics.HasError() != wantErr {
@@ -266,7 +270,7 @@ func TestStorageInfoQueries(t *testing.T) {
 func TestStorageInfoExplainsAdminOnlyErrors(t *testing.T) {
 	ds := &rowsDataSource{spec: findSpec(t, "storage_info")}
 	var diags diag.Diagnostics
-	_, ok := ds.queryRows(context.Background(), fakeRowsClient{err: errors.New("Invalid Error: MDExternalException: User not authorized. This is an admin only function.")}, "SELECT 1", &diags)
+	_, ok := ds.queryRows(context.Background(), fakeRowsClient{err: errors.New("Invalid Error: MDExternalException: User not authorized. This is an admin only function.")}, "SELECT 1", types.StringNull(), &diags)
 	if ok || !diags.HasError() {
 		t.Fatal("admin-only failure must fail the read")
 	}
@@ -276,8 +280,8 @@ func TestStorageInfoExplainsAdminOnlyErrors(t *testing.T) {
 
 	// Other data sources keep the generic read error for the same message.
 	var generic diag.Diagnostics
-	(&rowsDataSource{spec: findSpec(t, "databases")}).queryRows(context.Background(), fakeRowsClient{err: errors.New("admin only function")}, "SELECT 1", &generic)
-	if !generic.HasError() || generic[0].Summary() != "Unable to read MotherDuck rows data source" {
+	(&rowsDataSource{spec: findSpec(t, "databases")}).queryRows(context.Background(), fakeRowsClient{err: errors.New("admin only function")}, "SELECT 1", types.StringNull(), &generic)
+	if !generic.HasError() || generic[0].Summary() != "Unable to read motherduck_databases" {
 		t.Fatalf("unexpected generic diagnostic: %v", generic)
 	}
 }

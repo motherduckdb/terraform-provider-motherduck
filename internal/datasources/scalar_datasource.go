@@ -117,7 +117,7 @@ func (d *scalarDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return readErr
 	})
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to read MotherDuck scalar data source", err.Error())
+		resp.Diagnostics.AddError("Unable to read motherduck_"+d.name, err.Error())
 		return
 	}
 	if d.details == nil {

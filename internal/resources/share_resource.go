@@ -44,19 +44,19 @@ func (r *shareResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
-				PlanModifiers:       stringUseStateForUnknown(),
+				PlanModifiers:       identifierID("name"),
 				MarkdownDescription: "Share resource ID. This is the share name.",
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Share name.",
-				PlanModifiers:       stringRequiresReplace(),
-				Validators:          sqlIdentifierValidators(),
+				MarkdownDescription: "Share name of at most 254 characters without a forward slash. MotherDuck compares share names case-insensitively, so changing only the letter case updates state in place instead of replacing the share.",
+				PlanModifiers:       identifierRequiresReplace(),
+				Validators:          catalogNameValidators("share"),
 			},
 			"source_database": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Database to share.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Database to share. Terraform keeps the configured spelling when MotherDuck reports the same database name in a different letter case, and changing only the letter case updates state in place.",
+				PlanModifiers:       databaseIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"access": schema.StringAttribute{
@@ -120,6 +120,16 @@ func validateShareIncludePattern(includePattern types.List, diags *diag.Diagnost
 			diags.AddAttributeError(path.Root("include_pattern"), "Invalid MotherDuck share include pattern", "Include-pattern entries must not be null.")
 			return
 		}
+		// MotherDuck trims each entry and drops blank ones, so such entries
+		// would read back differently from the configuration.
+		if strings.TrimSpace(pattern.ValueString()) == "" {
+			diags.AddAttributeError(path.Root("include_pattern"), "Invalid MotherDuck share include pattern", "Include-pattern entries must not be empty or blank because MotherDuck drops them. Remove the entry. Use an empty list to share no objects.")
+			return
+		}
+		if strings.TrimSpace(pattern.ValueString()) != pattern.ValueString() {
+			diags.AddAttributeError(path.Root("include_pattern"), "Invalid MotherDuck share include pattern", fmt.Sprintf("Include-pattern entry %q must not have leading or trailing whitespace because MotherDuck trims it. Remove the surrounding whitespace.", pattern.ValueString()))
+			return
+		}
 		if hasUnquotedComma(pattern.ValueString()) {
 			diags.AddAttributeError(path.Root("include_pattern"), "Invalid MotherDuck share include pattern", "Include-pattern entries must not contain commas outside double-quoted identifiers because MotherDuck receives the entries as one comma-separated list. Use separate list entries instead.")
 			return
@@ -163,12 +173,12 @@ func (r *shareResource) Create(ctx context.Context, req resource.CreateRequest, 
 		options = append(options, "INCLUDE_PATTERN "+sqlbuild.StringLiteral(pattern))
 	}
 	if err := client.AttachDatabase(ctx, plan.SourceDatabase.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Unable to attach MotherDuck source database", err.Error())
+		resp.Diagnostics.AddError("Unable to attach MotherDuck source database", attachErrorDetail(err, plan.SourceDatabase.ValueString()))
 		return
 	}
 	query := "CREATE SHARE " + sqlbuild.QuoteIdentifier(plan.Name.ValueString()) + " FROM " + sqlbuild.QuoteIdentifier(plan.SourceDatabase.ValueString()) + sqlbuild.Options(options...)
 	if err := client.Exec(ctx, query); err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck share", err.Error())
+		resp.Diagnostics.AddError("Unable to create MotherDuck share", createErrorDetail(err, err.Error(), "share", plan.Name.ValueString()))
 		return
 	}
 	prepareShareCreateState(&plan)
@@ -272,7 +282,12 @@ func (r *shareResource) readShare(ctx context.Context, model *shareModel, diags 
 func applyOwnedShare(ctx context.Context, model *shareModel, share sqlcatalog.OwnedShare, diags *diag.Diagnostics) {
 	model.ID = types.StringValue(model.Name.ValueString())
 	model.URL = nullString(share.URL)
-	model.SourceDatabase = nullString(share.SourceDatabase)
+	// MotherDuck resolves the source database case-insensitively and reports
+	// the spelling the database was created with. Keep the configured
+	// spelling when it names the same database.
+	if model.SourceDatabase.IsNull() || model.SourceDatabase.IsUnknown() || !share.SourceDatabase.Valid || !strings.EqualFold(model.SourceDatabase.ValueString(), share.SourceDatabase.String) {
+		model.SourceDatabase = nullString(share.SourceDatabase)
+	}
 	model.Access = lowerNullString(share.Access)
 	model.Visibility = lowerNullString(share.Visibility)
 	model.UpdateMode = lowerNullString(share.UpdateMode)

@@ -52,13 +52,13 @@ func (r *databaseResource) Schema(ctx context.Context, req resource.SchemaReques
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Database resource ID. This is the database name.",
-				PlanModifiers:       stringUseStateForUnknown(),
+				PlanModifiers:       identifierID("name"),
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Database name. Must be a single MotherDuck SQL identifier.",
-				PlanModifiers:       stringRequiresReplace(),
-				Validators:          sqlIdentifierValidators(),
+				MarkdownDescription: "Database name. Must be a single MotherDuck SQL identifier of at most 254 characters without a forward slash. MotherDuck compares database names case-insensitively, so changing only the letter case updates state in place instead of replacing the database.",
+				PlanModifiers:       databaseIdentifierRequiresReplace(),
+				Validators:          catalogNameValidators("database"),
 			},
 			"transient": schema.BoolAttribute{
 				Optional:            true,
@@ -209,7 +209,7 @@ func (r *databaseResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	if err := client.Exec(ctx, query); err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck database", err.Error())
+		resp.Diagnostics.AddError("Unable to create MotherDuck database", createErrorDetail(err, err.Error(), "database", plan.Name.ValueString()))
 		return
 	}
 	plan.ID = types.StringValue(plan.Name.ValueString())
@@ -365,8 +365,19 @@ func (r *databaseResource) Delete(ctx context.Context, req resource.DeleteReques
 	resetDefaultDatabaseIfCurrent(ctx, client, state.Name.ValueString())
 	query := "DROP DATABASE IF EXISTS " + sqlbuild.QuoteIdentifier(state.Name.ValueString())
 	if err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) }); err != nil {
-		resp.Diagnostics.AddError("Unable to drop MotherDuck database", err.Error())
+		resp.Diagnostics.AddError("Unable to drop MotherDuck database", databaseDropErrorDetail(err))
 	}
+}
+
+// databaseDropErrorDetail explains a drop that failed because shares still
+// point at the database. MotherDuck suggests DROP DATABASE ... CASCADE, which
+// this resource does not issue because it would also drop shares that other
+// configurations or users manage.
+func databaseDropErrorDetail(err error) string {
+	if !strings.Contains(strings.ToLower(err.Error()), "database shares linked to it") {
+		return err.Error()
+	}
+	return err.Error() + "\n\nThis resource does not drop shares. Destroy the shares created from this database first. When a `motherduck_share` in the same configuration creates the share, set its `source_database` to `motherduck_database.<name>.name` so that Terraform destroys the share before the database."
 }
 
 func (r *databaseResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -382,7 +393,10 @@ func (r *databaseResource) readDatabase(ctx context.Context, model *databaseMode
 	var transient stdsql.NullBool
 	var retention stdsql.NullString
 	err := retry.SQL(ctx, func() error {
-		return client.QueryRow(ctx, `SELECT uuid::VARCHAR, created_ts::VARCHAR, transient, historical_snapshot_retention::VARCHAR, type FROM MD_INFORMATION_SCHEMA.DATABASES WHERE name = ?`, model.Name.ValueString()).Scan(&uuid, &createdTS, &transient, &retention, &dbType)
+		// MotherDuck compares database names case-insensitively and reports the
+		// spelling the database was created with. State keeps the configured
+		// spelling.
+		return client.QueryRow(ctx, `SELECT uuid::VARCHAR, created_ts::VARCHAR, transient, historical_snapshot_retention::VARCHAR, type FROM MD_INFORMATION_SCHEMA.DATABASES WHERE lower(name) = lower(?)`, model.Name.ValueString()).Scan(&uuid, &createdTS, &transient, &retention, &dbType)
 	})
 	if errors.Is(err, stdsql.ErrNoRows) {
 		return false

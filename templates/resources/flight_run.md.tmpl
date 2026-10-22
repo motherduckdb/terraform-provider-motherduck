@@ -20,6 +20,33 @@ for recurring execution.
 Refresh reads the run's status, timing, and `exit_code`. `started_at`,
 `ended_at`, and `exit_code` stay null until the run starts or finishes.
 
+## Waiting for the run
+
+When `wait_for_status` is set, the provider polls the run until it succeeds.
+A run that reaches a failure status fails the apply. If `timeout_seconds`
+passes, or the apply is interrupted, before the run succeeds, the provider
+stops waiting with a warning and the apply succeeds:
+
+- The run keeps running in MotherDuck and stays in state, so the next apply
+  does not start a second run.
+- `status` holds the last value the provider observed, such as `RUNNING`. The
+  next refresh reads the current value. A successful run reports `SUCCEEDED`.
+- Resources that depend on the run are not held back. Terraform creates or
+  updates them in the same apply, before the run finishes or even if it
+  later fails.
+
+To check the run after a warning, refresh state with
+`terraform apply -refresh-only` and read `status` with `terraform state show`.
+
+To keep a dependent resource from changing until the run succeeds, add a
+`lifecycle` `precondition` to the dependent resource that checks the run's
+`status`. When the wait stops early, the precondition fails the dependent
+resource instead of applying it. Until the run succeeds, plans that include the
+dependent resource fail with the precondition error. Once it succeeds, the next
+apply refreshes `status` and applies the dependent resource.
+
+{{tffile "examples/resources/motherduck_flight_run/gate_dependents/main.tf"}}
+
 ## Access to the Flight
 
 Run Terraform as the Flight owner, or as a principal that can see the Flight.

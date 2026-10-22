@@ -67,16 +67,19 @@ func (c *databaseIdentitySQL) Exec(ctx context.Context, query string, args ...an
 	return c.contractSQL.Exec(ctx, query, args...)
 }
 
-func (c *databaseIdentitySQL) Exists(ctx context.Context, query string, args ...any) (bool, error) {
+func (c *databaseIdentitySQL) QueryRowsJSON(ctx context.Context, query string, args ...any) (string, error) {
 	if strings.Contains(query, "information_schema.schemata") {
 		if len(args) != 2 || args[0] != "contract_database" || args[1] != "app" {
-			return false, fmt.Errorf("unexpected schema lookup: %v", args)
+			return "", fmt.Errorf("unexpected schema lookup: %v", args)
 		}
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		return c.schemaExists, nil
+		if !c.schemaExists {
+			return "[]", nil
+		}
+		return `[{"catalog_name":"contract_database","schema_name":"app"}]`, nil
 	}
-	return c.contractSQL.Exists(ctx, query, args...)
+	return c.contractSQL.QueryRowsJSON(ctx, query, args...)
 }
 
 func (c *databaseIdentitySQL) QueryRow(ctx context.Context, query string, args ...any) mdsql.RowScanner {

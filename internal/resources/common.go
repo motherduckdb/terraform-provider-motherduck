@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf16"
+	"unicode/utf8"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
 	resourceTimeouts "github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -57,6 +59,9 @@ func secretWriteDiagnostic(err error) string {
 			detail = "The secret could not be written because the connection or remote service request failed."
 		}
 	}
+	if isAlreadyExists(err) {
+		detail = "A MotherDuck secret with this name already exists."
+	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		detail = "The secret write was canceled or timed out."
 	}
@@ -73,6 +78,44 @@ func (r *baseResource) Configure(ctx context.Context, req resource.ConfigureRequ
 		return
 	}
 	r.provider = providerData
+}
+
+// ModifyPlan warns when a planned SQL change cannot be applied because the
+// provider has no SQL token. Offline plans stay possible, but the warning
+// appears before apply instead of the error appearing after approval. REST
+// resources and resources with their own ModifyPlan call the matching check
+// directly.
+func (r *baseResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	r.warnMissingSQLToken(req, resp)
+}
+
+func (r *baseResource) warnMissingSQLToken(req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if r.provider == nil || !planChangesResource(req) || r.provider.HasSQLCredentials() {
+		return
+	}
+	resp.Diagnostics.AddWarning(
+		"MotherDuck token not configured",
+		"This plan changes MotherDuck SQL objects, but the provider has no SQL token, so terraform apply will fail. Set the provider `token` argument or the MOTHERDUCK_TOKEN environment variable before applying.",
+	)
+}
+
+func (r *baseResource) warnMissingAdminToken(req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if r.provider == nil || !planChangesResource(req) {
+		return
+	}
+	if _, err := r.provider.AvailableRESTClient(); err == nil {
+		return
+	}
+	resp.Diagnostics.AddWarning(
+		"MotherDuck admin token not configured",
+		"This plan changes MotherDuck service accounts, access tokens, or Duckling configurations, but the provider has no admin token, so terraform apply will fail. Set the provider `admin_token` argument or the MOTHERDUCK_ADMIN_TOKEN environment variable before applying.",
+	)
+}
+
+// planChangesResource reports whether the plan creates, updates, or destroys
+// the resource. A plan identical to the prior state needs no credentials.
+func planChangesResource(req resource.ModifyPlanRequest) bool {
+	return !req.Plan.Raw.Equal(req.State.Raw)
 }
 
 func (r *baseResource) rest(resp *diag.Diagnostics) *mdrest.Client {
@@ -175,6 +218,67 @@ func isNotFound(err error) bool {
 			strings.Contains(msg, "no database/share named")
 	}
 	return false
+}
+
+// isAlreadyExists reports whether a create failed because MotherDuck already
+// has an object with the requested name. DuckDB reports this as a binder,
+// catalog, or invalid-input error depending on the object type, so it matches
+// the message text. REST conflicts match on status code or message.
+func isAlreadyExists(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *mdrest.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode == http.StatusConflict || strings.Contains(strings.ToLower(apiErr.Error()), "already exists")
+	}
+	var duckErr *duckdb.Error
+	if !errors.As(err, &duckErr) {
+		return false
+	}
+	msg := strings.ToLower(duckErr.Error())
+	return strings.Contains(msg, "already exists") || strings.Contains(msg, "already taken")
+}
+
+// createErrorDetail returns the detail for a failed create. When the object
+// already exists in MotherDuck, it explains how to manage that object with
+// Terraform, because the raw error does not say that import is the fix.
+func createErrorDetail(err error, detail, objectType, importID string) string {
+	if !isAlreadyExists(err) {
+		return detail
+	}
+	return detail + "\n\nTo manage the existing " + objectType + " with Terraform, import it with the ID \"" + importID + "\" (in an `import` block or with `terraform import`). Otherwise, choose a different name."
+}
+
+// attachErrorDetail returns the detail for a failed database attach. When the
+// database does not exist, it explains the usual cause: the database is
+// created in the same configuration but not referenced, so Terraform does not
+// order the creates.
+func attachErrorDetail(err error, database string) string {
+	if !isNotFoundFor(err, database) {
+		return err.Error()
+	}
+	return err.Error() + "\n\nThe database \"" + database + "\" does not exist, or the SQL token cannot access it. When a `motherduck_database` in the same configuration creates it, reference that resource (for example `motherduck_database.<name>.name`) instead of a literal name so that Terraform creates the database first."
+}
+
+// schemaCreateErrorDetail adds the schema ordering hint to a table or view
+// create detail when the target schema does not exist.
+func schemaCreateErrorDetail(err error, detail, schemaName string) string {
+	var duckErr *duckdb.Error
+	if !errors.As(err, &duckErr) || !strings.Contains(strings.ToLower(duckErr.Error()), "schema with name "+strings.ToLower(schemaName)+" does not exist") {
+		return detail
+	}
+	return detail + "\n\nThe schema \"" + schemaName + "\" does not exist in this database. When a `motherduck_schema` in the same configuration creates it, reference that resource (for example `motherduck_schema.<name>.name`) instead of a literal name so that Terraform creates the schema first."
+}
+
+// withoutSQLContext removes the "LINE n:" excerpt and caret line that DuckDB
+// appends to binder and catalog errors. Use it when the excerpt shows a query
+// the provider generated rather than one the user wrote.
+func withoutSQLContext(msg string) string {
+	if i := strings.Index(msg, "\nLINE "); i >= 0 {
+		msg = msg[:i]
+	}
+	return strings.TrimSpace(msg)
 }
 
 // isDatabaseGone reports whether a DROP inside database failed only because
@@ -339,6 +443,20 @@ func mapRequiresReplace() []planmodifier.Map {
 
 func sqlIdentifierValidators() []validator.String {
 	return []validator.String{sqlIdentifierValidator{}}
+}
+
+// catalogNameValidators validate the name of a database or share that the
+// provider creates. MotherDuck rejects those names when they contain a forward
+// slash or are 255 characters or longer, which would otherwise fail only at
+// apply time.
+func catalogNameValidators(kind string) []validator.String {
+	return []validator.String{sqlIdentifierValidator{}, objectNameValidator{kind: kind, maxLength: 254, rejectSlash: true}}
+}
+
+// secretNameValidators validate a secret name. MotherDuck fails with an
+// internal error for secret names longer than 255 characters.
+func secretNameValidators() []validator.String {
+	return []validator.String{sqlIdentifierValidator{}, objectNameValidator{kind: "secret", maxLength: 255}}
 }
 
 func databaseTypeValidators() []validator.String {
@@ -557,6 +675,38 @@ func (sqlIdentifierValidator) ValidateString(ctx context.Context, req validator.
 	}
 }
 
+// objectNameValidator enforces the MotherDuck name rules that the generic SQL
+// identifier validator does not cover for objects the provider creates.
+type objectNameValidator struct {
+	kind        string
+	maxLength   int
+	rejectSlash bool
+}
+
+func (v objectNameValidator) Description(context.Context) string {
+	if v.rejectSlash {
+		return fmt.Sprintf("must not contain a forward slash and must be at most %d characters", v.maxLength)
+	}
+	return fmt.Sprintf("must be at most %d characters", v.maxLength)
+}
+
+func (v objectNameValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v objectNameValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	value := req.ConfigValue.ValueString()
+	if v.rejectSlash && strings.Contains(value, "/") {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck "+v.kind+" name", "MotherDuck "+v.kind+" names must not contain a forward slash.")
+	}
+	if n := utf8.RuneCountInString(value); n > v.maxLength {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck "+v.kind+" name", fmt.Sprintf("MotherDuck %s names must be at most %d characters. This name has %d characters.", v.kind, v.maxLength, n))
+	}
+}
+
 type databaseTypeValidator struct{}
 
 func (databaseTypeValidator) Description(context.Context) string {
@@ -653,20 +803,38 @@ func (serviceAccountUsernameValidator) ValidateString(ctx context.Context, req v
 	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
+	// Configuration names existing accounts too, so it accepts legacy
+	// characters. ModifyPlan applies the creation rule to a new account.
 	value := req.ConfigValue.ValueString()
-	detail, ok := validateServiceAccountUsernameValue(value)
+	detail, ok := validateExistingServiceAccountUsernameValue(value)
 	if !ok {
 		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck service account username", detail)
 	}
 }
 
-const serviceAccountUsernameRule = "must be 3-255 UTF-16 code units, start with a letter, and contain only letters, ASCII digits, and underscores"
+const serviceAccountUsernameRule = "must be 3-255 UTF-16 code units, start with a letter, and contain only letters, ASCII digits, and underscores, or also hyphens, at signs, and periods for an existing account with a legacy username"
 
-// validateServiceAccountUsernameValue applies the MotherDuck username rule.
-// The service checks /^\p{L}/ and /^[\p{L}\d_]*$/ with JavaScript Unicode
-// regular expressions, where \d matches only ASCII digits, and measures the
-// 3-255 length in UTF-16 code units.
+// legacyUsernameCharacters appear in usernames MotherDuck created before it
+// restricted new usernames to letters, ASCII digits, and underscores, such as
+// the service account mdw-writer@motherduck-com.
+const legacyUsernameCharacters = "-@."
+
+// validateServiceAccountUsernameValue applies the MotherDuck rule for a new
+// username. The service checks /^\p{L}/ and /^[\p{L}\d_]*$/ with JavaScript
+// Unicode regular expressions, where \d matches only ASCII digits, and
+// measures the 3-255 length in UTF-16 code units.
 func validateServiceAccountUsernameValue(value string) (string, bool) {
+	return validateUsernameValue(value, false)
+}
+
+// validateExistingServiceAccountUsernameValue also accepts the legacy
+// characters an existing account can carry, so the account can be imported
+// and managed. MotherDuck rejects them when it creates an account.
+func validateExistingServiceAccountUsernameValue(value string) (string, bool) {
+	return validateUsernameValue(value, true)
+}
+
+func validateUsernameValue(value string, allowLegacy bool) (string, bool) {
 	if length := len(utf16.Encode([]rune(value))); value != strings.TrimSpace(value) || length < 3 || length > 255 {
 		return "Username must be between 3 and 255 UTF-16 code units, start with a letter, and contain only letters, ASCII digits, and underscores.", false
 	}
@@ -677,9 +845,13 @@ func validateServiceAccountUsernameValue(value string) (string, bool) {
 			}
 			continue
 		}
-		if !unicode.IsLetter(r) && !isASCIIDigit(r) && r != '_' {
-			return "Username must contain only letters, ASCII digits, and underscores.", false
+		if unicode.IsLetter(r) || isASCIIDigit(r) || r == '_' || (allowLegacy && strings.ContainsRune(legacyUsernameCharacters, r)) {
+			continue
 		}
+		if allowLegacy {
+			return "Username must contain only letters, ASCII digits, and underscores. An existing service account with a legacy username may also contain hyphens, at signs, and periods.", false
+		}
+		return "Username must contain only letters, ASCII digits, and underscores.", false
 	}
 	return "", true
 }

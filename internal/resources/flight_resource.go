@@ -67,7 +67,7 @@ func (r *flightResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			},
 			"schedule_cron": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional cron schedule for the Flight. MotherDuck rejects schedules on plans without scheduled runs, such as the Free plan. See `schedule_status` for whether MotherDuck is currently running the schedule.",
+				MarkdownDescription: "Optional cron schedule for the Flight. MotherDuck rejects schedules on plans without scheduled runs, such as the Free plan. An empty string and an omitted value both mean no schedule. Removing the value clears the schedule, which MotherDuck reports as a `DISABLED` `schedule_status`. See `schedule_status` for whether MotherDuck is currently running the schedule.",
 			},
 			"requirements_txt": schema.StringAttribute{
 				Optional:            true,
@@ -105,7 +105,7 @@ func (r *flightResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			},
 			"schedule_status": schema.StringAttribute{
 				Computed:            true,
-				MarkdownDescription: "Schedule status reported by MotherDuck, such as `ACTIVE` or `DISABLED`, or null when the Flight has no schedule. MotherDuck can disable a schedule on its own, for example when the organization moves to a plan without scheduled runs. Terraform reports this status but does not manage it.",
+				MarkdownDescription: "Schedule status reported by MotherDuck, such as `ACTIVE` or `DISABLED`, or null when the Flight never had a schedule. A cleared schedule reads `DISABLED`. MotherDuck can disable a schedule on its own, for example when the organization moves to a plan without scheduled runs. Terraform reports this status but does not manage it.",
 			},
 			"owner_name": schema.StringAttribute{
 				Computed:            true,
@@ -212,10 +212,14 @@ func (r *flightResource) Update(ctx context.Context, req resource.UpdateRequest,
 	if !ok {
 		return
 	}
-	args["flight_id"] = sqlbuild.StringLiteral(state.ID.ValueString()) + "::UUID"
-	if err := client.Exec(ctx, "CALL MD_UPDATE_FLIGHT"+sqlbuild.NamedArgs(args)); err != nil {
-		resp.Diagnostics.AddError("Unable to update MotherDuck Flight", err.Error())
-		return
+	// MotherDuck rejects an update without fields, for example when only
+	// schedule_cron switches between "" and unset.
+	if len(args) > 0 {
+		args["flight_id"] = sqlbuild.StringLiteral(state.ID.ValueString()) + "::UUID"
+		if err := client.Exec(ctx, "CALL MD_UPDATE_FLIGHT"+sqlbuild.NamedArgs(args)); err != nil {
+			resp.Diagnostics.AddError("Unable to update MotherDuck Flight", err.Error())
+			return
+		}
 	}
 	// On a failed read-back keep the prior state, which the framework returns
 	// when Update does not set state, rather than writing unknown values.
@@ -277,7 +281,7 @@ func (r *flightResource) readFlight(ctx context.Context, model *flightModel, dia
 		return false
 	}
 	model.Name = nullString(name)
-	model.ScheduleCron = clearableStringFromLive(model.ScheduleCron, schedule)
+	model.ScheduleCron = flightScheduleCronFromLive(model.ScheduleCron, schedule, scheduleStatus)
 	model.ScheduleStatus = nullString(scheduleStatus)
 	model.OwnerName = nullString(owner)
 	model.Status = nullString(status)
@@ -290,6 +294,23 @@ func (r *flightResource) readFlight(ctx context.Context, model *flightModel, dia
 		r.readFlightVersion(ctx, model, currentVersion.Int64, diags)
 	}
 	return !diags.HasError()
+}
+
+// flightScheduleCronFromLive maps the live schedule. Clearing a schedule
+// disables it, and MotherDuck keeps the cleared cron string for audit, so a
+// DISABLED schedule that the prior value does not set reads as no schedule.
+// Import reads a disabled schedule the same way. A configured cron keeps the
+// live value, so schedule_status reports a schedule that MotherDuck disabled on
+// its own, and an active schedule set outside Terraform plans a clear.
+func flightScheduleCronFromLive(prior types.String, live, status stdsql.NullString) types.String {
+	if flightScheduleDisabled(status) && !prior.IsUnknown() && prior.ValueString() == "" {
+		return prior
+	}
+	return clearableStringFromLive(prior, live)
+}
+
+func flightScheduleDisabled(status stdsql.NullString) bool {
+	return status.Valid && strings.HasSuffix(strings.ToUpper(strings.TrimSpace(status.String)), "DISABLED")
 }
 
 func (r *flightResource) readFlightVersion(ctx context.Context, model *flightModel, version int64, diags *diag.Diagnostics) {
@@ -483,7 +504,12 @@ func flightUpdateArgs(ctx context.Context, plan, state *flightModel, diags *diag
 	if !plan.SourceCode.Equal(state.SourceCode) {
 		args["source_code"] = sqlbuild.StringLiteral(plan.SourceCode.ValueString())
 	}
-	addOptionalStringUpdate(args, "schedule_cron", plan.ScheduleCron, state.ScheduleCron, "''")
+	// Null and "" both mean no schedule. MotherDuck rejects clearing a
+	// schedule that never existed, so only send a change when one side sets a
+	// cron.
+	if plan.ScheduleCron.ValueString() != "" || state.ScheduleCron.ValueString() != "" {
+		addOptionalStringUpdate(args, "schedule_cron", plan.ScheduleCron, state.ScheduleCron, "''")
+	}
 	addOptionalStringUpdate(args, "requirements_txt", plan.RequirementsTxt, state.RequirementsTxt, "NULL")
 	if plan.AccessTokenName.IsNull() && !state.AccessTokenName.IsNull() {
 		diags.AddError(
