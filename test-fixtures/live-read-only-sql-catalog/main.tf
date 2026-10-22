@@ -31,6 +31,20 @@ data "motherduck_shared_with_me" "missing" {
 
 data "motherduck_secrets" "current" {}
 
+data "motherduck_current_user_tokens" "current" {}
+
+# Describe the first owned share by name and the first listed share by URL so
+# the share description is checked against both catalogs.
+data "motherduck_share" "owned" {
+  count = length(data.motherduck_owned_shares.current.rows) > 0 ? 1 : 0
+  name  = data.motherduck_owned_shares.current.rows[0].name
+}
+
+data "motherduck_share" "listed" {
+  count = length(data.motherduck_shared_with_me.current.rows) > 0 ? 1 : 0
+  url   = data.motherduck_shared_with_me.current.rows[0].url
+}
+
 locals {
   attached_databases = nonsensitive(jsondecode(data.motherduck_attached_databases.current.rows_json))
   databases          = nonsensitive(jsondecode(data.motherduck_databases.current.rows_json))
@@ -74,4 +88,45 @@ output "missing_share_count" {
 
 output "secrets_read" {
   value = can(length(local.secrets))
+}
+
+output "current_user_details_present" {
+  value = alltrue([
+    for value in [
+      data.motherduck_current_user.current.user_id,
+      data.motherduck_current_user.current.username,
+      data.motherduck_current_user.current.org_id,
+      data.motherduck_current_user.current.org_type,
+      data.motherduck_current_user.current.region,
+    ] : value != null && value != ""
+  ])
+}
+
+output "version_extension_hash_present" {
+  value = data.motherduck_version.current.extension_hash != null && data.motherduck_version.current.extension_hash != ""
+}
+
+output "current_user_tokens_typed" {
+  value = alltrue([for token in data.motherduck_current_user_tokens.current.rows : token.token_name != null && token.created_ts != null])
+}
+
+output "shared_with_me_typed" {
+  value = alltrue([for share in data.motherduck_shared_with_me.current.rows : share.access != null && share.visibility != null && share.update_mode != null])
+}
+
+output "owned_shares_source_uuid_present" {
+  value = alltrue([for share in data.motherduck_owned_shares.current.rows : share.source_database_uuid != null])
+}
+
+output "owned_share_description_matches" {
+  value = length(data.motherduck_share.owned) == 0 ? true : (
+    data.motherduck_share.owned[0].source_database == data.motherduck_owned_shares.current.rows[0].source_database &&
+    data.motherduck_share.owned[0].source_database_uuid == data.motherduck_owned_shares.current.rows[0].source_database_uuid
+  )
+}
+
+output "listed_share_source_present" {
+  value = length(data.motherduck_share.listed) == 0 ? true : (
+    data.motherduck_share.listed[0].source_database != null && data.motherduck_share.listed[0].source_database_uuid != null
+  )
 }

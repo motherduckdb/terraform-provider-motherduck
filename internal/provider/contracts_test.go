@@ -236,6 +236,7 @@ func TestContractOwnedShareTypedNullState(t *testing.T) {
 		"AUTOMATIC",
 		nil,
 		"2026-09-01T00:00:00Z",
+		"00000000-0000-0000-0000-0000000000a1",
 	}
 	config := contractProviderConfig("http://127.0.0.1") + `
 data "motherduck_owned_share" "test" {
@@ -249,6 +250,7 @@ data "motherduck_owned_share" "test" {
 			Config: config,
 			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr("data.motherduck_owned_share.test", "source_database", "analytics"),
+				resource.TestCheckResourceAttr("data.motherduck_owned_share.test", "source_database_uuid", "00000000-0000-0000-0000-0000000000a1"),
 				resource.TestCheckResourceAttr("data.motherduck_owned_share.test", "access", "restricted"),
 				resource.TestCheckResourceAttr("data.motherduck_owned_share.test", "update_mode", "automatic"),
 				resource.TestCheckResourceAttr("data.motherduck_owned_share.test", "url", "md:_share/contract"),
@@ -388,7 +390,7 @@ resource "motherduck_share" "test" {
 }
 
 func contractShareRow(access, visibility, updateMode string) []any {
-	return []any{"md:_share/contract", "analytics", access, visibility, updateMode, nil, "2026-09-01T00:00:00Z"}
+	return []any{"md:_share/contract", "analytics", access, visibility, updateMode, nil, "2026-09-01T00:00:00Z", "00000000-0000-0000-0000-0000000000a1"}
 }
 
 func contractProviderFactories(sqlClient providerctx.SQLClient) map[string]func() (tfprotov6.ProviderServer, error) {

@@ -36,4 +36,15 @@ data "motherduck_guide_versions" "revenue" {
 
 ### Read-Only
 
+- `rows` (Attributes List) Typed catalog rows for stable MotherDuck metadata. `rows_json` remains available for raw server columns. (see [below for nested schema](#nestedatt--rows))
 - `rows_json` (String, Sensitive) Raw MotherDuck catalog rows encoded as JSON. Sensitive because catalog rows can include share URLs and account metadata.
+
+<a id="nestedatt--rows"></a>
+### Nested Schema for `rows`
+
+Read-Only:
+
+- `change_comment` (String) Version change comment.
+- `created_at` (String) Version creation timestamp.
+- `external_id` (String) External ID recorded for the version.
+- `version` (String) Guide version number.

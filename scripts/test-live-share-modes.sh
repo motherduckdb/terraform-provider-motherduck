@@ -93,6 +93,13 @@ for key, value in expected.items():
         sys.exit(1)
 PY
 
+for output_name in share_description_matches owned_share_source_uuid_matches; do
+  if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw "${output_name}")" != "true" ]]; then
+    echo "Expected ${output_name} to be true" >&2
+    exit 1
+  fi
+done
+
 expect_noop_plan "Expected no-op plan after share mode refresh, but Terraform reported changes" \
   env TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
 

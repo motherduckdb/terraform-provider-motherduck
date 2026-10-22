@@ -67,6 +67,19 @@ output "snapshot_name" {
   value = motherduck_snapshot.named.name
 }
 
+output "snapshot_rows_typed" {
+  value = anytrue([
+    for row in data.motherduck_database_snapshots.source.rows :
+    row.snapshot_name == motherduck_snapshot.named.name &&
+    row.database_id != null &&
+    row.active_bytes != null &&
+    row.bytes_written != null &&
+    row.bytes_deleted != null &&
+    row.user_name != null &&
+    row.user_id != null
+  ])
+}
+
 output "snapshot_rows_json" {
   value     = data.motherduck_database_snapshots.source.rows_json
   sensitive = true

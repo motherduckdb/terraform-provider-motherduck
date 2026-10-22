@@ -55,13 +55,16 @@ sql:
     - motherduck_database_snapshots
     - motherduck_owned_shares
     - motherduck_owned_share
+    - motherduck_share
     - motherduck_share_grants
     - motherduck_shared_with_me
     - motherduck_secret
     - motherduck_secrets
     - motherduck_current_user
+    - motherduck_current_user_tokens
     - motherduck_version
     - motherduck_live_duckling_size
+    - motherduck_storage_info
     - motherduck_buckets_for_secret
     - motherduck_files
     - motherduck_roles

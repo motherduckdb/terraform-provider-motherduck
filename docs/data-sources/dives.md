@@ -34,4 +34,24 @@ data "motherduck_dives" "recent" {
 
 ### Read-Only
 
+- `rows` (Attributes List) Typed catalog rows for stable MotherDuck metadata. `rows_json` remains available for raw server columns. (see [below for nested schema](#nestedatt--rows))
 - `rows_json` (String, Sensitive) Raw MotherDuck catalog rows encoded as JSON. Sensitive because catalog rows can include share URLs and account metadata.
+
+<a id="nestedatt--rows"></a>
+### Nested Schema for `rows`
+
+Read-Only:
+
+- `created_at` (String) Dive creation timestamp.
+- `current_version` (String) Current Dive version.
+- `description` (String) Dive description.
+- `id` (String) Dive ID.
+- `owner_id` (String) Dive owner ID.
+- `owner_name` (String) Dive owner name.
+- `required_resources` (String, Sensitive) JSON list of resources the current Dive version requires. Sensitive because entries can include share URLs.
+- `status` (String) Dive status.
+- `status_applies_to_version` (String) Dive version the status applies to.
+- `status_changed_at` (String) Timestamp of the latest status change.
+- `status_set_by` (String) ID of the user that set the status.
+- `title` (String) Dive title.
+- `updated_at` (String) Dive update timestamp.

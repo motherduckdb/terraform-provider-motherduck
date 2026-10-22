@@ -24,4 +24,17 @@ data "motherduck_attached_databases" "current" {}
 
 ### Read-Only
 
+- `rows` (Attributes List) Typed catalog rows for stable MotherDuck metadata. `rows_json` remains available for raw server columns. (see [below for nested schema](#nestedatt--rows))
 - `rows_json` (String, Sensitive) Raw MotherDuck catalog rows encoded as JSON. Sensitive because catalog rows can include share URLs and account metadata.
+
+<a id="nestedatt--rows"></a>
+### Nested Schema for `rows`
+
+Read-Only:
+
+- `alias` (String) Alias of the attached database in the current session.
+- `error_message` (String) Attach error reported for an error catalog.
+- `is_ducklake` (String) Whether the attached database is a DuckLake database.
+- `is_error_catalog` (String) Whether MotherDuck could not attach the database and reports it as an error catalog.
+- `is_readonly` (String) Whether the attached database is read only.
+- `is_share` (String) Whether the attached database is a share.

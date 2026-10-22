@@ -37,4 +37,20 @@ data "motherduck_flight_versions" "daily_load" {
 
 ### Read-Only
 
+- `rows` (Attributes List) Typed catalog rows for stable MotherDuck metadata. `rows_json` remains available for raw server columns. (see [below for nested schema](#nestedatt--rows))
 - `rows_json` (String, Sensitive) Raw MotherDuck catalog rows encoded as JSON. Sensitive because catalog rows can include share URLs and account metadata.
+
+<a id="nestedatt--rows"></a>
+### Nested Schema for `rows`
+
+Read-Only:
+
+- `access_token_name` (String) Name of the access token the version runs with.
+- `config` (String, Sensitive) JSON object of configuration values for the version. Sensitive because configuration can carry credentials.
+- `created_at` (String) Version creation timestamp.
+- `flight_id` (String) Flight ID.
+- `flight_secret_names` (String) JSON list of secret names available to the version.
+- `flight_version` (String) Flight version number.
+- `instance_type` (String) Instance type the version runs on.
+- `max_runtime_sec` (String) Maximum run time in seconds.
+- `version_id` (String) Flight version ID.

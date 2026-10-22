@@ -1,0 +1,26 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Access control"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Rows mirror `MD_INFORMATION_SCHEMA.SHARED_WITH_ME`. MotherDuck does not report
+the source database of a received share in that catalog, so
+`rows[*].source_database` is deprecated and always null. Pass a row's `url` to
+the [motherduck_share](share.md) data source to read the source database and
+its UUID.
+
+This data source inspects existing objects without taking lifecycle ownership.
+Use it after the referenced objects exist and with credentials that can read
+them. See [authentication](../guides/authentication.md).
+
+## Example Usage
+
+{{ tffile "examples/data-sources/motherduck_shared_with_me/data-source.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}

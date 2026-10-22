@@ -38,7 +38,13 @@ data "motherduck_database_snapshots" "analytics" {
 
 Read-Only:
 
+- `active_bytes` (String) Bytes referenced by the snapshot.
+- `bytes_deleted` (String) Bytes deleted by the change that produced the snapshot.
+- `bytes_written` (String) Bytes written by the change that produced the snapshot.
 - `created_ts` (String) Snapshot creation timestamp.
+- `database_id` (String) UUID of the database that owns the snapshot.
 - `database_name` (String) Database that owns the snapshot.
 - `snapshot_id` (String) MotherDuck snapshot ID.
 - `snapshot_name` (String) Snapshot name when the snapshot is named.
+- `user_id` (String) ID of the user that produced the snapshot.
+- `user_name` (String) User that produced the snapshot.

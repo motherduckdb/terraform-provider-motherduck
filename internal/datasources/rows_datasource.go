@@ -56,11 +56,13 @@ type rowsModel struct {
 	ReferenceMacro   types.String `tfsdk:"reference_macro"`
 	ReferenceUUID    types.String `tfsdk:"reference_uuid"`
 	RunNumber        types.Int64  `tfsdk:"run_number"`
+	Version          types.Int64  `tfsdk:"version"`
 	Limit            types.Int64  `tfsdk:"limit"`
 	Offset           types.Int64  `tfsdk:"offset"`
 	Order            types.String `tfsdk:"order"`
 	IncludeOrgShares types.Bool   `tfsdk:"include_org_shares"`
 	OwnerOnly        types.Bool   `tfsdk:"owner_only"`
+	IncludeHistory   types.Bool   `tfsdk:"include_history"`
 	RowsJSON         types.String `tfsdk:"rows_json"`
 }
 
@@ -189,6 +191,10 @@ func (d *rowsDataSource) queryRows(ctx context.Context, client interface {
 		return readErr
 	})
 	if err != nil {
+		if d.spec.permissionHint != "" && strings.Contains(strings.ToLower(err.Error()), "admin only") {
+			diags.AddError("MotherDuck organization admin permission required", d.spec.permissionHint+" MotherDuck reported: "+err.Error())
+			return "", false
+		}
 		if mdsql.IsUnsupportedCommand(err) {
 			diags.AddError(
 				"MotherDuck SQL command unavailable",
@@ -372,6 +378,8 @@ func rowAttribute(name string, required bool) schema.Attribute {
 		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Min("MotherDuck data source offset", 0)}, "Number of rows to skip when the underlying MotherDuck catalog function supports offsets.")
 	case "run_number":
 		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Min("MotherDuck data source run number", 1)}, "MotherDuck Flight run number.")
+	case "version":
+		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Min("MotherDuck data source version", 1)}, "Version number to read. Reads the current version when unset.")
 	case "order":
 		return rowStringAttribute(required, flightLogOrderValidators(), "Which end of the Flight run log `limit` counts from. `asc`, the default, reads from the first line. `desc` reads the most recent lines. Lines are always returned in ascending line order. Applies only when `limit` is set.")
 	case "dive_id":
@@ -412,6 +420,11 @@ func rowAttribute(name string, required bool) schema.Attribute {
 			return schema.BoolAttribute{Required: true, MarkdownDescription: "Whether to restrict Flight listings to Flights owned by the current user."}
 		}
 		return schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to restrict Flight listings to Flights owned by the current user. Ignored for callers who can only view their own Flights."}
+	case "include_history":
+		if required {
+			return schema.BoolAttribute{Required: true, MarkdownDescription: "Whether to read every recorded storage computation instead of only the latest one."}
+		}
+		return schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to read every recorded storage computation from `STORAGE_INFO_HISTORY` instead of only the latest one. Defaults to false."}
 	case "name":
 		return rowStringAttribute(required, nil, "Optional exact object name filter.")
 	case "database_name":
@@ -485,6 +498,8 @@ func (m *rowsModel) attribute(name string) attr.Value {
 		return &m.ReferenceUUID
 	case "run_number":
 		return &m.RunNumber
+	case "version":
+		return &m.Version
 	case "limit":
 		return &m.Limit
 	case "offset":
@@ -495,6 +510,8 @@ func (m *rowsModel) attribute(name string) attr.Value {
 		return &m.IncludeOrgShares
 	case "owner_only":
 		return &m.OwnerOnly
+	case "include_history":
+		return &m.IncludeHistory
 	default:
 		return nil
 	}

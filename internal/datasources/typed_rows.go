@@ -17,6 +17,7 @@ func (s rowSpec) typedRowsAttribute() schema.ListNestedAttribute {
 			Computed:            true,
 			Sensitive:           rowAttr.sensitive,
 			MarkdownDescription: rowAttr.description,
+			DeprecationMessage:  rowAttr.deprecation,
 		}
 	}
 	return schema.ListNestedAttribute{

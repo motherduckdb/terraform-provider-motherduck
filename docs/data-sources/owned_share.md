@@ -34,6 +34,7 @@ data "motherduck_owned_share" "pageviews" {
 - `created_ts` (String) Share creation timestamp reported by MotherDuck.
 - `include_pattern` (List of String) Catalog include patterns applied to the share. Null means the share is unfiltered.
 - `source_database` (String) Database backing the owned share.
+- `source_database_uuid` (String) UUID of the database backing the owned share.
 - `update_mode` (String) Share update mode.
 - `url` (String, Sensitive) Share URL. Sensitive because unrestricted share URLs can grant access.
 - `visibility` (String) Share visibility mode.
