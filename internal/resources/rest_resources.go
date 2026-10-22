@@ -165,6 +165,7 @@ func (r *serviceAccountResource) Read(ctx context.Context, req resource.ReadRequ
 // configuration, has no recorded description, so it may adopt the configured
 // one.
 func (r *serviceAccountResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	r.warnMissingAdminToken(req, resp)
 	if req.Plan.Raw.IsNull() {
 		return
 	}
@@ -1112,4 +1113,14 @@ func validateRESTImportIDPart(part, usage, label string, diags *diag.Diagnostics
 		return false
 	}
 	return true
+}
+
+// ModifyPlan warns when the plan needs the admin token and none is configured.
+func (r *accessTokenResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	r.warnMissingAdminToken(req, resp)
+}
+
+// ModifyPlan warns when the plan needs the admin token and none is configured.
+func (r *ducklingConfigResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	r.warnMissingAdminToken(req, resp)
 }

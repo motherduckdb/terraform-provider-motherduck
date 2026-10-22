@@ -75,6 +75,44 @@ func (r *baseResource) Configure(ctx context.Context, req resource.ConfigureRequ
 	r.provider = providerData
 }
 
+// ModifyPlan warns when a planned SQL change cannot be applied because the
+// provider has no SQL token. Offline plans stay possible, but the warning
+// appears before apply instead of the error appearing after approval. REST
+// resources and resources with their own ModifyPlan call the matching check
+// directly.
+func (r *baseResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	r.warnMissingSQLToken(req, resp)
+}
+
+func (r *baseResource) warnMissingSQLToken(req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if r.provider == nil || !planChangesResource(req) || r.provider.HasSQLCredentials() {
+		return
+	}
+	resp.Diagnostics.AddWarning(
+		"MotherDuck token not configured",
+		"This plan changes MotherDuck SQL objects, but the provider has no SQL token, so terraform apply will fail. Set the provider `token` argument or the MOTHERDUCK_TOKEN environment variable before applying.",
+	)
+}
+
+func (r *baseResource) warnMissingAdminToken(req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if r.provider == nil || !planChangesResource(req) {
+		return
+	}
+	if _, err := r.provider.AvailableRESTClient(); err == nil {
+		return
+	}
+	resp.Diagnostics.AddWarning(
+		"MotherDuck admin token not configured",
+		"This plan changes MotherDuck service accounts, access tokens, or Duckling configurations, but the provider has no admin token, so terraform apply will fail. Set the provider `admin_token` argument or the MOTHERDUCK_ADMIN_TOKEN environment variable before applying.",
+	)
+}
+
+// planChangesResource reports whether the plan creates, updates, or destroys
+// the resource. A plan identical to the prior state needs no credentials.
+func planChangesResource(req resource.ModifyPlanRequest) bool {
+	return !req.Plan.Raw.Equal(req.State.Raw)
+}
+
 func (r *baseResource) rest(resp *diag.Diagnostics) *mdrest.Client {
 	client, err := r.provider.AvailableRESTClient()
 	if err != nil {

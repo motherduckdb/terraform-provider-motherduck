@@ -148,6 +148,7 @@ func (r *tableResource) Read(ctx context.Context, req resource.ReadRequest, resp
 // the SQL client. For example, importing a table stores canonical `INTEGER`
 // types, and a configuration that says `INT` must not drop the table.
 func (r *tableResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	r.warnMissingSQLToken(req, resp)
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
 		return
 	}

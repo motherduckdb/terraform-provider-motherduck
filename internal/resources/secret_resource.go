@@ -127,6 +127,7 @@ func (r *secretResource) Update(ctx context.Context, req resource.UpdateRequest,
 }
 
 func (r *secretResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	r.warnMissingSQLToken(req, resp)
 	if req.Plan.Raw.IsNull() || req.State.Raw.IsNull() {
 		return
 	}
