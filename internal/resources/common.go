@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf16"
+	"unicode/utf8"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
 	resourceTimeouts "github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -444,6 +445,14 @@ func sqlIdentifierValidators() []validator.String {
 	return []validator.String{sqlIdentifierValidator{}}
 }
 
+// catalogNameValidators validate the name of a database or share that the
+// provider creates. MotherDuck rejects those names when they contain a forward
+// slash or are 255 characters or longer, which would otherwise fail only at
+// apply time.
+func catalogNameValidators(kind string) []validator.String {
+	return []validator.String{sqlIdentifierValidator{}, catalogNameValidator{kind: kind}}
+}
+
 func databaseTypeValidators() []validator.String {
 	return []validator.String{databaseTypeValidator{}}
 }
@@ -657,6 +666,33 @@ func (sqlIdentifierValidator) ValidateString(ctx context.Context, req validator.
 	}
 	if strings.Contains(value, ".") {
 		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck SQL identifier", "SQL resource names must not contain dots because Terraform state and import IDs use dots as separators.")
+	}
+}
+
+// maxCatalogNameLength is the longest database or share name MotherDuck
+// accepts. MotherDuck requires names shorter than 255 characters.
+const maxCatalogNameLength = 254
+
+type catalogNameValidator struct{ kind string }
+
+func (v catalogNameValidator) Description(context.Context) string {
+	return fmt.Sprintf("must not contain a forward slash and must be at most %d characters", maxCatalogNameLength)
+}
+
+func (v catalogNameValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v catalogNameValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	value := req.ConfigValue.ValueString()
+	if strings.Contains(value, "/") {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck "+v.kind+" name", "MotherDuck "+v.kind+" names must not contain a forward slash.")
+	}
+	if n := utf8.RuneCountInString(value); n > maxCatalogNameLength {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck "+v.kind+" name", fmt.Sprintf("MotherDuck %s names must be at most %d characters. This name has %d characters.", v.kind, maxCatalogNameLength, n))
 	}
 }
 

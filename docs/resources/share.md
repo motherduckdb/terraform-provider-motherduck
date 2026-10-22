@@ -94,7 +94,7 @@ terraform import motherduck_share.analytics 'analytics_share'
 
 ### Required
 
-- `name` (String) Share name. MotherDuck compares share names case-insensitively, so changing only the letter case updates state in place instead of replacing the share.
+- `name` (String) Share name of at most 254 characters without a forward slash. MotherDuck compares share names case-insensitively, so changing only the letter case updates state in place instead of replacing the share.
 - `source_database` (String) Database to share. Terraform keeps the configured spelling when MotherDuck reports the same database name in a different letter case, and changing only the letter case updates state in place.
 
 ### Optional

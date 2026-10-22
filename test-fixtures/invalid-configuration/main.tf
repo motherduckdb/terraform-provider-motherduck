@@ -86,6 +86,19 @@ resource "motherduck_database" "whitespace_wrapped" {
   name = " bad_whitespace_wrapped "
 }
 
+resource "motherduck_database" "slash" {
+  name = "bad/slash"
+}
+
+resource "motherduck_database" "too_long" {
+  name = "${join("", [for i in range(255) : "a"])}"
+}
+
+resource "motherduck_share" "slash" {
+  name            = "bad/share"
+  source_database = "bad_share_source"
+}
+
 resource "motherduck_database" "transient_type" {
   name          = "bad_transient_type"
   database_type = "transient"

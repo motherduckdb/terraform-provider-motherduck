@@ -49,9 +49,9 @@ func (r *shareResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Share name. MotherDuck compares share names case-insensitively, so changing only the letter case updates state in place instead of replacing the share.",
+				MarkdownDescription: "Share name of at most 254 characters without a forward slash. MotherDuck compares share names case-insensitively, so changing only the letter case updates state in place instead of replacing the share.",
 				PlanModifiers:       identifierRequiresReplace(),
-				Validators:          sqlIdentifierValidators(),
+				Validators:          catalogNameValidators("share"),
 			},
 			"source_database": schema.StringAttribute{
 				Required:            true,

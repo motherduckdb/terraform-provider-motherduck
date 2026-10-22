@@ -171,6 +171,37 @@ func TestSQLIdentifierValidator(t *testing.T) {
 	}
 }
 
+func TestCatalogNameValidator(t *testing.T) {
+	ctx := context.Background()
+	v := catalogNameValidator{kind: "database"}
+
+	tests := map[string]struct {
+		value   types.String
+		wantErr bool
+	}{
+		"simple":           {value: types.StringValue("tf_database"), wantErr: false},
+		"dash":             {value: types.StringValue("tf-database"), wantErr: false},
+		"slash":            {value: types.StringValue("tf/database"), wantErr: true},
+		"longest accepted": {value: types.StringValue(strings.Repeat("a", 254)), wantErr: false},
+		"too long":         {value: types.StringValue(strings.Repeat("a", 255)), wantErr: true},
+		"multibyte":        {value: types.StringValue(strings.Repeat("ä", 254)), wantErr: false},
+		"unknown":          {value: types.StringUnknown(), wantErr: false},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			var resp validator.StringResponse
+			v.ValidateString(ctx, validator.StringRequest{
+				Path:        path.Root("name"),
+				ConfigValue: tc.value,
+			}, &resp)
+			if gotErr := resp.Diagnostics.HasError(); gotErr != tc.wantErr {
+				t.Fatalf("diagnostics error = %t, want %t: %v", gotErr, tc.wantErr, resp.Diagnostics)
+			}
+		})
+	}
+}
+
 func TestSplitImportID(t *testing.T) {
 	tests := map[string]struct {
 		id        string
