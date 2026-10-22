@@ -210,7 +210,7 @@ func (d *rowsDataSource) queryRows(ctx context.Context, client interface {
 			)
 			return "", false
 		}
-		diags.AddError("Unable to read MotherDuck rows data source", message)
+		diags.AddError(fmt.Sprintf("Unable to read motherduck_%s", d.spec.name), message)
 		return "", false
 	}
 	if d.spec.postProcess == nil {
@@ -222,12 +222,12 @@ func (d *rowsDataSource) queryRows(ctx context.Context, client interface {
 	decoder.UseNumber()
 	var rows []map[string]any
 	if err := decoder.Decode(&rows); err != nil {
-		diags.AddError("Unable to decode MotherDuck rows data source", err.Error())
+		diags.AddError(fmt.Sprintf("Unable to decode motherduck_%s rows", d.spec.name), err.Error())
 		return "", false
 	}
 	data, err := json.Marshal(d.spec.postProcess(rows))
 	if err != nil {
-		diags.AddError("Unable to encode MotherDuck rows data source", err.Error())
+		diags.AddError(fmt.Sprintf("Unable to encode motherduck_%s rows", d.spec.name), err.Error())
 		return "", false
 	}
 	return string(data), true

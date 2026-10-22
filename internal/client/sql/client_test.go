@@ -289,3 +289,21 @@ func TestQueryRowsJSONKeepsDistinctRows(t *testing.T) {
 		t.Fatalf("rows = %s, want %s", got, want)
 	}
 }
+
+func TestOneTimeInitializerExplainsRejectedToken(t *testing.T) {
+	initializer := &oneTimeInitializer{queries: []string{"ATTACH 'md:'"}, token: "test-token"}
+	execer := &recordingExecer{attachFailures: 1, attachError: "Invalid Error: Request failed: Your request is not authenticated. Please check your MotherDuck token. (Jwt is not in the form of Header.Payload.Signature with two dots and 3 sections, request id: 'abc')"}
+	err := initializer.run(context.Background(), execer)
+	if err == nil {
+		t.Fatal("expected an authentication error")
+	}
+	got := err.Error()
+	for _, want := range []string{"MotherDuck rejected the SQL token", "MOTHERDUCK_TOKEN", "Your request is not authenticated"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("error %q does not contain %q", got, want)
+		}
+	}
+	if strings.Contains(got, "boot query") || strings.Contains(got, "network") {
+		t.Fatalf("authentication error reads like an internal or network failure: %q", got)
+	}
+}

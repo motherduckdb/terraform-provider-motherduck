@@ -3,6 +3,7 @@ package rest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -69,6 +70,40 @@ func TestAPIError(t *testing.T) {
 	}
 	if got := apiErr.Error(); !strings.Contains(got, "Unauthorized") || !strings.Contains(got, "minimum role org_admin is required") {
 		t.Fatalf("error string dropped API issue details: %q", got)
+	}
+}
+
+func TestAPIErrorExplainsRejectedAdminToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"errMessage":"Invalid authentication token, please fetch a new one at https://app.motherduck.com","mdFriendlyStatusCode":"AUTHENTICATION_ERROR"}`))
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL, "admin-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.ActiveAccounts(context.Background())
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || !apiErr.IsAuthenticationError() {
+		t.Fatalf("error = %v, want an authentication APIError", err)
+	}
+	got := apiErr.Error()
+	for _, want := range []string{"MotherDuck API error 403 (AUTHENTICATION_ERROR)", "Invalid authentication token", "MOTHERDUCK_ADMIN_TOKEN"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("error %q does not contain %q", got, want)
+		}
+	}
+	if strings.Contains(got, "{") {
+		t.Fatalf("error echoes the raw JSON body: %q", got)
+	}
+}
+
+func TestAPIErrorPermissionIsNotAuthentication(t *testing.T) {
+	err := APIError{StatusCode: http.StatusForbidden, Code: "FORBIDDEN", Message: "Unauthorized"}
+	if err.IsAuthenticationError() || strings.Contains(err.Error(), "MOTHERDUCK_ADMIN_TOKEN") {
+		t.Fatalf("permission error reported as a rejected token: %q", err.Error())
 	}
 }
 

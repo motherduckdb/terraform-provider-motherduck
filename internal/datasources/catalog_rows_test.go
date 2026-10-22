@@ -281,7 +281,7 @@ func TestStorageInfoExplainsAdminOnlyErrors(t *testing.T) {
 	// Other data sources keep the generic read error for the same message.
 	var generic diag.Diagnostics
 	(&rowsDataSource{spec: findSpec(t, "databases")}).queryRows(context.Background(), fakeRowsClient{err: errors.New("admin only function")}, "SELECT 1", &generic)
-	if !generic.HasError() || generic[0].Summary() != "Unable to read MotherDuck rows data source" {
+	if !generic.HasError() || generic[0].Summary() != "Unable to read motherduck_databases" {
 		t.Fatalf("unexpected generic diagnostic: %v", generic)
 	}
 }

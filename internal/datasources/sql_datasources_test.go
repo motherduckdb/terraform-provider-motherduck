@@ -373,7 +373,7 @@ func TestRowsDataSourceQueryRowsClassifiesErrors(t *testing.T) {
 	if _, ok := ds.queryRows(context.Background(), fakeRowsClient{err: errors.New("permission denied")}, "SHOW ALL ROLES", &otherDiags); ok {
 		t.Fatal("query errors must not succeed")
 	}
-	if !otherDiags.HasError() || otherDiags[0].Summary() != "Unable to read MotherDuck rows data source" {
+	if !otherDiags.HasError() || otherDiags[0].Summary() != "Unable to read motherduck_roles" {
 		t.Fatalf("unexpected error diagnostics: %v", otherDiags)
 	}
 }
