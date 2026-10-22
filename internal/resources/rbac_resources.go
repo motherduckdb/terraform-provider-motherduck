@@ -165,7 +165,7 @@ func (r *roleResource) readRole(ctx context.Context, model *roleModel, diags *di
 		if mdsql.IsUnsupportedCommand(err) {
 			diags.AddError(
 				"MotherDuck SQL command unavailable",
-				"SHOW ALL ROLES is not supported by the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_role resource.",
+				"SHOW ALL ROLES is not supported by the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_role resource. MotherDuck reported: "+err.Error(),
 			)
 			return false
 		}
@@ -404,7 +404,7 @@ func (r *roleGrantResource) readRoleGrant(ctx context.Context, model *roleGrantM
 		if mdsql.IsUnsupportedCommand(err) {
 			diags.AddError(
 				"MotherDuck SQL command unavailable",
-				"SHOW ROLES TO USER/ROLE is not supported by the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_role_grant resource.",
+				"SHOW ROLES TO USER/ROLE is not supported by the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_role_grant resource. MotherDuck reported: "+err.Error(),
 			)
 			return false
 		}

@@ -219,3 +219,25 @@ func (c *fakeClient) CreateDiveEmbedSession(_ context.Context, diveID string, re
 	c.request = req
 	return c.response, c.err
 }
+
+func TestUsernameValidatorsCountUTF16Units(t *testing.T) {
+	ctx := context.Background()
+	for name, tc := range map[string]struct {
+		value   string
+		wantErr bool
+	}{
+		"255 ASCII characters":      {value: strings.Repeat("a", 255)},
+		"127 emoji, 254 code units": {value: strings.Repeat("🦆", 127)},
+		"128 emoji, 256 code units": {value: strings.Repeat("🦆", 128), wantErr: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var resp validator.StringResponse
+			for _, v := range UsernameValidators() {
+				v.ValidateString(ctx, validator.StringRequest{Path: path.Root("username"), ConfigValue: types.StringValue(tc.value)}, &resp)
+			}
+			if got := resp.Diagnostics.HasError(); got != tc.wantErr {
+				t.Fatalf("username validation error = %t, want %t: %v", got, tc.wantErr, resp.Diagnostics)
+			}
+		})
+	}
+}
