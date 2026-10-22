@@ -117,7 +117,7 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"status": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Dive governance status. New Dives default to `draft`. Owners can set `draft`, `ready`, or `archived`, while `endorsed` requires organization-admin permission.",
+				MarkdownDescription: "Dive governance status. New Dives default to `draft`. Owners can set `draft`, `ready`, or `archived`, while `endorsed` requires organization-admin permission. If MotherDuck rejects the status of a new Dive, the apply keeps the Dive with a warning and the next plan retries the status in place.",
 				Validators:          diveStatusValidators(),
 				PlanModifiers:       stringUseStateForUnknown(),
 			},
@@ -244,12 +244,7 @@ func (r *diveResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if !diveStatusChanged(requestedStatus, plan.Status) {
 		return
 	}
-	if !r.updateDiveStatus(ctx, client, plan.ID.ValueString(), requestedStatus.ValueString(), &resp.Diagnostics) {
-		return
-	}
-	if !r.readDive(ctx, &plan, &resp.Diagnostics) {
-		return
-	}
+	r.setCreatedDiveStatus(ctx, client, &plan, requestedStatus, &resp.Diagnostics)
 	if diveVersionDescriptionConfigured(requestedVersionDescription) {
 		// Keep the configured value when its write failed above. Refresh
 		// reports what MotherDuck stores.
@@ -296,6 +291,44 @@ func (r *diveResource) setCreatedDiveVersionDescription(ctx context.Context, cli
 		diags.AddWarning(
 			"Unable to read MotherDuck Dive",
 			"MotherDuck created Dive "+created.ID.ValueString()+" and Terraform wrote its version description, but could not read the Dive back. Terraform kept the Dive in state as read after creation, and the next refresh reconciles it. "+detail,
+		)
+		return
+	}
+	*plan = written
+}
+
+// setCreatedDiveStatus sets the configured status of a Dive that Create just
+// made and read back. Like setCreatedDiveVersionDescription, it keeps the Dive
+// in state with a warning when the status write or the read-back fails, for
+// example when a non-admin sets `endorsed`, instead of tainting the Dive and
+// recreating it with a new ID. The state records the configured status, the
+// next refresh reads the status MotherDuck stores, and the next plan retries
+// the status in place.
+func (r *diveResource) setCreatedDiveStatus(ctx context.Context, client interface {
+	QueryRowsJSON(context.Context, string, ...any) (string, error)
+}, plan *diveModel, requested types.String, diags *diag.Diagnostics) {
+	created := *plan
+	created.Status = requested
+	var statusDiags diag.Diagnostics
+	if !r.updateDiveStatus(ctx, client, created.ID.ValueString(), requested.ValueString(), &statusDiags) {
+		*plan = created
+		diags.AddWarning(
+			"MotherDuck Dive status not set",
+			"MotherDuck created Dive "+created.ID.ValueString()+", but setting its status to "+requested.String()+" failed. Terraform kept the Dive in state instead of recreating it. The next refresh reads the status MotherDuck stores, and the next plan retries the status in place. Error: "+statusDiags.Errors()[0].Detail(),
+		)
+		return
+	}
+	written := created
+	var readDiags diag.Diagnostics
+	if !r.readDive(ctx, &written, &readDiags) {
+		*plan = created
+		detail := "The Dive could not be read through MD_GET_DIVE."
+		if readDiags.HasError() {
+			detail = readDiags.Errors()[0].Detail()
+		}
+		diags.AddWarning(
+			"Unable to read MotherDuck Dive",
+			"MotherDuck created Dive "+created.ID.ValueString()+" and Terraform set its status, but could not read the Dive back. Terraform kept the Dive in state, and the next refresh reconciles it. "+detail,
 		)
 		return
 	}
@@ -359,10 +392,16 @@ func (r *diveResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		contentArgs["id"] = sqlbuild.StringLiteral(state.ID.ValueString()) + "::UUID"
 		if _, err := client.QueryRowsJSON(ctx, "SELECT * FROM MD_UPDATE_DIVE_CONTENT"+sqlbuild.NamedArgs(contentArgs)); err != nil {
 			resp.Diagnostics.AddError("Unable to update MotherDuck Dive content", sensitiveWriteDiagnostic("Dive", err, diveSensitiveValues(ctx, plan.RequiredResources)))
+			if updateMetadata {
+				r.keepAppliedDiveUpdate(ctx, plan, resp)
+			}
 			return
 		}
 	}
 	if updateStatus && !r.updateDiveStatus(ctx, client, state.ID.ValueString(), plan.Status.ValueString(), &resp.Diagnostics) {
+		if updateMetadata || updateContent {
+			r.keepAppliedDiveUpdate(ctx, plan, resp)
+		}
 		return
 	}
 	// On a failed read-back keep the prior state, which the framework returns
@@ -374,6 +413,21 @@ func (r *diveResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// keepAppliedDiveUpdate records the writes that an Update applied before a
+// later write failed. Without it the framework keeps the prior state, and the
+// next apply repeats a content write that already succeeded as another Dive
+// version. State takes the Dive as read back, so the next plan retries only
+// the part that failed. Terraform does not compare the result of a failed
+// apply with the plan. If the read-back fails, the prior state stays.
+func (r *diveResource) keepAppliedDiveUpdate(ctx context.Context, plan diveModel, resp *resource.UpdateResponse) {
+	applied := plan
+	var readDiags diag.Diagnostics
+	if !r.readDive(ctx, &applied, &readDiags) {
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &applied)...)
 }
 
 func (r *diveResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -727,15 +781,9 @@ func diveContentWriteArgs(ctx context.Context, plan *diveModel, diags *diag.Diag
 	return args, true
 }
 
-func optionalListValuesEqual(left, right types.List) bool {
-	if left.IsNull() && right.IsNull() {
-		return true
-	}
-	return left.Equal(right)
-}
-
 // diveRequiredResourcesEqual compares the configured parts of two mount lists,
-// alias and URL, and ignores the computed resource_type.
+// alias and URL, and ignores the computed resource_type. URLs that name the
+// same database or share count as equal.
 func diveRequiredResourcesEqual(ctx context.Context, left, right types.List) bool {
 	if left.IsNull() || right.IsNull() {
 		return left.IsNull() && right.IsNull()
@@ -748,11 +796,21 @@ func diveRequiredResourcesEqual(ctx context.Context, left, right types.List) boo
 		return false
 	}
 	for i := range leftItems {
-		if !leftItems[i].Alias.Equal(rightItems[i].Alias) || !leftItems[i].URL.Equal(rightItems[i].URL) {
+		if !leftItems[i].Alias.Equal(rightItems[i].Alias) || !diveResourceURLValuesEquivalent(leftItems[i].URL, rightItems[i].URL) {
 			return false
 		}
 	}
 	return true
+}
+
+// diveResourceURLValuesEquivalent compares two mount URLs the way MotherDuck
+// resolves them, so a configured spelling and the canonical URL that import
+// reads do not plan a content write.
+func diveResourceURLValuesEquivalent(left, right types.String) bool {
+	if left.IsNull() || left.IsUnknown() || right.IsNull() || right.IsUnknown() {
+		return left.Equal(right)
+	}
+	return diveResourceURLsEquivalent(left.ValueString(), right.ValueString())
 }
 
 // diveLiveResource is one entry of MD_GET_DIVE version_required_resources.

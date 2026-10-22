@@ -20,6 +20,13 @@ for recurring execution.
 Refresh reads the run's status, timing, and `exit_code`. `started_at`,
 `ended_at`, and `exit_code` stay null until the run starts or finishes.
 
+When `wait_for_status` is set and `timeout_seconds` passes, or the apply is
+interrupted, before the run succeeds, the provider stops waiting with a
+warning. The run keeps running in MotherDuck and stays in state with its last
+observed status, so the apply succeeds and the next apply does not start a
+second run. The next refresh reads its current status. A run that reaches a
+failure status still fails the apply.
+
 ## Access to the Flight
 
 Run Terraform as the Flight owner, or as a principal that can see the Flight.
@@ -79,7 +86,7 @@ resource "motherduck_flight_run" "heartbeat" {
 - `config` (Map of String) Optional string configuration for this on-demand Flight run. Keys must already exist on the Flight definition and must be valid Flight config names.
 - `poll_interval_seconds` (Number) Polling interval in seconds when `wait_for_status` is set. Defaults to 10 seconds.
 - `timeout_seconds` (Number) Maximum number of seconds to wait when `wait_for_status` is set. Defaults to 600 seconds.
-- `wait_for_status` (String) Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`. If the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`.
+- `wait_for_status` (String) Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`. If the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`. If `timeout_seconds` passes or the apply is interrupted first, the provider stops waiting with a warning and keeps the run in state with its last observed status, so the next apply does not start another run.
 
 ### Read-Only
 

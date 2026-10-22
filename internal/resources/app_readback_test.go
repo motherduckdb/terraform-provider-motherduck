@@ -256,12 +256,16 @@ func TestReadDiveKeepsUnsetDescriptionNull(t *testing.T) {
 }
 
 func flightReadbackClient(schedule any) *scriptedAppSQL {
+	return flightScheduleReadbackClient(schedule, nil)
+}
+
+func flightScheduleReadbackClient(schedule, scheduleStatus any) *scriptedAppSQL {
 	return &scriptedAppSQL{queryRow: func(query string) mdsql.RowScanner {
 		switch {
 		case strings.Contains(query, "MD_GET_FLIGHT_VERSION"):
 			return scannedRow{values: []any{"print(1)", nil, nil, nil, nil, int64(900), "F16"}}
 		case strings.Contains(query, "MD_GET_FLIGHT("):
-			return scannedRow{values: []any{"flight", schedule, nil, "ACTIVE", int64(1), "c", "u", "owner"}}
+			return scannedRow{values: []any{"flight", schedule, scheduleStatus, "ACTIVE", int64(1), "c", "u", "owner"}}
 		default:
 			return scannedRow{err: fmt.Errorf("unexpected query %q", query)}
 		}
@@ -272,15 +276,22 @@ func TestReadFlightNormalizesClearedSchedule(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		schedule any
+		status   any
 		current  types.String
 		want     types.String
 	}{
-		{"removed reads empty", "", types.StringNull(), types.StringNull()},
-		{"set empty reads null", nil, types.StringValue(""), types.StringValue("")},
-		{"value", "0 * * * *", types.StringNull(), types.StringValue("0 * * * *")},
+		{"removed reads empty", "", nil, types.StringNull(), types.StringNull()},
+		{"set empty reads null", nil, nil, types.StringValue(""), types.StringValue("")},
+		{"value", "0 * * * *", nil, types.StringNull(), types.StringValue("0 * * * *")},
+		// Clearing a schedule keeps its cron string with a DISABLED status.
+		{"cleared reads null", "0 * * * *", "DISABLED", types.StringNull(), types.StringNull()},
+		{"cleared keeps empty", "0 * * * *", "DISABLED", types.StringValue(""), types.StringValue("")},
+		{"disabled configured schedule keeps cron", "0 * * * *", "DISABLED", types.StringValue("0 * * * *"), types.StringValue("0 * * * *")},
+		{"disabled schedule reads live cron", "0 5 * * *", "DISABLED", types.StringValue("0 * * * *"), types.StringValue("0 5 * * *")},
+		{"active schedule set outside Terraform", "0 * * * *", "ACTIVE", types.StringNull(), types.StringValue("0 * * * *")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			res := &flightResource{baseResource: baseResource{provider: &providerctx.Context{SQL: flightReadbackClient(tc.schedule)}}}
+			res := &flightResource{baseResource: baseResource{provider: &providerctx.Context{SQL: flightScheduleReadbackClient(tc.schedule, tc.status)}}}
 			model := flightModel{
 				ID:                types.StringValue(testAppID),
 				ScheduleCron:      tc.current,

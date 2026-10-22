@@ -95,7 +95,7 @@ func (r *flightRunResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			"wait_for_status": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`. If the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`.",
+				MarkdownDescription: "Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`. If the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`. If `timeout_seconds` passes or the apply is interrupted first, the provider stops waiting with a warning and keeps the run in state with its last observed status, so the next apply does not start another run.",
 				Validators:          flightRunWaitStatusValidators(),
 			},
 			"poll_interval_seconds": schema.Int64Attribute{
@@ -210,9 +210,11 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 			diags.AddError("MotherDuck Flight run failed", detail)
 			return
 		}
+		// The run is already in state. An error would taint it, and the next
+		// apply would start a second production run, so stopping the wait is
+		// a warning and the run keeps its last observed status.
 		if !time.Now().Before(deadline) {
-			detail := fmt.Sprintf("Timed out after %d seconds waiting for Flight run %d to reach %q. Last status was %q. Inspect logs with the sensitive motherduck_flight_logs data source. Logs are not copied into diagnostics because they can contain credentials or other sensitive output.", int64ValueOrDefault(model.TimeoutSeconds, 600), model.RunNumber.ValueInt64(), wantStatus, model.Status.ValueString())
-			diags.AddError("Timed out waiting for MotherDuck Flight run", detail)
+			diags.AddWarning("Timed out waiting for MotherDuck Flight run", fmt.Sprintf("Terraform stopped waiting after %d seconds for Flight run %d to reach %q. %s", int64ValueOrDefault(model.TimeoutSeconds, 600), model.RunNumber.ValueInt64(), wantStatus, flightRunWaitStoppedDetail(model)))
 			return
 		}
 
@@ -231,10 +233,17 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 			continue
 		}
 		if err != nil {
-			diags.AddError("Interrupted while waiting for MotherDuck Flight run", err.Error())
+			diags.AddWarning("Interrupted while waiting for MotherDuck Flight run", fmt.Sprintf("Terraform stopped waiting for Flight run %d to reach %q: %s. %s", model.RunNumber.ValueInt64(), wantStatus, err.Error(), flightRunWaitStoppedDetail(model)))
 			return
 		}
-		found := r.readFlightRunStatus(ctx, model, lookup, diags)
+		var pollDiags diag.Diagnostics
+		found := r.readFlightRunStatus(ctx, model, lookup, &pollDiags)
+		if pollDiags.HasError() && ctx.Err() != nil {
+			// The deadline passed or the caller cancelled during the read.
+			// The next iteration reports which one.
+			continue
+		}
+		diags.Append(pollDiags...)
 		if diags.HasError() {
 			return
 		}
@@ -250,7 +259,11 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 		if client == nil {
 			return
 		}
-		exists, known := r.flightExists(ctx, client, model.FlightID.ValueString(), diags)
+		exists, known := r.flightExists(ctx, client, model.FlightID.ValueString(), &pollDiags)
+		if pollDiags.HasError() && ctx.Err() != nil {
+			continue
+		}
+		diags.Append(pollDiags...)
 		if diags.HasError() {
 			return
 		}
@@ -262,6 +275,12 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 			return
 		}
 	}
+}
+
+// flightRunWaitStoppedDetail explains that a run whose wait stopped early
+// stays in state and keeps running in MotherDuck.
+func flightRunWaitStoppedDetail(model *flightRunModel) string {
+	return fmt.Sprintf("The run keeps running in MotherDuck. Terraform kept it in state with its last observed status %q instead of failing the apply, so the next apply does not start another run. Refresh reads the current status. Inspect logs with the sensitive motherduck_flight_logs data source. Logs are not copied into diagnostics because they can contain credentials or other sensitive output.", model.Status.ValueString())
 }
 
 // flightRunLookup records which MotherDuck functions can read a Flight run.
