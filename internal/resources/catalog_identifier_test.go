@@ -23,27 +23,30 @@ const kelvinSign = "K"
 // DuckDB folds only ASCII letters when it compares schema, table, and view
 // names, while MotherDuck resolves database names with a Unicode
 // case-insensitive collation. The plan modifiers must replace an object
-// exactly when the new name resolves to a different object.
+// exactly when the new name resolves to a different object. MotherDuck cannot
+// attach a database by a spelling that differs in the case of non-ASCII
+// letters, so such a database rename fails at plan time.
 func TestIdentifierPlanModifiersMatchCatalogResolution(t *testing.T) {
 	ctx := context.Background()
 	type renameCase struct {
 		prior, planned string
 		wantReplace    bool
+		wantErr        bool
 	}
 	asciiCases := []renameCase{
-		{"Sales", "sales", false},
-		{"sales", "SALES", false},
-		{"Äpfel", "äpfel", true},
-		{"Kelvin", kelvinSign + "elvin", true},
-		{"KELVIN", kelvinSign + "ELVIN", true},
-		{"ſales", "sales", true},
-		{"sales", "orders", true},
+		{"Sales", "sales", false, false},
+		{"sales", "SALES", false, false},
+		{"Äpfel", "äpfel", true, false},
+		{"Kelvin", kelvinSign + "elvin", true, false},
+		{"KELVIN", kelvinSign + "ELVIN", true, false},
+		{"ſales", "sales", true, false},
+		{"sales", "orders", true, false},
 	}
 	unicodeCases := []renameCase{
-		{"Analytics", "analytics", false},
-		{"Äpfel", "äpfel", false},
-		{"Kelvin", kelvinSign + "elvin", false},
-		{"analytics", "warehouse", true},
+		{"Analytics", "analytics", false, false},
+		{"Äpfel", "äpfel", false, true},
+		{"Kelvin", kelvinSign + "elvin", false, true},
+		{"analytics", "warehouse", true, false},
 	}
 	for _, tc := range []struct {
 		resource  resource.Resource
@@ -83,8 +86,11 @@ func TestIdentifierPlanModifiersMatchCatalogResolution(t *testing.T) {
 				for _, modifier := range modifiers {
 					modifier.PlanModifyString(ctx, req, resp)
 				}
-				if resp.Diagnostics.HasError() {
-					t.Fatal(resp.Diagnostics)
+				if resp.Diagnostics.HasError() != c.wantErr {
+					t.Fatalf("diagnostics error = %t, want %t: %v", resp.Diagnostics.HasError(), c.wantErr, resp.Diagnostics)
+				}
+				if c.wantErr {
+					return
 				}
 				if resp.RequiresReplace != c.wantReplace {
 					t.Fatalf("RequiresReplace = %t, want %t", resp.RequiresReplace, c.wantReplace)
