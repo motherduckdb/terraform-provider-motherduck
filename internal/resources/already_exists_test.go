@@ -82,3 +82,40 @@ func TestDropErrorDetails(t *testing.T) {
 		t.Fatalf("database drop detail for other errors should be unchanged, got %q", got)
 	}
 }
+
+func TestAttachErrorDetail(t *testing.T) {
+	missing := &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: `Catalog Error: no database/share named "analytics" found`}
+	if got := attachErrorDetail(missing, "analytics"); !strings.Contains(got, `The database "analytics" does not exist`) {
+		t.Fatalf("attach detail should explain the missing database, got %q", got)
+	}
+	if got := attachErrorDetail(missing, "other"); got != missing.Error() {
+		t.Fatalf("attach detail for another database should be unchanged, got %q", got)
+	}
+	denied := &duckdb.Error{Type: duckdb.ErrorTypePermission, Msg: "Permission Error: denied"}
+	if got := attachErrorDetail(denied, "analytics"); got != denied.Error() {
+		t.Fatalf("attach detail for other errors should be unchanged, got %q", got)
+	}
+}
+
+func TestWithoutSQLContext(t *testing.T) {
+	msg := "Catalog Error: Type with name INTEGR does not exist!\nDid you mean \"JSON\"?\n\nLINE 1: SELECT typeof(CAST(NULL AS INTEGR))\n                                   ^"
+	want := "Catalog Error: Type with name INTEGR does not exist!\nDid you mean \"JSON\"?"
+	if got := withoutSQLContext(msg); got != want {
+		t.Fatalf("withoutSQLContext() = %q, want %q", got, want)
+	}
+	if got := withoutSQLContext("plain error"); got != "plain error" {
+		t.Fatalf("withoutSQLContext() changed a message without context: %q", got)
+	}
+}
+
+func TestSchemaCreateErrorDetail(t *testing.T) {
+	missing := &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: "Catalog Error: Schema with name staging does not exist!"}
+	if got := schemaCreateErrorDetail(missing, missing.Error(), "staging"); !strings.Contains(got, `The schema "staging" does not exist`) {
+		t.Fatalf("detail should explain the missing schema, got %q", got)
+	}
+	// A view query can reference a different missing schema, which is a
+	// query error rather than an ordering problem.
+	if got := schemaCreateErrorDetail(missing, missing.Error(), "main"); got != missing.Error() {
+		t.Fatalf("detail for another schema should be unchanged, got %q", got)
+	}
+}

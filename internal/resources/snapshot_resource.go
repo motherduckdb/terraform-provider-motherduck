@@ -92,7 +92,7 @@ func (r *snapshotResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	if err := client.AttachDatabase(ctx, plan.Database.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Unable to attach MotherDuck database", err.Error())
+		resp.Diagnostics.AddError("Unable to attach MotherDuck database", attachErrorDetail(err, plan.Database.ValueString()))
 		return
 	}
 	query := "CREATE SNAPSHOT " + sqlbuild.QuoteIdentifier(plan.Name.ValueString()) + " OF " + sqlbuild.QuoteIdentifier(plan.Database.ValueString())

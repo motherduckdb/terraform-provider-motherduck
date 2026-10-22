@@ -249,6 +249,37 @@ func createErrorDetail(err error, detail, objectType, importID string) string {
 	return detail + "\n\nTo manage the existing " + objectType + " with Terraform, import it with the ID \"" + importID + "\" (in an `import` block or with `terraform import`). Otherwise, choose a different name."
 }
 
+// attachErrorDetail returns the detail for a failed database attach. When the
+// database does not exist, it explains the usual cause: the database is
+// created in the same configuration but not referenced, so Terraform does not
+// order the creates.
+func attachErrorDetail(err error, database string) string {
+	if !isNotFoundFor(err, database) {
+		return err.Error()
+	}
+	return err.Error() + "\n\nThe database \"" + database + "\" does not exist, or the SQL token cannot access it. When a `motherduck_database` in the same configuration creates it, reference that resource (for example `motherduck_database.<name>.name`) instead of a literal name so that Terraform creates the database first."
+}
+
+// schemaCreateErrorDetail adds the schema ordering hint to a table or view
+// create detail when the target schema does not exist.
+func schemaCreateErrorDetail(err error, detail, schemaName string) string {
+	var duckErr *duckdb.Error
+	if !errors.As(err, &duckErr) || !strings.Contains(strings.ToLower(duckErr.Error()), "schema with name "+strings.ToLower(schemaName)+" does not exist") {
+		return detail
+	}
+	return detail + "\n\nThe schema \"" + schemaName + "\" does not exist in this database. When a `motherduck_schema` in the same configuration creates it, reference that resource (for example `motherduck_schema.<name>.name`) instead of a literal name so that Terraform creates the schema first."
+}
+
+// withoutSQLContext removes the "LINE n:" excerpt and caret line that DuckDB
+// appends to binder and catalog errors. Use it when the excerpt shows a query
+// the provider generated rather than one the user wrote.
+func withoutSQLContext(msg string) string {
+	if i := strings.Index(msg, "\nLINE "); i >= 0 {
+		msg = msg[:i]
+	}
+	return strings.TrimSpace(msg)
+}
+
 // isDatabaseGone reports whether a DROP inside database failed only because
 // the database itself no longer exists. A connection that attached the
 // database before another operation dropped it binds the statement and then

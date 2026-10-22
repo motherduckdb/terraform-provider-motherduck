@@ -180,7 +180,7 @@ func (r *viewResource) writeView(ctx context.Context, getter stateGetter, setter
 	}
 	id := qualifiedObjectID(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString())
 	if err := client.AttachDatabase(ctx, plan.Database.ValueString()); err != nil {
-		diags.AddError("Unable to attach MotherDuck database", err.Error())
+		diags.AddError("Unable to attach MotherDuck database", attachErrorDetail(err, plan.Database.ValueString()))
 		return
 	}
 	createKeyword := "CREATE VIEW "
@@ -189,7 +189,7 @@ func (r *viewResource) writeView(ctx context.Context, getter stateGetter, setter
 	}
 	query := createKeyword + sqlbuild.QuoteQualifiedIdentifier(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString()) + " AS " + plan.Query.ValueString()
 	if err := client.Exec(ctx, query); err != nil {
-		diags.AddError("Unable to create MotherDuck view", createErrorDetail(err, err.Error(), "view", id))
+		diags.AddError("Unable to create MotherDuck view", schemaCreateErrorDetail(err, createErrorDetail(err, err.Error(), "view", id), plan.Schema.ValueString()))
 		return
 	}
 	plan.ID = types.StringValue(id)

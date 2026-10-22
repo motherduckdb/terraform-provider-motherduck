@@ -173,7 +173,7 @@ func (r *shareResource) Create(ctx context.Context, req resource.CreateRequest, 
 		options = append(options, "INCLUDE_PATTERN "+sqlbuild.StringLiteral(pattern))
 	}
 	if err := client.AttachDatabase(ctx, plan.SourceDatabase.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Unable to attach MotherDuck source database", err.Error())
+		resp.Diagnostics.AddError("Unable to attach MotherDuck source database", attachErrorDetail(err, plan.SourceDatabase.ValueString()))
 		return
 	}
 	query := "CREATE SHARE " + sqlbuild.QuoteIdentifier(plan.Name.ValueString()) + " FROM " + sqlbuild.QuoteIdentifier(plan.SourceDatabase.ValueString()) + sqlbuild.Options(options...)

@@ -71,7 +71,7 @@ func (r *schemaResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 	id := plan.Database.ValueString() + "." + plan.Name.ValueString()
 	if err := client.AttachDatabase(ctx, plan.Database.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Unable to attach MotherDuck database", err.Error())
+		resp.Diagnostics.AddError("Unable to attach MotherDuck database", attachErrorDetail(err, plan.Database.ValueString()))
 		return
 	}
 	if err := client.Exec(ctx, "CREATE SCHEMA "+sqlbuild.QuoteQualifiedIdentifier(plan.Database.ValueString(), plan.Name.ValueString())); err != nil {

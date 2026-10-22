@@ -95,7 +95,7 @@ func (r *tableResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	id := qualifiedObjectID(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString())
 	if err := client.AttachDatabase(ctx, plan.Database.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Unable to attach MotherDuck database", err.Error())
+		resp.Diagnostics.AddError("Unable to attach MotherDuck database", attachErrorDetail(err, plan.Database.ValueString()))
 		return
 	}
 	columns = canonicalTableColumns(ctx, client, columns, &resp.Diagnostics)
@@ -104,7 +104,7 @@ func (r *tableResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	query := "CREATE TABLE " + sqlbuild.QuoteQualifiedIdentifier(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString()) + " (" + columnDDL(columns) + ")"
 	if err := client.Exec(ctx, query); err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck table", createErrorDetail(err, err.Error(), "table", id))
+		resp.Diagnostics.AddError("Unable to create MotherDuck table", schemaCreateErrorDetail(err, createErrorDetail(err, err.Error(), "table", id), plan.Schema.ValueString()))
 		return
 	}
 	plan.ID = types.StringValue(id)
@@ -462,7 +462,7 @@ func canonicalTableColumns(ctx context.Context, client scalarStringer, columns m
 	for _, name := range keys {
 		columnType, err := canonicalColumnType(ctx, client, columns[name])
 		if err != nil {
-			diags.AddAttributeError(path.Root("columns").AtMapKey(name), "Invalid MotherDuck table column type", err.Error())
+			diags.AddAttributeError(path.Root("columns").AtMapKey(name), "Invalid MotherDuck table column type", fmt.Sprintf("MotherDuck could not resolve the type %q of column %q: %s", columns[name], name, withoutSQLContext(err.Error())))
 			continue
 		}
 		canonical[name] = columnType
