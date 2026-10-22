@@ -8,10 +8,13 @@ description: |-
 # motherduck_view (Resource)
 
 Manage a SQL view over existing data. Changes to the query update the view in
-place. Moving or renaming it requires replacement, except that a change in
-the letter case of the database, schema, or name only updates state because
-MotherDuck resolves names case-insensitively. Creation fails when a view
-with the same name already exists. Import it instead of overwriting it.
+place. Moving or renaming it requires replacement. A change in the letter case
+of the database name only updates state because MotherDuck resolves database
+names case-insensitively. In the schema and view name, DuckDB folds only the
+ASCII letters A to Z, so a change in the case of those letters only updates
+state. Any other change, such as `Öl` to `öl`, names a different view and
+replaces it. Creation fails when a view with the same name
+already exists. Import it instead of overwriting it.
 
 ## Writing the query
 
@@ -68,9 +71,9 @@ resource "motherduck_view" "recent_events" {
 ### Required
 
 - `database` (String) Database that contains the view. Changing only the letter case updates state in place.
-- `name` (String) View name. Changing only the letter case updates state in place.
+- `name` (String) View name. Changing only the case of ASCII letters updates state in place. Any other change, including the case of a non-ASCII letter such as `Ä`, names a different view and replaces it.
 - `query` (String) Single SELECT query body for the view. Semicolons are rejected.
-- `schema` (String) Schema that contains the view. Changing only the letter case updates state in place.
+- `schema` (String) Schema that contains the view. Changing only the case of ASCII letters updates state in place. Any other change replaces the view.
 
 ### Read-Only
 

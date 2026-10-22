@@ -2,7 +2,6 @@ package resources
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -51,14 +50,14 @@ func (r *tableResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			},
 			"schema": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Schema that contains the table. Changing only the letter case updates state in place.",
-				PlanModifiers:       identifierRequiresReplace(),
+				MarkdownDescription: "Schema that contains the table. Changing only the case of ASCII letters updates state in place. Any other change replaces the table.",
+				PlanModifiers:       catalogIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Table name. Changing only the letter case updates state in place.",
-				PlanModifiers:       identifierRequiresReplace(),
+				MarkdownDescription: "Table name. Changing only the case of ASCII letters updates state in place. Any other change, including the case of a non-ASCII letter such as `Ä`, names a different table and replaces it.",
+				PlanModifiers:       catalogIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"columns": schema.MapAttribute{
@@ -172,14 +171,26 @@ func (r *tableResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		// Replacing drops the table and its data, so a failed comparison, such
 		// as a transient connection error, must fail the plan instead of
 		// planning a replacement that the types may not need.
-		resp.Diagnostics.AddAttributeError(path.Root("columns"), "Unable to compare MotherDuck table column types",
-			"The provider could not normalize the planned column types, so it cannot tell whether the change needs to replace the table. Retry the plan. "+compareDiags.Errors()[0].Detail())
+		first := compareDiags.Errors()[0]
+		errorPath := path.Root("columns")
+		if withPath, ok := first.(diag.DiagnosticWithPath); ok {
+			errorPath = withPath.Path()
+		}
+		resp.Diagnostics.AddAttributeError(errorPath, "Unable to compare MotherDuck table column types",
+			"The provider could not normalize the planned column types, so it cannot tell whether the change needs to replace the table. "+first.Detail()+"\n\n"+tableColumnTypeResolutionHint)
 		return
 	}
 	if !equivalent {
 		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("columns"))
 	}
 }
+
+// tableColumnTypeResolutionHint explains the common cause of a type that
+// cannot be normalized. The provider resolves types with
+// `typeof(CAST(NULL AS <type>))` in its connection's current database, while
+// CREATE TABLE resolves an unqualified user-defined type in the table's own
+// database.
+const tableColumnTypeResolutionHint = "The provider resolves column types in the current database of its connection, not in the table's database. A type created with CREATE TYPE in the table's database does not resolve there. Qualify such a type with its database and schema, for example `analytics.main.mood`, or write out its definition, for example `ENUM('ok', 'sad')`."
 
 // Update only runs when ModifyPlan found the planned columns equivalent to the
 // current ones, so it records the configured spelling without running DDL.
@@ -267,27 +278,30 @@ func (r *tableResource) ImportState(ctx context.Context, req resource.ImportStat
 }
 
 func readTableColumnTypes(ctx context.Context, client providerctx.SQLClient, database, schemaName, name string, diags *diag.Diagnostics) map[string]string {
-	var rowsJSON string
+	var rows [][]string
 	err := retry.SQL(ctx, func() error {
 		var queryErr error
-		rowsJSON, queryErr = client.QueryRowsJSON(ctx, `SELECT column_name, data_type FROM information_schema.columns WHERE lower(table_catalog) = lower(?) AND lower(table_schema) = lower(?) AND lower(table_name) = lower(?) ORDER BY ordinal_position`, database, schemaName, name)
+		rows, queryErr = queryCatalogRows(ctx, client, []string{"table_catalog", "table_schema", "table_name", "column_name", "data_type"},
+			`SELECT table_catalog, table_schema, table_name, column_name, data_type FROM information_schema.columns WHERE lower(table_catalog) = lower(?) AND lower(table_schema) = lower(?) AND lower(table_name) = lower(?) ORDER BY ordinal_position`,
+			database, schemaName, name)
 		return queryErr
 	})
 	if err != nil {
 		diags.AddError("Unable to read MotherDuck table columns", err.Error())
 		return nil
 	}
-	var rows []struct {
-		ColumnName string `json:"column_name"`
-		DataType   string `json:"data_type"`
+	// lower() also matches tables whose names differ only in the case of
+	// non-ASCII letters, which DuckDB treats as different tables. Keep the
+	// columns of the one table that DDL on these identifiers would resolve.
+	match := matchCatalogRow(rows, database, schemaName, name)
+	columns := map[string]string{}
+	if match < 0 {
+		return columns
 	}
-	if err := json.Unmarshal([]byte(rowsJSON), &rows); err != nil {
-		diags.AddError("Unable to decode MotherDuck table columns", err.Error())
-		return nil
-	}
-	columns := make(map[string]string, len(rows))
 	for _, row := range rows {
-		columns[row.ColumnName] = row.DataType
+		if row[0] == rows[match][0] && row[1] == rows[match][1] && row[2] == rows[match][2] {
+			columns[row[3]] = row[4]
+		}
 	}
 	return columns
 }

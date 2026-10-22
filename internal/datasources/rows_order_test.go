@@ -19,6 +19,7 @@ func TestPostProcessPreservesIntegerPrecision(t *testing.T) {
 		context.Background(),
 		fakeRowsClient{rowsJSON: `[{"role_name":"b","n":9007199254740993},{"role_name":"a","n":170141183460469231731687303715884105727}]`},
 		"SHOW ALL ROLES",
+		types.StringNull(),
 		&diags,
 	)
 	if !ok || diags.HasError() {

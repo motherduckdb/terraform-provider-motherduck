@@ -2,9 +2,7 @@ package resources
 
 import (
 	"context"
-	stdsql "database/sql"
 	"encoding/json"
-	"errors"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -58,14 +56,14 @@ func (r *viewResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"schema": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Schema that contains the view. Changing only the letter case updates state in place.",
-				PlanModifiers:       identifierRequiresReplace(),
+				MarkdownDescription: "Schema that contains the view. Changing only the case of ASCII letters updates state in place. Any other change replaces the view.",
+				PlanModifiers:       catalogIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "View name. Changing only the letter case updates state in place.",
-				PlanModifiers:       identifierRequiresReplace(),
+				MarkdownDescription: "View name. Changing only the case of ASCII letters updates state in place. Any other change, including the case of a non-ASCII letter such as `Ä`, names a different view and replaces it.",
+				PlanModifiers:       catalogIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"query": schema.StringAttribute{
@@ -211,27 +209,29 @@ func (r *viewResource) writeView(ctx context.Context, getter stateGetter, setter
 }
 
 func readViewServerDefinition(ctx context.Context, client providerctx.SQLClient, database, schemaName, name string, diags *diag.Diagnostics) (string, bool) {
-	var definition stdsql.NullString
+	var rows [][]string
 	err := retry.SQL(ctx, func() error {
 		if err := client.AttachDatabase(ctx, database); err != nil {
 			return err
 		}
-		return client.QueryRow(ctx, `SELECT view_definition FROM information_schema.views WHERE lower(table_catalog) = lower(?) AND lower(table_schema) = lower(?) AND lower(table_name) = lower(?)`, database, schemaName, name).Scan(&definition)
+		var queryErr error
+		rows, queryErr = queryCatalogRows(ctx, client, []string{"table_catalog", "table_schema", "table_name", "view_definition"},
+			`SELECT table_catalog, table_schema, table_name, view_definition FROM information_schema.views WHERE lower(table_catalog) = lower(?) AND lower(table_schema) = lower(?) AND lower(table_name) = lower(?)`,
+			database, schemaName, name)
+		return queryErr
 	})
 	if err != nil && isNotFoundFor(err, database, schemaName, name) {
-		return "", false
-	}
-	if errors.Is(err, stdsql.ErrNoRows) {
 		return "", false
 	}
 	if err != nil {
 		diags.AddError("Unable to read MotherDuck view definition", err.Error())
 		return "", false
 	}
-	if !definition.Valid {
+	match := matchCatalogRow(rows, database, schemaName, name)
+	if match < 0 || rows[match][3] == "" {
 		return "", false
 	}
-	return definition.String, true
+	return rows[match][3], true
 }
 
 func storeViewServerDefinition(ctx context.Context, private privateState, definition string, diags *diag.Diagnostics) {

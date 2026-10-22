@@ -8,8 +8,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 )
 
 func TestColumnDDLSortsAndQuotes(t *testing.T) {
@@ -168,5 +173,72 @@ func TestColumnTypesSemanticallyEqualPreservesQuotedCase(t *testing.T) {
 				t.Fatalf("equivalent = %v, error = %v, want %v (live %q)", got, err, tc.want, canonicalLive)
 			}
 		})
+	}
+}
+
+// typeResolvingClient resolves column types with a local DuckDB.
+type typeResolvingClient struct {
+	recordingSQLClient
+	db *stdsql.DB
+}
+
+func (c *typeResolvingClient) ScalarString(ctx context.Context, query string, args ...any) (string, error) {
+	return embeddedTypeStringer{db: c.db}.ScalarString(ctx, query, args...)
+}
+
+// CREATE TABLE resolves an unqualified user-defined type in the table's own
+// database, but the plan-time comparison resolves types in the connection's
+// current database. The plan error must name the column, keep DuckDB's
+// detail, and explain how to spell such a type instead of telling the user to
+// retry a plan that fails the same way every time.
+func TestTableModifyPlanExplainsUnresolvableColumnType(t *testing.T) {
+	ctx := context.Background()
+	db, err := stdsql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	db.SetMaxOpenConns(1)
+	for _, statement := range []string{`ATTACH ':memory:' AS analytics`, `CREATE TYPE analytics.main.mood AS ENUM ('ok', 'sad')`} {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := &tableResource{baseResource: baseResource{provider: &providerctx.Context{SQL: &typeResolvingClient{db: db}}}}
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+	model := func(columnType string) tableModel {
+		return tableModel{
+			ID: types.StringValue("analytics.main.facts"), Database: types.StringValue("analytics"),
+			Schema: types.StringValue("main"), Name: types.StringValue("facts"),
+			Columns: types.MapValueMust(types.StringType, map[string]attr.Value{"m": types.StringValue(columnType)}),
+		}
+	}
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	plan := tfsdk.Plan{Schema: schemaResp.Schema}
+	if diags := state.Set(ctx, model("ENUM('ok', 'sad')")); diags.HasError() {
+		t.Fatal(diags)
+	}
+	if diags := plan.Set(ctx, model("mood")); diags.HasError() {
+		t.Fatal(diags)
+	}
+	resp := &resource.ModifyPlanResponse{Plan: plan}
+	r.ModifyPlan(ctx, resource.ModifyPlanRequest{State: state, Plan: plan}, resp)
+	if len(resp.RequiresReplace) != 0 || resp.Diagnostics.ErrorsCount() != 1 {
+		t.Fatalf("diagnostics = %v, replace = %v, want one error and no replacement", resp.Diagnostics, resp.RequiresReplace)
+	}
+	got := resp.Diagnostics.Errors()[0]
+	withPath, ok := got.(diag.DiagnosticWithPath)
+	if !ok || !withPath.Path().Equal(path.Root("columns").AtMapKey("m")) {
+		t.Errorf("error path = %v, want columns[\"m\"]", got)
+	}
+	detail := got.Detail()
+	if strings.Contains(detail, "Retry the plan") {
+		t.Errorf("detail tells the user to retry: %s", detail)
+	}
+	for _, want := range []string{"Type with name mood does not exist", "not in the table's database", "analytics.main.mood", "ENUM('ok', 'sad')"} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("detail does not mention %q: %s", want, detail)
+		}
 	}
 }

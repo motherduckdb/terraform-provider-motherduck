@@ -271,3 +271,38 @@ func TestContractCatalogDataSourceErrors(t *testing.T) {
 		})
 	}
 }
+
+// guidesErrorSQL fails every Guide listing with an error that echoes the
+// configured reference URL.
+type guidesErrorSQL struct {
+	*catalogSQL
+	echo string
+}
+
+func (c *guidesErrorSQL) QueryRowsJSON(ctx context.Context, query string, args ...any) (string, error) {
+	if strings.Contains(query, "MD_LIST_GUIDES(") {
+		return "", errors.New("IO Error: could not resolve " + c.echo + " for reference")
+	}
+	return c.catalogSQL.QueryRowsJSON(ctx, query, args...)
+}
+
+// The Guides data source redacts its configured reference_url exactly, so a
+// URL that the share URL patterns do not recognize, such as one without a
+// UUID token, stays out of the error.
+func TestContractGuidesErrorRedactsConfiguredReferenceURL(t *testing.T) {
+	const referenceURL = "md:_share/team data/latest"
+	client := &guidesErrorSQL{catalogSQL: newCatalogSQL(), echo: referenceURL}
+	client.functions["md_list_guides"] = true
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(client),
+		Steps: []resource.TestStep{{
+			Config: contractProviderConfig("http://127.0.0.1") + fmt.Sprintf(`
+data "motherduck_guides" "test" {
+  reference_type = "catalog"
+  reference_url  = %q
+}
+`, referenceURL),
+			ExpectError: regexp.MustCompile(`could not resolve <redacted share URL> for reference`),
+		}},
+	})
+}

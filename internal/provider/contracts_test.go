@@ -500,12 +500,6 @@ func (c *contractSQL) Exists(_ context.Context, query string, args ...any) (bool
 	c.record("exists", query, args...)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if strings.Contains(query, "information_schema.tables") {
-		if len(args) != 4 || args[0] != "contract_database" || args[1] != "app" || args[2] != "facts" || args[3] != "BASE TABLE" {
-			return false, fmt.Errorf("unexpected table exists args: %#v", args)
-		}
-		return c.tableExists, nil
-	}
 	return false, fmt.Errorf("unexpected SQL exists query %q", query)
 }
 
@@ -551,6 +545,18 @@ func (c *contractSQL) QueryRowsJSON(_ context.Context, query string, args ...any
 	c.record("query-json", query, args...)
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	relation := map[string]string{"table_catalog": "contract_database", "table_schema": "app", "table_name": "facts"}
+	if strings.Contains(query, "information_schema.tables") {
+		if len(args) != 4 || args[0] != "contract_database" || args[1] != "app" || args[2] != "facts" || args[3] != "BASE TABLE" {
+			return "", fmt.Errorf("unexpected table exists args: %#v", args)
+		}
+		rows := []map[string]string{}
+		if c.tableExists {
+			rows = append(rows, relation)
+		}
+		encoded, err := json.Marshal(rows)
+		return string(encoded), err
+	}
 	if !strings.Contains(query, "information_schema.columns") {
 		return "", fmt.Errorf("unexpected SQL JSON query %q", query)
 	}
@@ -564,7 +570,11 @@ func (c *contractSQL) QueryRowsJSON(_ context.Context, query string, args ...any
 	sort.Strings(names)
 	rows := make([]map[string]string, 0, len(names))
 	for _, name := range names {
-		rows = append(rows, map[string]string{"column_name": name, "data_type": c.tableColumns[name]})
+		row := map[string]string{"column_name": name, "data_type": c.tableColumns[name]}
+		for key, value := range relation {
+			row[key] = value
+		}
+		rows = append(rows, row)
 	}
 	encoded, err := json.Marshal(rows)
 	return string(encoded), err

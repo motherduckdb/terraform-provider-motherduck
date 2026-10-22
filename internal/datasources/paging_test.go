@@ -281,7 +281,7 @@ func TestGuidesReferenceURLStaysOutOfOutput(t *testing.T) {
 		"generic":     errors.New("Catalog Error: Share 'md:_share/tenant/" + shareID + "' not found"),
 	} {
 		var diags diag.Diagnostics
-		(&rowsDataSource{spec: spec}).queryRows(context.Background(), fakeRowsClient{err: err}, query, &diags)
+		(&rowsDataSource{spec: spec}).queryRows(context.Background(), fakeRowsClient{err: err}, query, types.StringNull(), &diags)
 		if !diags.HasError() {
 			t.Fatalf("%s: want an error", name)
 		}
@@ -295,7 +295,7 @@ func TestGuidesReferenceURLStaysOutOfOutput(t *testing.T) {
 func TestUnsupportedCommandKeepsServerMessage(t *testing.T) {
 	var diags diag.Diagnostics
 	err := errors.New("Binder Error: Unsupported named parameter include_org_shares for md_list_dives")
-	(&rowsDataSource{spec: findSpec(t, "dives")}).queryRows(context.Background(), fakeRowsClient{err: err}, "SELECT * FROM MD_LIST_DIVES(include_org_shares := true)", &diags)
+	(&rowsDataSource{spec: findSpec(t, "dives")}).queryRows(context.Background(), fakeRowsClient{err: err}, "SELECT * FROM MD_LIST_DIVES(include_org_shares := true)", types.StringNull(), &diags)
 	if !diags.HasError() || diags[0].Summary() != "MotherDuck SQL command unavailable" {
 		t.Fatalf("diagnostics = %v", diags)
 	}
@@ -319,6 +319,57 @@ func TestShareDataSourceKeepsConfiguredName(t *testing.T) {
 	setShareModel(&model, share)
 	if !model.URL.Equal(types.StringValue("MD:_SHARE/tenant/abc")) || !model.Name.Equal(types.StringValue("tenant")) {
 		t.Fatalf("name = %v, url = %v, want the reported name and the configured URL", model.Name, model.URL)
+	}
+}
+
+// A share name can contain spaces, and a quote followed by a space, so the
+// quoted-literal and whitespace rules alone stop inside the URL and leave its
+// token visible. Redaction runs from the prefix to the UUID token instead.
+func TestRedactShareURLWithSpacesInName(t *testing.T) {
+	shareID := "0a9a026ec5a55946a9de39851087ed81"
+	dashedID := "0a9a026e-c5a5-5946-a9de-39851087ed81"
+	for name, tc := range map[string]struct{ message, want string }{
+		"quote and space":         {"Catalog Error: Share: 'md:_share/it' s/" + shareID + "' not found.", "Catalog Error: Share: '<redacted share URL>' not found."},
+		"space unquoted":          {"could not resolve md:_share/a b/" + shareID + " here", "could not resolve <redacted share URL> here"},
+		"space quoted":            {"Share 'md:_share/team data/" + shareID + "' not found", "Share '<redacted share URL>' not found"},
+		"space double quoted":     {`share "md:_share/team data/` + shareID + `" missing`, `share "<redacted share URL>" missing`},
+		"doubled quote and space": {"SELECT * FROM MD_LIST_GUIDES(reference := {'url': 'md:_share/it'' s/" + shareID + "'})", "SELECT * FROM MD_LIST_GUIDES(reference := {'url': '<redacted share URL>'})"},
+		"dashed token":            {"could not resolve md:_share/a b/" + dashedID + ".", "could not resolve <redacted share URL>."},
+		"upper case token":        {"could not resolve MD:_SHARE/A B/" + strings.ToUpper(shareID) + ".", "could not resolve <redacted share URL>."},
+		"encoded space":           {"GET md%3A_share%2Fa%20b%2F" + shareID + " failed", "GET <redacted share URL> failed"},
+		"two urls on one line":    {"md:_share/a b/" + shareID + " and md:_share/c d/" + dashedID, "<redacted share URL> and <redacted share URL>"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := redactShareURL(tc.message, types.StringNull())
+			if got != tc.want {
+				t.Fatalf("redactShareURL(%q) = %q, want %q", tc.message, got, tc.want)
+			}
+		})
+	}
+}
+
+// A configured reference_url is redacted exactly, so a URL whose format the
+// patterns do not recognize, such as one without a UUID token, stays out of
+// the diagnostics too, including the echoed query.
+func TestQueryRowsRedactsConfiguredShareURL(t *testing.T) {
+	configured := "md:_share/team data/it's latest"
+	spec := findSpec(t, "guides")
+	query := buildSpec(t, "guides", rowsModel{ReferenceType: types.StringValue("catalog"), ReferenceURL: types.StringValue(configured)})
+	for name, err := range map[string]error{
+		"generic":     errors.New("IO Error: could not resolve " + configured + " for reference"),
+		"unsupported": errors.New("Not implemented Error: reference filters"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			var diags diag.Diagnostics
+			(&rowsDataSource{spec: spec}).queryRows(context.Background(), fakeRowsClient{err: err}, query, types.StringValue(configured), &diags)
+			if !diags.HasError() {
+				t.Fatal("want an error")
+			}
+			detail := diags[0].Detail()
+			if strings.Contains(detail, "latest") || strings.Contains(detail, "team data") || !strings.Contains(detail, redactedShareURL) {
+				t.Errorf("diagnostic echoes the configured share URL: %s", detail)
+			}
+		})
 	}
 }
 

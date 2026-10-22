@@ -358,7 +358,7 @@ func TestRowsDataSourceQueryRowsClassifiesErrors(t *testing.T) {
 	ds := &rowsDataSource{spec: rowSpec{name: "roles"}}
 
 	var unsupportedDiags diag.Diagnostics
-	if _, ok := ds.queryRows(context.Background(), fakeRowsClient{err: errors.New("Parser Error: syntax error at or near \"SHOW\"")}, "SHOW ALL ROLES", &unsupportedDiags); ok {
+	if _, ok := ds.queryRows(context.Background(), fakeRowsClient{err: errors.New("Parser Error: syntax error at or near \"SHOW\"")}, "SHOW ALL ROLES", types.StringNull(), &unsupportedDiags); ok {
 		t.Fatal("unsupported command must not succeed")
 	}
 	if !unsupportedDiags.HasError() ||
@@ -370,7 +370,7 @@ func TestRowsDataSourceQueryRowsClassifiesErrors(t *testing.T) {
 	}
 
 	var otherDiags diag.Diagnostics
-	if _, ok := ds.queryRows(context.Background(), fakeRowsClient{err: errors.New("permission denied")}, "SHOW ALL ROLES", &otherDiags); ok {
+	if _, ok := ds.queryRows(context.Background(), fakeRowsClient{err: errors.New("permission denied")}, "SHOW ALL ROLES", types.StringNull(), &otherDiags); ok {
 		t.Fatal("query errors must not succeed")
 	}
 	if !otherDiags.HasError() || otherDiags[0].Summary() != "Unable to read motherduck_roles" {
@@ -385,6 +385,7 @@ func TestRowsDataSourceQueryRowsAppliesPostProcess(t *testing.T) {
 		context.Background(),
 		fakeRowsClient{rowsJSON: `[{"role_name":"zeta"},{"role_name":"alpha"}]`},
 		"SHOW ALL ROLES",
+		types.StringNull(),
 		&diags,
 	)
 	if !ok || diags.HasError() {
