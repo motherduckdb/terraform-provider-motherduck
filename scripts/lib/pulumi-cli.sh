@@ -2,19 +2,19 @@
 
 # Pulumi CLI and Any Terraform Provider bridge versions used by the Pulumi
 # checks. Bump both together with the example in examples/pulumi/python.
-PULUMI_CLI_VERSION="3.265.0"
+PULUMI_CLI_VERSION="3.271.0"
 # shellcheck disable=SC2034
-PULUMI_BRIDGE_VERSION="1.4.0"
+PULUMI_BRIDGE_VERSION="1.5.0"
 
 # pulumi_cli_digest <platform> prints the pinned SHA-256 of the release archive
 # for that platform, so a replaced upstream archive fails verification even if
 # its published checksum file is replaced with it.
 pulumi_cli_digest() {
   case "$1" in
-    linux-x64) echo "a7eff63bc539e4319a8add7383a01e427aef74a8994bcf5e6a9d12bf9d674979" ;;
-    linux-arm64) echo "55f2acb3db3618ec7405cbdf2bb21566fdf46c282a92ef419d9b1d7298a83ee4" ;;
-    darwin-x64) echo "ef23180967a62aed4fe86fd64e0a2814d907a112952e93af7e354ed7f9ca3f8a" ;;
-    darwin-arm64) echo "659e825627a45e781a290df53f801f60a21e0c206f351d08d68beadbb1fbaafe" ;;
+    linux-x64) echo "48b92e1584cf10649e43add7b4750e8be71231976f0cf25c94148a7ed254a01f" ;;
+    linux-arm64) echo "d8889833c6cfd8e1393e765f85891fd93af47651c1db08c54a11750b5c11df1c" ;;
+    darwin-x64) echo "0dcc11080718b71ebd7bcae3f3f22752d887a275532e4f1f13fcd9ba72e15eb7" ;;
+    darwin-arm64) echo "d855d3d9016ef616695c35964c967f28493272f8acbaeff2e856c8484c4b8f15" ;;
     *)
       echo "No pinned Pulumi CLI digest for platform $1" >&2
       return 1
