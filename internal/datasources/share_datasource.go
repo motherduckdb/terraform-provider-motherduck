@@ -195,6 +195,13 @@ func setShareModel(model *shareModel, share shareDescription) {
 
 const redactedShareURL = "<redacted share URL>"
 
+// tokenShareURLPattern matches a share URL up to its token. MotherDuck share
+// URLs have the form `md:_share/<share name>/<token>`, where the token is a
+// UUID and the share name has no slash but can contain spaces and quotes. The
+// match runs from the prefix to the first UUID segment, so it covers the whole
+// URL whatever the name contains, plain or URL-encoded.
+var tokenShareURLPattern = regexp.MustCompile(`(?i)md(?::|%3a)_share(?:/|%2f)[^/\r\n]*?(?:/|%2f)\{?[0-9a-f]{8}(?:-?[0-9a-f]{4}){3}-?[0-9a-f]{12}[0-9a-f-]*\}?`)
+
 // quotedShareURLPattern matches a share URL that starts a quoted literal, up
 // to the quote that ends the literal. A quote followed by another character
 // of the URL, as in a share name that contains a quote or a doubled SQL
@@ -209,15 +216,19 @@ var shareURLPattern = regexp.MustCompile(`(?i)md(?::|%3a)_share(?:/|%2f)\S*[^\s'
 
 // redactShareURL keeps share URLs out of diagnostics, because MotherDuck
 // errors echo the lookup value and the URL can grant access. It removes the
-// configured URL in any letter case and in its URL-encoded forms, and then any
-// remaining share URL, quoted or not.
+// configured URL in any letter case and in its URL-encoded forms, then any
+// share URL that ends in a token, and then any remaining share URL, quoted or
+// not.
 func redactShareURL(message string, configured types.String) string {
 	if !configured.IsNull() && !configured.IsUnknown() && configured.ValueString() != "" {
 		value := configured.ValueString()
-		for _, form := range []string{value, url.QueryEscape(value), url.PathEscape(value)} {
+		// An echoed query quotes the URL as a SQL literal, which doubles any
+		// quote in the share name.
+		for _, form := range []string{value, url.QueryEscape(value), url.PathEscape(value), strings.ReplaceAll(value, "'", "''")} {
 			message = regexp.MustCompile(`(?i)`+regexp.QuoteMeta(form)).ReplaceAllLiteralString(message, redactedShareURL)
 		}
 	}
+	message = tokenShareURLPattern.ReplaceAllLiteralString(message, redactedShareURL)
 	message = quotedShareURLPattern.ReplaceAllString(message, "${1}"+redactedShareURL+"${2}")
 	return shareURLPattern.ReplaceAllLiteralString(message, redactedShareURL)
 }

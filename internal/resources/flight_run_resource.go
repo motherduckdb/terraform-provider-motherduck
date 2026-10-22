@@ -83,7 +83,7 @@ func (r *flightRunResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			"status": schema.StringAttribute{
 				Computed:            true,
-				MarkdownDescription: "Latest Flight run status observed by the provider.",
+				MarkdownDescription: "Latest Flight run status observed by the provider, as MotherDuck reports it, for example `PENDING`, `RUNNING`, `SUCCEEDED`, `FAILED`, or `CANCELLED`. A successful run reports `SUCCEEDED`.",
 			},
 			"flight_version": schema.Int64Attribute{
 				Computed:            true,
@@ -95,7 +95,7 @@ func (r *flightRunResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			"wait_for_status": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`. If the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`. If `timeout_seconds` passes or the apply is interrupted first, the provider stops waiting with a warning and keeps the run in state with its last observed status, so the next apply does not start another run.",
+				MarkdownDescription: "Optional terminal status to wait for after triggering the run. The only supported value is `succeeded`. If the run reaches a failure status, the provider fails the apply without copying potentially sensitive Flight logs into diagnostics. Inspect logs separately with `motherduck_flight_logs`. If `timeout_seconds` passes or the apply is interrupted first, the provider stops waiting with a warning and the apply succeeds. The run keeps running, `status` holds the last observed value, and the next apply does not start another run. Resources that depend on the run are not held back in that case. To gate them on success, add a `lifecycle` `precondition` to each dependent resource that checks `status == \"SUCCEEDED\"`.",
 				Validators:          flightRunWaitStatusValidators(),
 			},
 			"poll_interval_seconds": schema.Int64Attribute{
@@ -270,7 +270,7 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 		if known && !exists {
 			diags.AddWarning(
 				"MotherDuck Flight run status not visible",
-				fmt.Sprintf("Flight %s was not found for the current principal, so Terraform stopped waiting for Flight run %d to reach %q and kept the run in state with its last known status %q. A Flight run grant lets a principal start a Flight it cannot read. To wait for the run, give the principal access to the Flight or run Terraform as the Flight owner.", model.FlightID.ValueString(), model.RunNumber.ValueInt64(), wantStatus, model.Status.ValueString()),
+				fmt.Sprintf("Flight %s was not found for the current principal, so Terraform stopped waiting for Flight run %d to reach %q and kept the run in state with its last known status %q. %s Refresh cannot update `status` while the Flight is not visible. A Flight run grant lets a principal start a Flight it cannot read. To wait for the run, give the principal access to the Flight or run Terraform as the Flight owner.", model.FlightID.ValueString(), model.RunNumber.ValueInt64(), wantStatus, model.Status.ValueString(), flightRunNotGatedDetail),
 			)
 			return
 		}
@@ -278,10 +278,19 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 }
 
 // flightRunWaitStoppedDetail explains that a run whose wait stopped early
-// stays in state and keeps running in MotherDuck.
+// stays in state and keeps running in MotherDuck, and that resources that
+// depend on the run were not held back.
 func flightRunWaitStoppedDetail(model *flightRunModel) string {
-	return fmt.Sprintf("The run keeps running in MotherDuck. Terraform kept it in state with its last observed status %q instead of failing the apply, so the next apply does not start another run. Refresh reads the current status. Inspect logs with the sensitive motherduck_flight_logs data source. Logs are not copied into diagnostics because they can contain credentials or other sensitive output.", model.Status.ValueString())
+	return fmt.Sprintf("The run keeps running in MotherDuck. Terraform kept it in state with its last observed status %q instead of failing the apply, so the next apply does not start another run. %s Refresh reads the current status into the `status` attribute, for example `terraform apply -refresh-only` followed by `terraform state show` on this resource. To hold back dependent resources until the run succeeds, add a lifecycle precondition on them that checks `status == %q`. Inspect logs with the sensitive motherduck_flight_logs data source. Logs are not copied into diagnostics because they can contain credentials or other sensitive output.", model.Status.ValueString(), flightRunNotGatedDetail, flightRunSucceededStatus)
 }
+
+// flightRunNotGatedDetail warns that the apply went on without the run's
+// result.
+const flightRunNotGatedDetail = "Resources that depend on this run were not held back and can be created or updated in this apply before the run finishes or even if it fails."
+
+// flightRunSucceededStatus is how MotherDuck reports a successful run in
+// `status`.
+const flightRunSucceededStatus = "SUCCEEDED"
 
 // flightRunLookup records which MotherDuck functions can read a Flight run.
 type flightRunLookup struct {

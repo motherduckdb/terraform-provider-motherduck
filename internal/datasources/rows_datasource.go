@@ -117,7 +117,7 @@ func (d *rowsDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	if d.spec.name == "role_members" {
 		rowsJSON, ok = d.queryRoleMembers(ctx, client, config.RoleName.ValueString(), &resp.Diagnostics)
 	} else {
-		rowsJSON, ok = d.queryRows(ctx, client, query, &resp.Diagnostics)
+		rowsJSON, ok = d.queryRows(ctx, client, query, config.ReferenceURL, &resp.Diagnostics)
 	}
 	if !ok {
 		return
@@ -139,11 +139,11 @@ func (d *rowsDataSource) queryRoleMembers(ctx context.Context, client interface 
 	QueryRowsJSON(context.Context, string, ...any) (string, error)
 }, roleName string, diags *diag.Diagnostics) (string, bool) {
 	role := sqlbuild.QuoteIdentifier(roleName)
-	usersJSON, ok := d.queryRows(ctx, client, "SHOW USERS OF ROLE "+role, diags)
+	usersJSON, ok := d.queryRows(ctx, client, "SHOW USERS OF ROLE "+role, types.StringNull(), diags)
 	if !ok {
 		return "", false
 	}
-	rolesJSON, ok := d.queryRows(ctx, client, "SHOW ROLES OF ROLE "+role, diags)
+	rolesJSON, ok := d.queryRows(ctx, client, "SHOW ROLES OF ROLE "+role, types.StringNull(), diags)
 	if !ok {
 		return "", false
 	}
@@ -188,7 +188,7 @@ func (d *rowsDataSource) queryRoleMembers(ctx context.Context, client interface 
 
 func (d *rowsDataSource) queryRows(ctx context.Context, client interface {
 	QueryRowsJSON(context.Context, string, ...any) (string, error)
-}, query string, diags *diag.Diagnostics) (string, bool) {
+}, query string, shareURL types.String, diags *diag.Diagnostics) (string, bool) {
 	var rowsJSON string
 	err := retry.SQL(ctx, func() error {
 		var readErr error
@@ -197,8 +197,9 @@ func (d *rowsDataSource) queryRows(ctx context.Context, client interface {
 	})
 	if err != nil {
 		// Queries and MotherDuck errors can carry share URLs from filters
-		// such as the Guide reference_url, so diagnostics redact them.
-		message := redactShareURL(err.Error(), types.StringNull())
+		// such as the Guide reference_url, so diagnostics redact them. The
+		// configured URL is redacted exactly, whatever its format.
+		message := redactShareURL(err.Error(), shareURL)
 		if d.spec.permissionHint != "" && strings.Contains(strings.ToLower(message), "admin only") {
 			diags.AddError("MotherDuck organization admin permission required", d.spec.permissionHint+" MotherDuck reported: "+message)
 			return "", false
@@ -206,7 +207,7 @@ func (d *rowsDataSource) queryRows(ctx context.Context, client interface {
 		if mdsql.IsUnsupportedCommand(err) {
 			diags.AddError(
 				"MotherDuck SQL command unavailable",
-				fmt.Sprintf("%s is not supported by the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_%s data source. MotherDuck reported: %s", redactShareURL(query, types.StringNull()), d.spec.name, message),
+				fmt.Sprintf("%s is not supported by the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_%s data source. MotherDuck reported: %s", redactShareURL(query, shareURL), d.spec.name, message),
 			)
 			return "", false
 		}

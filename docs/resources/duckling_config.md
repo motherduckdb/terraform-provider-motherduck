@@ -21,14 +21,16 @@ change replaces the resource unless only its letter case changes, because
 MotherDuck compares usernames case-insensitively. Pulse does not accept
 cooldown settings, so omit the corresponding cooldown when selecting Pulse.
 
-Cooldowns are optional. When a cooldown is unset, Terraform records the live
-value and keeps it while that instance size stays the same. This includes the
-first apply, which reads the live configuration and keeps a cooldown set in the
-MotherDuck UI when the instance size matches. MotherDuck stores the
-configuration exactly as written, so a write without the cooldown would reset
-it. When the instance size changes, MotherDuck applies its default for the new
-size. Removing a configured cooldown keeps the current value, so set the value
-you want instead of deleting the line.
+Cooldowns are optional. MotherDuck stores the configuration exactly as written,
+so a write without a cooldown resets it. On create, Terraform sends no cooldown
+for an unset one, so MotherDuck applies its default and replaces any cooldown
+set outside Terraform, such as in the MotherDuck UI. To keep such a cooldown,
+set it in the configuration before the first apply, or import the resource.
+After that, Terraform records the live value of an unset cooldown and keeps it
+while that instance size stays the same. When the instance size changes,
+MotherDuck applies its default for the new size. Removing a configured cooldown
+keeps the current value, so set the value you want instead of deleting the
+line.
 
 An unset cooldown on a Pulse size is always cleared. When a plan limit lowers
 an account to Pulse, MotherDuck keeps reporting the cooldown stored for the
@@ -95,8 +97,8 @@ resource "motherduck_service_account" "app" {
 
 ### Optional
 
-- `read_scaling_cooldown_seconds` (Number) Optional read-scaling cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds. When unset, Terraform does not manage the cooldown: it records the live value, keeps it while the instance size stays the same, including on the first apply, and lets MotherDuck apply its default when the instance size changes. With a Pulse instance size an unset cooldown is cleared, including one MotherDuck still reports after a plan limit lowered the size to Pulse. Removing a configured value keeps the current cooldown. Set a value to change it.
-- `read_write_cooldown_seconds` (Number) Optional read-write cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds. When unset, Terraform does not manage the cooldown: it records the live value, keeps it while the instance size stays the same, including on the first apply, and lets MotherDuck apply its default when the instance size changes. With a Pulse instance size an unset cooldown is cleared, including one MotherDuck still reports after a plan limit lowered the size to Pulse. Removing a configured value keeps the current cooldown. Set a value to change it.
+- `read_scaling_cooldown_seconds` (Number) Optional read-scaling cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds. When unset on create, Terraform sends no cooldown, so MotherDuck applies its default and replaces any cooldown set outside Terraform. After that, an unset cooldown is not managed: Terraform records the live value, keeps it while the instance size stays the same, and lets MotherDuck apply its default when the instance size changes. With a Pulse instance size an unset cooldown is cleared, including one MotherDuck still reports after a plan limit lowered the size to Pulse. Removing a configured value keeps the current cooldown. Set a value to change it.
+- `read_write_cooldown_seconds` (Number) Optional read-write cooldown in seconds. Must be between 60 and 86400. Pulse instances do not support cooldown seconds. When unset on create, Terraform sends no cooldown, so MotherDuck applies its default and replaces any cooldown set outside Terraform. After that, an unset cooldown is not managed: Terraform records the live value, keeps it while the instance size stays the same, and lets MotherDuck apply its default when the instance size changes. With a Pulse instance size an unset cooldown is cleared, including one MotherDuck still reports after a plan limit lowered the size to Pulse. Removing a configured value keeps the current cooldown. Set a value to change it.
 
 ### Read-Only
 

@@ -717,7 +717,8 @@ type ducklingConfigModel struct {
 func NewDucklingConfigResource() resource.Resource { return &ducklingConfigResource{} }
 
 const ducklingUnsetCooldownDescription = "Pulse instances do not support cooldown seconds. " +
-	"When unset, Terraform does not manage the cooldown: it records the live value, keeps it while the instance size stays the same, including on the first apply, and lets MotherDuck apply its default when the instance size changes. " +
+	"When unset on create, Terraform sends no cooldown, so MotherDuck applies its default and replaces any cooldown set outside Terraform. " +
+	"After that, an unset cooldown is not managed: Terraform records the live value, keeps it while the instance size stays the same, and lets MotherDuck apply its default when the instance size changes. " +
 	"With a Pulse instance size an unset cooldown is cleared, including one MotherDuck still reports after a plan limit lowered the size to Pulse. " +
 	"Removing a configured value keeps the current cooldown. Set a value to change it."
 
@@ -784,7 +785,7 @@ func (r *ducklingConfigResource) ValidateConfig(ctx context.Context, req resourc
 }
 
 func (r *ducklingConfigResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	r.putDucklingConfig(ctx, req.Plan, &resp.State, &resp.Diagnostics, true)
+	r.putDucklingConfig(ctx, req.Plan, &resp.State, &resp.Diagnostics)
 }
 
 func (r *ducklingConfigResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -811,7 +812,7 @@ func (r *ducklingConfigResource) Read(ctx context.Context, req resource.ReadRequ
 }
 
 func (r *ducklingConfigResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	r.putDucklingConfig(ctx, req.Plan, &resp.State, &resp.Diagnostics, false)
+	r.putDucklingConfig(ctx, req.Plan, &resp.State, &resp.Diagnostics)
 }
 
 func (r *ducklingConfigResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -834,7 +835,7 @@ func (r *ducklingConfigResource) putDucklingConfig(ctx context.Context, planGett
 	Get(context.Context, any) diag.Diagnostics
 }, stateSetter interface {
 	Set(context.Context, any) diag.Diagnostics
-}, diags *diag.Diagnostics, create bool) {
+}, diags *diag.Diagnostics) {
 	client := r.rest(diags)
 	if client == nil {
 		return
@@ -864,23 +865,11 @@ func (r *ducklingConfigResource) putDucklingConfig(ctx context.Context, planGett
 		v := plan.ReadScalingCooldownSeconds.ValueInt64()
 		cfg.ReadScaling.CooldownSeconds = &v
 	}
-	// MotherDuck stores the configuration exactly as written, so a write that
-	// omits a cooldown drops an override set outside Terraform. On create no
-	// state holds the live cooldown yet, so read it and send it back while the
-	// instance size stays the same.
-	if create && (keepsLiveCooldown(plan.ReadWriteCooldownSeconds, cfg.ReadWrite.InstanceSize) || keepsLiveCooldown(plan.ReadScalingCooldownSeconds, cfg.ReadScaling.InstanceSize)) {
-		live, err := client.GetDucklingConfig(ctx, plan.Username.ValueString())
-		if err != nil {
-			diags.AddError("Unable to read MotherDuck Duckling config", "Terraform reads the current Duckling configuration before its first write to keep cooldowns the configuration does not set. "+err.Error())
-			return
-		}
-		if keepsLiveCooldown(plan.ReadWriteCooldownSeconds, cfg.ReadWrite.InstanceSize) && sameInstanceSize(cfg.ReadWrite.InstanceSize, live.ReadWrite.InstanceSize) {
-			cfg.ReadWrite.CooldownSeconds = live.ReadWrite.CooldownSeconds
-		}
-		if keepsLiveCooldown(plan.ReadScalingCooldownSeconds, cfg.ReadScaling.InstanceSize) && sameInstanceSize(cfg.ReadScaling.InstanceSize, live.ReadScaling.InstanceSize) {
-			cfg.ReadScaling.CooldownSeconds = live.ReadScaling.CooldownSeconds
-		}
-	}
+	// A cooldown the configuration leaves unset is unknown on create and is
+	// not sent. MotherDuck stores the configuration exactly as written, so it
+	// applies its default and drops a cooldown set outside Terraform. Reading
+	// the live cooldown instead would turn a default that GET fills in, or an
+	// organization-level cooldown, into a stored user-level override.
 	// MotherDuck rejects any cooldown for Pulse.
 	if isPulseSize(cfg.ReadWrite.InstanceSize) {
 		cfg.ReadWrite.CooldownSeconds = nil
@@ -909,16 +898,6 @@ func (r *ducklingConfigResource) putDucklingConfig(ctx context.Context, planGett
 		plan.ReadScalingCooldownSeconds = types.Int64Null()
 	}
 	diags.Append(stateSetter.Set(ctx, &plan)...)
-}
-
-// keepsLiveCooldown reports whether a write should carry the live cooldown:
-// the configuration leaves it unset and the size is not Pulse.
-func keepsLiveCooldown(planned types.Int64, size string) bool {
-	return planned.IsUnknown() && !isPulseSize(size)
-}
-
-func sameInstanceSize(planned, live string) bool {
-	return strings.EqualFold(strings.TrimSpace(planned), strings.TrimSpace(live))
 }
 
 // ducklingTierLimits are the default Duckling limits for each MotherDuck plan,

@@ -310,30 +310,40 @@ func TestContractDucklingConfigAfterPlanLimitLowersSizeToPulse(t *testing.T) {
 	})
 }
 
-// TestContractDucklingConfigCreateKeepsLiveCooldown keeps a cooldown override
-// set outside Terraform when the configuration leaves it unset. MotherDuck
-// stores the configuration exactly as written, so a first write that omitted
-// the cooldown would silently reset the override to the default.
-func TestContractDucklingConfigCreateKeepsLiveCooldown(t *testing.T) {
-	rest := newDucklingContractREST(t)
-	rest.config = &mdrest.DucklingConfig{
-		ReadWrite:   mdrest.DucklingReadWriteConfig{InstanceSize: "standard", CooldownSeconds: int64Pointer(900)},
-		ReadScaling: mdrest.DucklingReadScalingConfig{InstanceSize: "jumbo", FlockSize: 2, CooldownSeconds: int64Pointer(1200)},
+// TestContractDucklingConfigCreateSendsNoUnsetCooldown sends no cooldown on
+// create when the configuration leaves it unset. A GET fills in MotherDuck's
+// default, or an organization-level cooldown, for a user with no stored
+// cooldown, so sending the live value back would turn it into a stored
+// user-level override. MotherDuck stores the write exactly as sent, so it
+// applies its default and replaces a cooldown set outside Terraform.
+func TestContractDucklingConfigCreateSendsNoUnsetCooldown(t *testing.T) {
+	for name, stored := range map[string]*mdrest.DucklingConfig{
+		// The user has no stored configuration and reads the organization
+		// default, with the default cooldowns filled in.
+		"organization default": nil,
+		// The user has cooldowns set in the MotherDuck UI at the same sizes.
+		"outside override": {
+			ReadWrite:   mdrest.DucklingReadWriteConfig{InstanceSize: "standard", CooldownSeconds: int64Pointer(900)},
+			ReadScaling: mdrest.DucklingReadScalingConfig{InstanceSize: "standard", FlockSize: 2, CooldownSeconds: int64Pointer(1200)},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rest := newDucklingContractREST(t)
+			rest.config = stored
+			resource.UnitTest(t, resource.TestCase{
+				ProtoV6ProviderFactories: contractProviderFactories(newContractSQL()),
+				Steps: []resource.TestStep{{
+					Config: ducklingContractSizes(rest.server.URL, "standard", 2),
+					ConfigPlanChecks: resource.ConfigPlanChecks{
+						PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+					},
+					Check: resource.ComposeAggregateTestCheckFunc(
+						rest.checkLastPutCooldowns(nil, nil),
+						resource.TestCheckResourceAttr("motherduck_duckling_config.test", "read_write_cooldown_seconds", "300"),
+						resource.TestCheckResourceAttr("motherduck_duckling_config.test", "read_scaling_cooldown_seconds", "300"),
+					),
+				}},
+			})
+		})
 	}
-	resource.UnitTest(t, resource.TestCase{
-		ProtoV6ProviderFactories: contractProviderFactories(newContractSQL()),
-		Steps: []resource.TestStep{{
-			// The read-write size is unchanged, so its override stays. The
-			// read-scaling size changes, so MotherDuck applies its default.
-			Config: ducklingContractSizes(rest.server.URL, "standard", 2),
-			ConfigPlanChecks: resource.ConfigPlanChecks{
-				PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
-			},
-			Check: resource.ComposeAggregateTestCheckFunc(
-				resource.TestCheckResourceAttr("motherduck_duckling_config.test", "read_write_cooldown_seconds", "900"),
-				resource.TestCheckResourceAttr("motherduck_duckling_config.test", "read_scaling_cooldown_seconds", "300"),
-				rest.checkLastPutCooldowns(int64Pointer(900), nil),
-			),
-		}},
-	})
 }

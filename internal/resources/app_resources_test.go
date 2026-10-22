@@ -853,6 +853,46 @@ func TestFlightWaitCancelledDuringReadKeepsRun(t *testing.T) {
 	}
 }
 
+// When the wait stops early the apply succeeds, so dependent resources go
+// ahead. The warning must say so and tell the user how to check `status` and
+// gate dependents on success.
+func TestFlightWaitStopWarningsSayDependentsWereNotGated(t *testing.T) {
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	for name, tc := range map[string]struct {
+		ctx     context.Context
+		timeout int64
+	}{
+		"timeout":   {ctx: t.Context(), timeout: 1},
+		"interrupt": {ctx: cancelled, timeout: 60},
+	} {
+		t.Run(name, func(t *testing.T) {
+			model := flightRunModel{
+				Status: types.StringValue("RUNNING"), WaitForStatus: types.StringValue("succeeded"),
+				TimeoutSeconds: types.Int64Value(tc.timeout), PollIntervalSeconds: types.Int64Value(10),
+				RunNumber: types.Int64Value(42),
+			}
+			var diags diag.Diagnostics
+			(&flightRunResource{}).waitForFlightRun(tc.ctx, &model, flightRunLookup{listing: true}, &diags)
+			if diags.HasError() || len(diags) != 1 {
+				t.Fatalf("expected one warning, got %v", diags)
+			}
+			detail := diags[0].Detail()
+			for _, want := range []string{
+				"depend on this run were not held back",
+				"`status`",
+				"terraform apply -refresh-only",
+				"lifecycle precondition",
+				`status == "SUCCEEDED"`,
+			} {
+				if !strings.Contains(detail, want) {
+					t.Errorf("warning detail does not mention %q: %s", want, detail)
+				}
+			}
+		})
+	}
+}
+
 func TestFlightWaitPreservesCallerCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

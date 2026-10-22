@@ -270,7 +270,7 @@ func TestStorageInfoQueries(t *testing.T) {
 func TestStorageInfoExplainsAdminOnlyErrors(t *testing.T) {
 	ds := &rowsDataSource{spec: findSpec(t, "storage_info")}
 	var diags diag.Diagnostics
-	_, ok := ds.queryRows(context.Background(), fakeRowsClient{err: errors.New("Invalid Error: MDExternalException: User not authorized. This is an admin only function.")}, "SELECT 1", &diags)
+	_, ok := ds.queryRows(context.Background(), fakeRowsClient{err: errors.New("Invalid Error: MDExternalException: User not authorized. This is an admin only function.")}, "SELECT 1", types.StringNull(), &diags)
 	if ok || !diags.HasError() {
 		t.Fatal("admin-only failure must fail the read")
 	}
@@ -280,7 +280,7 @@ func TestStorageInfoExplainsAdminOnlyErrors(t *testing.T) {
 
 	// Other data sources keep the generic read error for the same message.
 	var generic diag.Diagnostics
-	(&rowsDataSource{spec: findSpec(t, "databases")}).queryRows(context.Background(), fakeRowsClient{err: errors.New("admin only function")}, "SELECT 1", &generic)
+	(&rowsDataSource{spec: findSpec(t, "databases")}).queryRows(context.Background(), fakeRowsClient{err: errors.New("admin only function")}, "SELECT 1", types.StringNull(), &generic)
 	if !generic.HasError() || generic[0].Summary() != "Unable to read MotherDuck rows data source" {
 		t.Fatalf("unexpected generic diagnostic: %v", generic)
 	}

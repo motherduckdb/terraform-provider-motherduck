@@ -3,6 +3,8 @@ package resources
 import (
 	"context"
 	stdsql "database/sql"
+	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -60,9 +62,10 @@ type stateSetter interface {
 	Set(context.Context, any) diag.Diagnostics
 }
 
-// identifierRequiresReplace replaces the resource when a SQL identifier
-// changes, except for a change in letter case. DuckDB and MotherDuck resolve
-// identifiers case-insensitively and never allow two names that differ only in
+// identifierRequiresReplace replaces the resource when the name of a
+// MotherDuck entity changes, except for a change in letter case. MotherDuck
+// resolves database, share, and principal names with a Unicode
+// case-insensitive collation and never allows two names that differ only in
 // case, so a case-only edit names the same object. Terraform then updates
 // state in place to the new spelling instead of dropping the object.
 func identifierRequiresReplace() []planmodifier.String {
@@ -76,6 +79,100 @@ func identifierRequiresReplace() []planmodifier.String {
 }
 
 const identifierRequiresReplaceDescription = "Changing the name replaces the resource unless only its letter case changes."
+
+// catalogIdentifierRequiresReplace is identifierRequiresReplace for schema,
+// table, and view names. DuckDB stores these in the database catalog and folds
+// only ASCII letters when it compares them, so `Äpfel` and `äpfel` are two
+// different tables that can exist side by side. Only a change in the case of
+// ASCII letters names the same object.
+func catalogIdentifierRequiresReplace() []planmodifier.String {
+	return []planmodifier.String{stringplanmodifier.RequiresReplaceIf(
+		func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+			resp.RequiresReplace = !catalogNamesEqual(req.StateValue.ValueString(), req.PlanValue.ValueString())
+		},
+		catalogIdentifierRequiresReplaceDescription,
+		catalogIdentifierRequiresReplaceDescription,
+	)}
+}
+
+const catalogIdentifierRequiresReplaceDescription = "Changing the name replaces the resource unless only the case of ASCII letters changes."
+
+// catalogNamesEqual compares two catalog names the way DuckDB does. DuckDB
+// folds only the ASCII letters A to Z, and compares every other character,
+// including non-ASCII letters, exactly.
+func catalogNamesEqual(left, right string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := 0; i < len(left); i++ {
+		if asciiLower(left[i]) != asciiLower(right[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func asciiLower(b byte) byte {
+	if 'A' <= b && b <= 'Z' {
+		return b + ('a' - 'A')
+	}
+	return b
+}
+
+// matchCatalogRow returns the index of the row whose leading columns name want
+// under DuckDB's catalog comparison, or -1 when no row does. Catalog lookups
+// fetch candidates with lower(), which folds Unicode letters too, so callers
+// must filter the rows again here. An exact match wins over a case-folded one.
+func matchCatalogRow(rows [][]string, want ...string) int {
+	found := -1
+	for i, row := range rows {
+		if len(row) < len(want) {
+			continue
+		}
+		exact, equal := true, true
+		for j, part := range want {
+			if row[j] != part {
+				exact = false
+			}
+			if !catalogNamesEqual(row[j], part) {
+				equal = false
+				break
+			}
+		}
+		if equal && exact {
+			return i
+		}
+		if equal && found < 0 {
+			found = i
+		}
+	}
+	return found
+}
+
+// queryCatalogRows runs a catalog query whose columns are all strings and
+// returns its rows with the columns in the given order. A NULL value becomes
+// an empty string.
+func queryCatalogRows(ctx context.Context, client providerctx.SQLClient, columns []string, query string, args ...any) ([][]string, error) {
+	rowsJSON, err := client.QueryRowsJSON(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	var decoded []map[string]*string
+	if err := json.Unmarshal([]byte(rowsJSON), &decoded); err != nil {
+		return nil, fmt.Errorf("decode catalog rows: %w", err)
+	}
+	rows := make([][]string, 0, len(decoded))
+	for _, values := range decoded {
+		row := make([]string, len(columns))
+		for i, column := range columns {
+			if value := values[column]; value != nil {
+				row[i] = *value
+			}
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
+}
 
 // identifierIDPlanModifier keeps the prior ID like UseStateForUnknown, except
 // that it plans the ID from the configured identifiers. When an identifier
@@ -131,11 +228,13 @@ func relationExists(ctx context.Context, r interface {
 		if err := client.AttachDatabase(ctx, database); err != nil {
 			return err
 		}
-		var existsErr error
-		// DuckDB resolves identifiers case-insensitively, but the catalog
-		// reports the spelling the object was created with.
-		exists, existsErr = client.Exists(ctx, `SELECT count(*) FROM information_schema.tables WHERE lower(table_catalog) = lower(?) AND lower(table_schema) = lower(?) AND lower(table_name) = lower(?) AND table_type = ?`, database, schemaName, name, tableType)
-		return existsErr
+		// DuckDB resolves identifiers by folding ASCII letters, but the
+		// catalog reports the spelling the object was created with.
+		rows, queryErr := queryCatalogRows(ctx, client, []string{"table_catalog", "table_schema", "table_name"},
+			`SELECT table_catalog, table_schema, table_name FROM information_schema.tables WHERE lower(table_catalog) = lower(?) AND lower(table_schema) = lower(?) AND lower(table_name) = lower(?) AND table_type = ?`,
+			database, schemaName, name, tableType)
+		exists = queryErr == nil && matchCatalogRow(rows, database, schemaName, name) >= 0
+		return queryErr
 	})
 	if err != nil && isNotFoundFor(err, database, schemaName, name) {
 		return false
