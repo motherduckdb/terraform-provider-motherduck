@@ -757,11 +757,35 @@ func TestFlightWaitReportsConfiguredTimeout(t *testing.T) {
 	}
 	var diags diag.Diagnostics
 	res.waitForFlightRun(t.Context(), &model, flightRunLookup{listing: true}, &diags)
-	if len(diags) != 1 || diags[0].Summary() != "Timed out waiting for MotherDuck Flight run" {
-		t.Fatalf("expected configured timeout diagnostic, got %v", diags)
+	// The run is already in state, so the timeout must not fail the apply
+	// and taint it, which would start a second run on the next apply.
+	if len(diags) != 1 || diags[0].Severity() != diag.SeverityWarning || diags[0].Summary() != "Timed out waiting for MotherDuck Flight run" {
+		t.Fatalf("expected configured timeout warning, got %v", diags)
 	}
 	if !strings.Contains(diags[0].Detail(), "Flight run 42") || !strings.Contains(diags[0].Detail(), "RUNNING") {
 		t.Fatalf("timeout must identify the run and last status: %v", diags)
+	}
+}
+
+func TestFlightWaitCancelledDuringReadKeepsRun(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	client := &scriptedAppSQL{queryRow: func(string) mdsql.RowScanner {
+		cancel()
+		return scannedRow{err: context.Canceled}
+	}}
+	res := &flightRunResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	model := flightRunModel{
+		FlightID: types.StringValue(testAppID), Status: types.StringValue("QUEUED"), WaitForStatus: types.StringValue("succeeded"),
+		TimeoutSeconds: types.Int64Value(60), PollIntervalSeconds: types.Int64Value(1), RunNumber: types.Int64Value(7),
+	}
+	var diags diag.Diagnostics
+	res.waitForFlightRun(ctx, &model, flightRunLookup{direct: true}, &diags)
+	if diags.HasError() || len(diags) != 1 || diags[0].Summary() != "Interrupted while waiting for MotherDuck Flight run" {
+		t.Fatalf("expected one interruption warning, got %v", diags)
+	}
+	if model.Status.ValueString() != "QUEUED" {
+		t.Fatalf("status = %s, want the last observed QUEUED", model.Status)
 	}
 }
 
@@ -775,7 +799,10 @@ func TestFlightWaitPreservesCallerCancellation(t *testing.T) {
 	}
 	var diags diag.Diagnostics
 	res.waitForFlightRun(ctx, &model, flightRunLookup{listing: true}, &diags)
-	if len(diags) != 1 || diags[0].Summary() != "Interrupted while waiting for MotherDuck Flight run" {
-		t.Fatalf("expected caller cancellation diagnostic, got %v", diags)
+	if len(diags) != 1 || diags[0].Severity() != diag.SeverityWarning || diags[0].Summary() != "Interrupted while waiting for MotherDuck Flight run" {
+		t.Fatalf("expected caller cancellation warning, got %v", diags)
+	}
+	if model.Status.ValueString() != "RUNNING" {
+		t.Fatalf("status = %s, want the last observed RUNNING", model.Status)
 	}
 }

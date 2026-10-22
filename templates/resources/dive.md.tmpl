@@ -30,7 +30,9 @@ Import by Dive UUID. Refresh and import read `api_version` and the mounted
 added, removed, or retargeted outside Terraform plans an update. MotherDuck
 stores a share URL under the share's name. A configured share URL with the same
 token keeps its configured spelling in state. After import, a configured URL
-spelled differently from the stored one plans a single update. Omit
+that names the same database or share but is spelled differently from the
+stored one plans a single update that records the configured spelling without
+writing a new Dive version. Omit
 `api_version` to let MotherDuck choose it when content changes.
 
 Each `required_resources` URL must start with `md:`. Mount a database as
@@ -53,7 +55,9 @@ MotherDuck ignores an empty `description` in a metadata update, so an existing
 description cannot be cleared in place. Setting it to `""` or removing it fails
 the apply. Set a new non-empty description instead, or replace the Dive if it
 must have none. Setting `endorsed` status requires the appropriate
-organization-admin permission.
+organization-admin permission. MotherDuck sets the status of a new Dive after
+creating it. If it rejects that status, the apply keeps the new Dive with a
+warning instead of tainting it, and the next plan retries the status in place.
 
 Destroy deletes the Dive. To change deployment tools without deleting it,
 follow [ownership migration](../guides/resource-scope.md).

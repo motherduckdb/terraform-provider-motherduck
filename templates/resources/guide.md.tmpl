@@ -25,6 +25,11 @@ Keep Guide content in version control and choose one deployment owner for
 content, references, and audience. Referenced share URLs are sensitive and can
 appear in Terraform state even when normal output is masked.
 
+MotherDuck stores a catalog reference by database or share and reads it back as
+`md:<database>` or `md:_share/<share>/<token>`, and it returns reference UUIDs
+in lowercase. A configured URL that names the same database or share token, or a
+UUID that differs only in case, keeps its configured spelling in state.
+
 Import by Guide UUID. User/private and organization audiences are the documented
 public access modes. `access = "role"` with `role_names` is experimental and is
 not available in production MotherDuck yet. It requires a session whose

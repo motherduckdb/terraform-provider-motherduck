@@ -70,6 +70,14 @@ organization moves to a plan without scheduled runs. `schedule_status` then
 reads `DISABLED` while `schedule_cron` keeps its value. Terraform reports the
 status but does not manage it.
 
+Removing `schedule_cron` clears the schedule. MotherDuck keeps the cleared cron
+string and reports `schedule_status = "DISABLED"`, so Terraform reads a
+disabled schedule that the configuration does not set as no schedule. Import
+reads a Flight with a disabled schedule the same way. Setting `schedule_cron`
+again reactivates the schedule. `schedule_cron = ""` and an omitted
+`schedule_cron` both mean no schedule, and switching between them sends no
+update to MotherDuck.
+
 The provider validates at plan time that `source_code` is 1 to 204,800 bytes,
 that `requirements_txt` is at most 20,480 bytes, that `instance_type` is a
 MotherDuck size name (`F4`, `F8`, `F16`, or `F32`, case-sensitive), and that
@@ -126,7 +134,7 @@ resource "motherduck_flight" "heartbeat" {
 - `instance_type` (String) Runner size for Flight runs: `F4`, `F16`, or `F32`, with 4, 16, or 32 GB of memory. Each plan offers a subset: `F4`, `F16`, and `F32` on the Business plan and during a free trial, `F4` and `F16` on the Lite plan, and `F4` on the Free plan. An expired free trial gets the Free plan sizes. MotherDuck rejects a size the plan does not offer. When omitted at creation, MotherDuck applies the plan default: `F16` on the Business and Lite plans and during a free trial, and `F4` on the Free plan. Removing a configured value keeps the last applied size, so set the value explicitly to change it. A change creates a new Flight version.
 - `max_runtime_sec` (Number) Maximum Flight runtime in seconds. MotherDuck enforces a per-plan cap: 3,600 seconds (1 hour) on the Lite and Free plans, 28,800 seconds (8 hours) during a free trial, and no cap on the Business plan. On a capped plan, a value above the cap or `0` is rejected. On the Business plan, `0` removes the runtime limit. When omitted at creation, MotherDuck applies the plan default: 8 hours on the Business plan and during a free trial, and 1 hour on the Lite and Free plans. Removing a configured value keeps the last applied limit, so set the value explicitly to change it.
 - `requirements_txt` (String) Optional Python requirements text for the Flight runtime. Must be at most 20,480 bytes (20 KiB) of UTF-8.
-- `schedule_cron` (String) Optional cron schedule for the Flight. MotherDuck rejects schedules on plans without scheduled runs, such as the Free plan. See `schedule_status` for whether MotherDuck is currently running the schedule.
+- `schedule_cron` (String) Optional cron schedule for the Flight. MotherDuck rejects schedules on plans without scheduled runs, such as the Free plan. An empty string and an omitted value both mean no schedule. Removing the value clears the schedule, which MotherDuck reports as a `DISABLED` `schedule_status`. See `schedule_status` for whether MotherDuck is currently running the schedule.
 
 ### Read-Only
 
@@ -134,7 +142,7 @@ resource "motherduck_flight" "heartbeat" {
 - `current_version` (Number) Current Flight version number reported by MotherDuck.
 - `id` (String) Flight ID assigned by MotherDuck.
 - `owner_name` (String) Name of the Flight owner reported by MotherDuck.
-- `schedule_status` (String) Schedule status reported by MotherDuck, such as `ACTIVE` or `DISABLED`, or null when the Flight has no schedule. MotherDuck can disable a schedule on its own, for example when the organization moves to a plan without scheduled runs. Terraform reports this status but does not manage it.
+- `schedule_status` (String) Schedule status reported by MotherDuck, such as `ACTIVE` or `DISABLED`, or null when the Flight never had a schedule. A cleared schedule reads `DISABLED`. MotherDuck can disable a schedule on its own, for example when the organization moves to a plan without scheduled runs. Terraform reports this status but does not manage it.
 - `status` (String) Current Flight status reported by MotherDuck.
 - `updated_at` (String) Flight update timestamp reported by MotherDuck.
 
