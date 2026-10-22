@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -56,6 +57,9 @@ func secretWriteDiagnostic(err error) string {
 		case duckdb.ErrorTypeConnection, duckdb.ErrorTypeNetwork, duckdb.ErrorTypeHTTP, duckdb.ErrorTypeIO:
 			detail = "The secret could not be written because the connection or remote service request failed."
 		}
+	}
+	if isAlreadyExists(err) {
+		detail = "A MotherDuck secret with this name already exists."
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		detail = "The secret write was canceled or timed out."
@@ -213,6 +217,36 @@ func isNotFound(err error) bool {
 			strings.Contains(msg, "no database/share named")
 	}
 	return false
+}
+
+// isAlreadyExists reports whether a create failed because MotherDuck already
+// has an object with the requested name. DuckDB reports this as a binder,
+// catalog, or invalid-input error depending on the object type, so it matches
+// the message text. REST conflicts match on status code or message.
+func isAlreadyExists(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *mdrest.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode == http.StatusConflict || strings.Contains(strings.ToLower(apiErr.Error()), "already exists")
+	}
+	var duckErr *duckdb.Error
+	if !errors.As(err, &duckErr) {
+		return false
+	}
+	msg := strings.ToLower(duckErr.Error())
+	return strings.Contains(msg, "already exists") || strings.Contains(msg, "already taken")
+}
+
+// createErrorDetail returns the detail for a failed create. When the object
+// already exists in MotherDuck, it explains how to manage that object with
+// Terraform, because the raw error does not say that import is the fix.
+func createErrorDetail(err error, detail, objectType, importID string) string {
+	if !isAlreadyExists(err) {
+		return detail
+	}
+	return detail + "\n\nTo manage the existing " + objectType + " with Terraform, import it with the ID \"" + importID + "\" (in an `import` block or with `terraform import`). Otherwise, choose a different name."
 }
 
 // isDatabaseGone reports whether a DROP inside database failed only because

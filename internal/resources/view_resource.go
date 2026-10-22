@@ -189,7 +189,7 @@ func (r *viewResource) writeView(ctx context.Context, getter stateGetter, setter
 	}
 	query := createKeyword + sqlbuild.QuoteQualifiedIdentifier(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString()) + " AS " + plan.Query.ValueString()
 	if err := client.Exec(ctx, query); err != nil {
-		diags.AddError("Unable to create MotherDuck view", err.Error())
+		diags.AddError("Unable to create MotherDuck view", createErrorDetail(err, err.Error(), "view", id))
 		return
 	}
 	plan.ID = types.StringValue(id)

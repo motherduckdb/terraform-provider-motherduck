@@ -209,7 +209,7 @@ func (r *databaseResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	if err := client.Exec(ctx, query); err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck database", err.Error())
+		resp.Diagnostics.AddError("Unable to create MotherDuck database", createErrorDetail(err, err.Error(), "database", plan.Name.ValueString()))
 		return
 	}
 	plan.ID = types.StringValue(plan.Name.ValueString())

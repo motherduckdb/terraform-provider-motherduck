@@ -263,7 +263,7 @@ func (r *secretResource) createSecret(ctx context.Context, getter stateGetter, s
 	}
 	query := fmt.Sprintf("%s %s IN MOTHERDUCK (%s)", createKeyword, sqlbuild.QuoteIdentifier(plan.Name.ValueString()), strings.Join(entries, ", "))
 	if err := client.Exec(ctx, query); err != nil {
-		diags.AddError("Unable to create MotherDuck secret", secretWriteDiagnostic(err))
+		diags.AddError("Unable to create MotherDuck secret", createErrorDetail(err, secretWriteDiagnostic(err), "secret", plan.Name.ValueString()))
 		return
 	}
 	// Save the created identity before the catalog readback so a readback

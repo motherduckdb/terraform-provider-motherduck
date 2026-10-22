@@ -104,7 +104,7 @@ func (r *tableResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	query := "CREATE TABLE " + sqlbuild.QuoteQualifiedIdentifier(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString()) + " (" + columnDDL(columns) + ")"
 	if err := client.Exec(ctx, query); err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck table", err.Error())
+		resp.Diagnostics.AddError("Unable to create MotherDuck table", createErrorDetail(err, err.Error(), "table", id))
 		return
 	}
 	plan.ID = types.StringValue(id)

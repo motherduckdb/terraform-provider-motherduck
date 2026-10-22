@@ -73,7 +73,7 @@ func (r *schemaResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 	if err := client.Exec(ctx, "CREATE SCHEMA "+sqlbuild.QuoteQualifiedIdentifier(plan.Database.ValueString(), plan.Name.ValueString())); err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck schema", err.Error())
+		resp.Diagnostics.AddError("Unable to create MotherDuck schema", createErrorDetail(err, err.Error(), "schema", id))
 		return
 	}
 	plan.ID = types.StringValue(id)

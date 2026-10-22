@@ -1,0 +1,65 @@
+package resources
+
+import (
+	"errors"
+	"net/http"
+	"strings"
+	"testing"
+
+	duckdb "github.com/duckdb/duckdb-go/v2"
+	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
+)
+
+func TestIsAlreadyExists(t *testing.T) {
+	cases := map[string]struct {
+		err  error
+		want bool
+	}{
+		// Messages below are the ones MotherDuck returns for each object type.
+		"database":      {&duckdb.Error{Type: duckdb.ErrorTypeBinder, Msg: `Binder Error: Failed to create database: database with name "tf_db" already exists`}, true},
+		"schema":        {&duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: `Catalog Error: Schema with name "s1" already exists!`}, true},
+		"table":         {&duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: `Catalog Error: Table with name "t1" already exists!`}, true},
+		"share":         {&duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: "Catalog Error: Failed to create share: share name is already taken!"}, true},
+		"secret":        {&duckdb.Error{Type: duckdb.ErrorTypeInvalid, Msg: "Invalid Error: MDExternalException: Failed to create secret: another secret with the same name already exists! DROP SECRET or CREATE OR REPLACE SECRET."}, true},
+		"rest conflict": {&mdrest.APIError{StatusCode: http.StatusConflict, Code: "CONFLICT", Message: "conflict"}, true},
+		"rest message":  {&mdrest.APIError{StatusCode: http.StatusBadRequest, Code: "BAD_REQUEST", Message: "User svc already exists"}, true},
+		"not found":     {&duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: "Catalog Error: Table with name t1 does not exist!"}, false},
+		"rest other":    {&mdrest.APIError{StatusCode: http.StatusBadRequest, Code: "BAD_REQUEST", Message: "invalid username"}, false},
+		"plain error":   {errors.New("database already exists"), false},
+		"nil":           {nil, false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := isAlreadyExists(tc.err); got != tc.want {
+				t.Fatalf("isAlreadyExists() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCreateErrorDetailSuggestsImport(t *testing.T) {
+	err := &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: `Catalog Error: Table with name "t1" already exists!`}
+	got := createErrorDetail(err, err.Error(), "table", "analytics.main.t1")
+	if !strings.HasPrefix(got, err.Error()) {
+		t.Fatalf("detail should keep the MotherDuck error first, got %q", got)
+	}
+	if !strings.Contains(got, `import it with the ID "analytics.main.t1"`) {
+		t.Fatalf("detail should name the import ID, got %q", got)
+	}
+
+	other := &duckdb.Error{Type: duckdb.ErrorTypePermission, Msg: "Permission Error: denied"}
+	if got := createErrorDetail(other, other.Error(), "table", "analytics.main.t1"); got != other.Error() {
+		t.Fatalf("detail for other errors should be unchanged, got %q", got)
+	}
+}
+
+func TestSecretWriteDiagnosticAlreadyExists(t *testing.T) {
+	err := &duckdb.Error{Type: duckdb.ErrorTypeInvalid, Msg: "Invalid Error: MDExternalException: Failed to create secret: another secret with the same name already exists! DROP SECRET or CREATE OR REPLACE SECRET."}
+	got := secretWriteDiagnostic(err)
+	if !strings.HasPrefix(got, "A MotherDuck secret with this name already exists.") {
+		t.Fatalf("unexpected secret diagnostic %q", got)
+	}
+	if strings.Contains(got, "DROP SECRET") {
+		t.Fatalf("secret diagnostic must not copy the raw error, got %q", got)
+	}
+}

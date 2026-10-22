@@ -178,7 +178,7 @@ func (r *shareResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	query := "CREATE SHARE " + sqlbuild.QuoteIdentifier(plan.Name.ValueString()) + " FROM " + sqlbuild.QuoteIdentifier(plan.SourceDatabase.ValueString()) + sqlbuild.Options(options...)
 	if err := client.Exec(ctx, query); err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck share", err.Error())
+		resp.Diagnostics.AddError("Unable to create MotherDuck share", createErrorDetail(err, err.Error(), "share", plan.Name.ValueString()))
 		return
 	}
 	prepareShareCreateState(&plan)

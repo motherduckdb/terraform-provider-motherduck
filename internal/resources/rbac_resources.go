@@ -85,7 +85,7 @@ func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 	if err := client.Exec(ctx, "CREATE ROLE "+sqlbuild.QuoteIdentifier(plan.Name.ValueString())); err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck role", err.Error())
+		resp.Diagnostics.AddError("Unable to create MotherDuck role", createErrorDetail(err, err.Error(), "role", plan.Name.ValueString()))
 		return
 	}
 	plan.ID = types.StringValue(plan.Name.ValueString())

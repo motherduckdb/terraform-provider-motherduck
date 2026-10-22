@@ -101,7 +101,7 @@ func (r *serviceAccountResource) Create(ctx context.Context, req resource.Create
 	}
 	created, err := client.CreateServiceAccount(ctx, createReq)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck service account", err.Error())
+		resp.Diagnostics.AddError("Unable to create MotherDuck service account", createErrorDetail(err, err.Error(), "service account", plan.Username.ValueString()))
 		return
 	}
 	plan.ID = types.StringValue(created.Username)
