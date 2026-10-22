@@ -10,43 +10,43 @@ This release restricts `motherduck_service_account` to service accounts, correct
 
 ## v0.3.7
 
-Build with Go 1.27.3 to fix the `crypto/x509` certificate trust vulnerability GO-2026-6809, and update Go, workflow and example dependencies. Constraints such as `~> 0.3.0` select it. See the [v0.3.7 release notes](release-notes/v0.3.7.md).
+This release builds the provider with Go 1.27.3 to fix the `crypto/x509` certificate trust vulnerability GO-2026-6809 and updates Go, workflow and example dependencies. Version constraints such as `~> 0.3.0` select it. See the [v0.3.7 release notes](release-notes/v0.3.7.md).
 
 ## v0.3.6
 
-Keep access tokens in Terraform state when a successful REST response has an empty or null body instead of a token inventory. See the [v0.3.6 release notes](release-notes/v0.3.6.md).
+This release keeps access tokens in Terraform state when a successful REST response has an empty or null body instead of a token inventory. Version constraints such as `~> 0.3.0` select it. See the [v0.3.6 release notes](release-notes/v0.3.6.md).
 
 ## v0.3.5
 
-Explain refused role grants in organizations that manage user roles through SCIM, matching the MotherDuck release of 2026-10-15, report unreachable MotherDuck as a network problem rather than a token problem, and detect ENUM label case drift on tables. Constraints such as `~> 0.3.0` select it. See the [v0.3.5 release notes](release-notes/v0.3.5.md).
+This release explains refused role grants in organizations that manage user roles through SCIM, reports an unreachable MotherDuck as a network problem rather than a token problem, and detects letter case drift in table ENUM labels. Version constraints such as `~> 0.3.0` select it. See the [v0.3.5 release notes](release-notes/v0.3.5.md).
 
 ## v0.3.4
 
-Recover a missing snapshot ID after its creating database was dropped, so refresh and destroy can manage the retained snapshot name. See the [v0.3.4 release notes](release-notes/v0.3.4.md).
+This release recovers a missing snapshot ID after the creating database was dropped, so that refresh and destroy can manage the retained snapshot name, and builds with Go 1.27.2. Version constraints such as `~> 0.3.0` select it. See the [v0.3.4 release notes](release-notes/v0.3.4.md).
 
 ## v0.3.3
 
-List the users and service accounts in your organization with `data.motherduck_users`, matching the MotherDuck release of 2026-10-07. Constraints such as `~> 0.3.0` select it. See the [v0.3.3 release notes](release-notes/v0.3.3.md).
+This release adds the `motherduck_users` data source, which lists the users and service accounts of an organization. Version constraints such as `~> 0.3.0` select it. See the [v0.3.3 release notes](release-notes/v0.3.3.md).
 
 ## v0.3.2
 
-Set a Flight's runner size with `instance_type` and use DuckDB 1.5.6, matching the MotherDuck release of 2026-10-01. Constraints such as `~> 0.3.0` select it. See the [v0.3.2 release notes](release-notes/v0.3.2.md).
+This release adds `instance_type` to set the runner size of a Flight and embeds DuckDB 1.5.6. Version constraints such as `~> 0.3.0` select it. See the [v0.3.2 release notes](release-notes/v0.3.2.md).
 
 ## v0.3.1
 
-Look up separately owned secrets with `data.motherduck_secret` and keep snapshot state when a failed create or cleanup cannot resolve the snapshot ID. See the [v0.3.1 release notes](release-notes/v0.3.1.md).
+This release adds the `motherduck_secret` data source for separately owned secrets and keeps snapshot state when a failed create or cleanup cannot resolve the snapshot ID. Version constraints such as `~> 0.3.0` select it. See the [v0.3.1 release notes](release-notes/v0.3.1.md).
 
 ## v0.3.0
 
-Register Iceberg REST catalogs as databases, manage the MotherDuck features released through 2026-09-25, and install on glibc 2.34 and macOS 13. Includes stricter plan-time validation and a few behavior changes, so `~> 0.2.x` constraints do not select it. See the [upgrade steps and v0.3.0 release notes](release-notes/v0.3.0.md).
+This release registers Iceberg REST catalogs as databases, manages the MotherDuck features released through 2026-09-25, and installs on glibc 2.34 and macOS 13. It includes stricter plan-time validation and behavior changes, so constraints such as `~> 0.2.13` do not select it. See the [upgrade steps and v0.3.0 release notes](release-notes/v0.3.0.md).
 
 ## v0.2.13
 
-Follow the current, version-pinned examples with safer token rotation and complete copyable Terraform roots. See the [v0.2.13 release notes](release-notes/v0.2.13.md).
+This release version-pins the examples, makes their token rotation safer, and provides complete Terraform root modules. See the [v0.2.13 release notes](release-notes/v0.2.13.md).
 
 ## v0.2.12
 
-Retain a newly created view's Terraform state when its immediate catalog read returns no row or an error. See the [v0.2.12 release notes](release-notes/v0.2.12.md).
+This release keeps a newly created view in Terraform state when the catalog read that follows its creation returns no row or an error. See the [v0.2.12 release notes](release-notes/v0.2.12.md).
 
 ## v0.2.11
 
