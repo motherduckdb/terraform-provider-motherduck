@@ -6,7 +6,7 @@ This index lists the headline change for every release.
 
 ## v0.3.8
 
-This release restricts `motherduck_service_account` to service accounts, corrects the handling of identifiers that differ only in letter case, adds data sources and attributes for the MotherDuck production surface, and fixes several refresh and plan defects. Version constraints such as `~> 0.3.0` select it. See the [v0.3.8 release notes](release-notes/v0.3.8.md).
+This release restricts `motherduck_service_account` to service accounts, corrects the handling of identifiers that differ only in letter case, adds data sources and attributes for the MotherDuck production surface, fixes several refresh and plan defects, and explains how to resolve common configuration errors. Version constraints such as `~> 0.3.0` select it. See the [v0.3.8 release notes](release-notes/v0.3.8.md).
 
 ## v0.3.7
 
