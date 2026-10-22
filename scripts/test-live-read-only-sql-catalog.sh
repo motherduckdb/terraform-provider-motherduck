@@ -47,7 +47,9 @@ if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_di
   echo "Expected live Duckling size to be present" >&2
   exit 1
 fi
-for output_name in attached_databases_read databases_read owned_shares_read shared_with_me_read secrets_read; do
+for output_name in attached_databases_read databases_read owned_shares_read shared_with_me_read secrets_read \
+  current_user_details_present version_extension_hash_present current_user_tokens_typed shared_with_me_typed \
+  owned_shares_source_uuid_present owned_share_description_matches listed_share_source_present; do
   if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw "${output_name}")" != "true" ]]; then
     echo "Expected ${output_name} to be true" >&2
     exit 1

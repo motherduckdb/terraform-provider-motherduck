@@ -16,9 +16,10 @@ func TestDiveAPIVersionPlanModifier(t *testing.T) {
 	NewDiveResource().Schema(ctx, resource.SchemaRequest{}, &schemaResp)
 	s := schemaResp.Schema
 	objectType := diveRequiredResourceObjectType()
-	model := func(content string, apiVersion types.Int64) diveModel {
+	model := func(content string, apiVersion types.Int64, versionDescription types.String) diveModel {
 		return diveModel{
-			ID: types.StringValue(testAppID), Title: types.StringValue("Dive"), Description: types.StringNull(),
+			VersionDescription: versionDescription,
+			ID:                 types.StringValue(testAppID), Title: types.StringValue("Dive"), Description: types.StringNull(),
 			Content: types.StringValue(content), APIVersion: apiVersion, RequiredResources: types.ListNull(objectType),
 			Status: types.StringValue("draft"), StatusChangedAt: types.StringNull(), StatusSetBy: types.StringNull(),
 			StatusVersion: types.Int64Null(), CurrentVersion: types.Int64Value(1), CreatedAt: types.StringNull(),
@@ -26,25 +27,33 @@ func TestDiveAPIVersionPlanModifier(t *testing.T) {
 		}
 	}
 	for name, tc := range map[string]struct {
-		planContent string
-		config      types.Int64
-		want        types.Int64
+		planContent            string
+		planVersionDescription types.String
+		config                 types.Int64
+		want                   types.Int64
 	}{
 		"metadata change keeps state":  {planContent: "content", config: types.Int64Null(), want: types.Int64Value(1)},
 		"content change stays unknown": {planContent: "new content", config: types.Int64Null(), want: types.Int64Unknown()},
 		"configured value is not kept": {planContent: "content", config: types.Int64Value(2), want: types.Int64Unknown()},
+		// A version description change writes a new version, which must send
+		// the prior API version instead of the MotherDuck default.
+		"version description change keeps state": {planContent: "content", planVersionDescription: types.StringValue("v2"), config: types.Int64Null(), want: types.Int64Value(1)},
 	} {
 		t.Run(name, func(t *testing.T) {
+			versionDescription := tc.planVersionDescription
+			if versionDescription.IsNull() {
+				versionDescription = types.StringValue("v1")
+			}
 			state := tfsdk.State{Schema: s}
-			if d := state.Set(ctx, model("content", types.Int64Value(1))); d.HasError() {
+			if d := state.Set(ctx, model("content", types.Int64Value(1), types.StringValue("v1"))); d.HasError() {
 				t.Fatal(d)
 			}
 			plan := tfsdk.Plan{Schema: s}
-			if d := plan.Set(ctx, model(tc.planContent, types.Int64Unknown())); d.HasError() {
+			if d := plan.Set(ctx, model(tc.planContent, types.Int64Unknown(), versionDescription)); d.HasError() {
 				t.Fatal(d)
 			}
 			req := planmodifier.Int64Request{
-				Path: path.Root("api_version"), Plan: plan, State: state,
+				Path: path.Root("api_version"), Plan: plan, State: state, Config: tfsdk.Config{Schema: s, Raw: plan.Raw},
 				PlanValue: types.Int64Unknown(), StateValue: types.Int64Value(1), ConfigValue: tc.config,
 			}
 			resp := &planmodifier.Int64Response{PlanValue: req.PlanValue}

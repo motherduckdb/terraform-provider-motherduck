@@ -181,6 +181,23 @@ func TestActiveAccountsDataSourceReadUsesRESTClient(t *testing.T) {
 	if got, want := state.AccountsJSON.ValueString(), `[{"username":"svc","ducklings":null}]`; got != want {
 		t.Fatalf("accounts_json = %q, want %q", got, want)
 	}
+	if rows := state.Accounts.Elements(); len(rows) != 1 || !rows[0].(types.Object).Attributes()["username"].Equal(types.StringValue("svc")) {
+		t.Fatalf("accounts = %v, want one typed svc account", state.Accounts)
+	}
+}
+
+// TestActiveAccountsTypedListIsSensitive marks the typed inventory sensitive
+// like accounts_json, because both reveal account and Duckling metadata.
+func TestActiveAccountsTypedListIsSensitive(t *testing.T) {
+	var resp datasource.SchemaResponse
+	NewActiveAccountsDataSource().Schema(context.Background(), datasource.SchemaRequest{}, &resp)
+	attr, ok := resp.Schema.Attributes["accounts"].(schema.ListNestedAttribute)
+	if !ok {
+		t.Fatalf("accounts attribute = %T, want schema.ListNestedAttribute", resp.Schema.Attributes["accounts"])
+	}
+	if !attr.Computed || !attr.Sensitive {
+		t.Fatalf("accounts Computed=%t Sensitive=%t, want computed and sensitive", attr.Computed, attr.Sensitive)
+	}
 }
 
 func TestUserTokensDataSourceReadSetsTypedTokens(t *testing.T) {

@@ -100,6 +100,18 @@ output "instance_type" {
   value = motherduck_flight.smoke.instance_type
 }
 
+output "flight_run_timing" {
+  value = var.run_flight ? {
+    status       = motherduck_flight_run.smoke[0].status
+    is_scheduled = motherduck_flight_run.smoke[0].is_scheduled
+    started_at   = motherduck_flight_run.smoke[0].started_at
+    ended_at     = motherduck_flight_run.smoke[0].ended_at
+    scheduled_at = motherduck_flight_run.smoke[0].scheduled_at
+    cancelled_at = motherduck_flight_run.smoke[0].cancelled_at
+    exit_code    = motherduck_flight_run.smoke[0].exit_code
+  } : null
+}
+
 # The account-wide listing changes while parallel smoke runs create and delete
 # Flights, so exposing its rows would break the no-op plan check. Keep the
 # data source in every plan and output only a stable decoding check.

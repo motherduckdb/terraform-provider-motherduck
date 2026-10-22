@@ -82,8 +82,9 @@ data "motherduck_flight_logs" "pageviews" {
 }
 
 resource "motherduck_dive" "pageviews" {
-  title       = "Wikipedia Pageviews ${local.suffix}"
-  api_version = 1
+  title               = "Wikipedia Pageviews ${local.suffix}"
+  api_version         = 1
+  version_description = "Blueprint release ${local.suffix}"
 
   content = <<-JSX
     export default function Dive() {
@@ -95,6 +96,10 @@ resource "motherduck_dive" "pageviews" {
     {
       alias = "wikipedia_pageviews"
       url   = motherduck_share.pageviews.url
+    },
+    {
+      alias = "pageviews_database"
+      url   = "md:${motherduck_database.pageviews.name}"
     }
   ]
 
@@ -116,6 +121,28 @@ output "share_url" {
 
 output "flight_run_status" {
   value = motherduck_flight_run.pageviews.status
+}
+
+output "flight_run_result" {
+  value = {
+    is_scheduled = motherduck_flight_run.pageviews.is_scheduled
+    exit_code    = motherduck_flight_run.pageviews.exit_code
+    started      = motherduck_flight_run.pageviews.started_at != null
+    ended        = motherduck_flight_run.pageviews.ended_at != null
+    cancelled    = motherduck_flight_run.pageviews.cancelled_at != null
+  }
+}
+
+output "dive_metadata" {
+  value = {
+    version_description = motherduck_dive.pageviews.version_description
+    current_version     = motherduck_dive.pageviews.current_version
+    owner_id_set        = motherduck_dive.pageviews.owner_id != null
+    version_created_set = motherduck_dive.pageviews.version_created_at != null
+    resource_types      = [for mount in motherduck_dive.pageviews.required_resources : mount.resource_type]
+  }
+  # Derived from the sensitive required_resources.
+  sensitive = true
 }
 
 output "flight_log_line_count" {

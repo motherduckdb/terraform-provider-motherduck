@@ -191,20 +191,20 @@ resource "motherduck_access_token" "test" {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("motherduck_access_token.test", "token", "md_contract_secret_1"),
-					resource.TestCheckResourceAttr("motherduck_access_token.test", "id", "token-1"),
+					resource.TestCheckResourceAttr("motherduck_access_token.test", "id", contractTokenID1),
 				),
 			},
 			{
 				RefreshState: true,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("motherduck_access_token.test", "token", "md_contract_secret_1"),
-					resource.TestCheckResourceAttr("motherduck_access_token.test", "id", "token-1"),
+					resource.TestCheckResourceAttr("motherduck_access_token.test", "id", contractTokenID1),
 				),
 			},
 			{
 				ResourceName:            "motherduck_access_token.test",
 				ImportState:             true,
-				ImportStateId:           "contract_user/token-1",
+				ImportStateId:           "contract_user/" + contractTokenID1,
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"token"},
 			},
@@ -236,6 +236,7 @@ func TestContractOwnedShareTypedNullState(t *testing.T) {
 		"AUTOMATIC",
 		nil,
 		"2026-09-01T00:00:00Z",
+		"00000000-0000-0000-0000-0000000000a1",
 	}
 	config := contractProviderConfig("http://127.0.0.1") + `
 data "motherduck_owned_share" "test" {
@@ -249,6 +250,7 @@ data "motherduck_owned_share" "test" {
 			Config: config,
 			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr("data.motherduck_owned_share.test", "source_database", "analytics"),
+				resource.TestCheckResourceAttr("data.motherduck_owned_share.test", "source_database_uuid", "00000000-0000-0000-0000-0000000000a1"),
 				resource.TestCheckResourceAttr("data.motherduck_owned_share.test", "access", "restricted"),
 				resource.TestCheckResourceAttr("data.motherduck_owned_share.test", "update_mode", "automatic"),
 				resource.TestCheckResourceAttr("data.motherduck_owned_share.test", "url", "md:_share/contract"),
@@ -388,7 +390,7 @@ resource "motherduck_share" "test" {
 }
 
 func contractShareRow(access, visibility, updateMode string) []any {
-	return []any{"md:_share/contract", "analytics", access, visibility, updateMode, nil, "2026-09-01T00:00:00Z"}
+	return []any{"md:_share/contract", "analytics", access, visibility, updateMode, nil, "2026-09-01T00:00:00Z", "00000000-0000-0000-0000-0000000000a1"}
 }
 
 func contractProviderFactories(sqlClient providerctx.SQLClient) map[string]func() (tfprotov6.ProviderServer, error) {
@@ -642,6 +644,14 @@ func (r contractRow) Scan(dest ...any) error {
 	return nil
 }
 
+// contractTokenID returns the UUID the contract server assigns to the nth
+// token it creates. Import accepts only UUID token IDs, as MotherDuck issues.
+func contractTokenID(n int) string {
+	return fmt.Sprintf("00000000-0000-4000-8000-%012d", n)
+}
+
+var contractTokenID1 = contractTokenID(1)
+
 type contractREST struct {
 	mu          sync.Mutex
 	token       *mdrest.Token
@@ -686,7 +696,7 @@ func (c *contractREST) serveHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		c.createCount++
 		c.token = &mdrest.Token{
-			ID:        fmt.Sprintf("token-%d", c.createCount),
+			ID:        contractTokenID(c.createCount),
 			Name:      createReq.Name,
 			Token:     fmt.Sprintf("md_contract_secret_%d", c.createCount),
 			TokenType: createReq.TokenType,

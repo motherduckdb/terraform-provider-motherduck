@@ -17,6 +17,23 @@ A Flight run is an operation recorded in Terraform state. Creating or replacing
 this resource can execute the Flight again. Use the Flight definition's schedule
 for recurring execution.
 
+Refresh reads the run's status, timing, and `exit_code`. `started_at`,
+`ended_at`, and `exit_code` stay null until the run starts or finishes.
+
+## Access to the Flight
+
+Run Terraform as the Flight owner, or as a principal that can see the Flight.
+A Flight run grant lets a principal start a Flight without seeing it, but
+MotherDuck then reports the Flight and its runs as not found to that principal.
+Refresh cannot tell that apart from a deleted Flight, so the provider keeps the
+run in state with a warning instead of removing it and starting a new run on
+the next apply. Its status and timing stay at the values seen at creation.
+`wait_for_status` stops waiting with a warning as soon as the Flight is not
+visible and keeps the run in state, so the apply succeeds without starting a
+second run. `cancel_on_destroy` cannot cancel the run, so destroy removes it
+from state with a warning. If the Flight was deleted, remove the run resource
+from the configuration or from state.
+
 ## Example Usage
 
 ```terraform
@@ -66,10 +83,16 @@ resource "motherduck_flight_run" "heartbeat" {
 
 ### Read-Only
 
+- `cancelled_at` (String) Timestamp when the run was cancelled, or null when it was not cancelled.
 - `created_at` (String) Flight run creation timestamp reported by MotherDuck.
+- `ended_at` (String) Timestamp when the run finished, or null until it finishes.
+- `exit_code` (Number) Process exit code of the run, or null until the run finishes.
 - `flight_version` (Number) Flight version used by this run.
 - `id` (String) MotherDuck run ID for this Flight run.
+- `is_scheduled` (Boolean) Whether MotherDuck started the run from the Flight schedule. Runs started by this resource are on-demand, so this is `false`.
 - `run_number` (Number) MotherDuck run number assigned to this Flight run.
+- `scheduled_at` (String) Timestamp MotherDuck scheduled the run for. On-demand runs also report one, set when the run was queued.
+- `started_at` (String) Timestamp when the run started executing, or null while it is queued.
 - `status` (String) Latest Flight run status observed by the provider.
 
 ## Import

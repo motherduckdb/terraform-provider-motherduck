@@ -78,6 +78,32 @@ if [[ "${normalized_run_status}" != "succeeded" ]]; then
   exit 1
 fi
 
+# A waited run that succeeded reports its timing and exit code. The Dive
+# writes its version description as a second version and reports each mount
+# type.
+TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -json flight_run_result | python3 -c '
+import json, sys
+run = json.load(sys.stdin)
+want = {"is_scheduled": False, "exit_code": 0, "started": True, "ended": True, "cancelled": False}
+if run != want:
+    sys.exit("Unexpected Flight run result %s, want %s" % (run, want))
+'
+TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -json dive_metadata | python3 -c '
+import json, sys
+dive = json.load(sys.stdin)
+problems = []
+if not dive["version_description"].startswith("Blueprint release "):
+    problems.append("version_description was not read back")
+if dive["current_version"] != 2:
+    problems.append("current_version should be 2 after writing the version description")
+if not dive["owner_id_set"] or not dive["version_created_set"]:
+    problems.append("owner_id and version_created_at should be set")
+if dive["resource_types"] != ["share", "database"]:
+    problems.append("resource_types should be share then database, got %s" % dive["resource_types"])
+if problems:
+    sys.exit("Unexpected Dive metadata: " + ", ".join(problems))
+'
+
 flight_logs_ready=false
 for _ in {1..12}; do
   log_line_count="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw flight_log_line_count)"

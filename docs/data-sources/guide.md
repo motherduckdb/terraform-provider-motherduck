@@ -2,12 +2,12 @@
 page_title: "motherduck_guide Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Reads one MotherDuck Guide, including its current content and references.
+  Reads one MotherDuck Guide, including its content and references. Reads the current version unless version is set.
 ---
 
 # motherduck_guide (Data Source)
 
-Reads one MotherDuck Guide, including its current content and references.
+Reads one MotherDuck Guide, including its content and references. Reads the current version unless `version` is set.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read
@@ -28,6 +28,33 @@ data "motherduck_guide" "revenue" {
 
 - `guide_id` (String) Guide ID. Must be a UUID with no leading or trailing whitespace.
 
+### Optional
+
+- `version` (Number) Version number to read. Reads the current version when unset.
+
 ### Read-Only
 
+- `rows` (Attributes List) Typed catalog rows for stable MotherDuck metadata. `rows_json` remains available for raw server columns. (see [below for nested schema](#nestedatt--rows))
 - `rows_json` (String, Sensitive) Raw MotherDuck catalog rows encoded as JSON. Sensitive because catalog rows can include share URLs and account metadata.
+
+<a id="nestedatt--rows"></a>
+### Nested Schema for `rows`
+
+Read-Only:
+
+- `access` (String) Guide access mode.
+- `content` (String, Sensitive) Guide Markdown content of the returned version. Sensitive because it can include account details.
+- `created_at` (String) Guide creation timestamp.
+- `current_version` (String) Current guide version.
+- `description` (String) Guide description.
+- `id` (String) Guide ID.
+- `owner_id` (String) Guide owner ID.
+- `owner_name` (String) Guide owner name.
+- `references` (String, Sensitive) JSON list of objects the Guide references. Sensitive because catalog references can include share URLs.
+- `title` (String) Guide title.
+- `topic` (String) Optional slash-separated guide topic.
+- `updated_at` (String) Guide update timestamp.
+- `version` (String) Guide version returned in this row.
+- `version_change_comment` (String) Change comment of the returned version.
+- `version_created_at` (String) Creation timestamp of the returned version.
+- `version_external_id` (String) External ID of the returned version.

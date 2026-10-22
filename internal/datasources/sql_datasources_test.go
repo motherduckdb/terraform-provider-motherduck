@@ -16,31 +16,33 @@ import (
 
 func TestRowSpecsCoverPlannedSQLDataSources(t *testing.T) {
 	want := map[string]bool{
-		"databases":          true,
-		"attached_databases": true,
-		"database_snapshots": true,
-		"owned_shares":       true,
-		"shared_with_me":     true,
-		"share_grants":       true,
-		"secrets":            true,
-		"buckets_for_secret": true,
-		"files":              true,
-		"roles":              true,
-		"role_members":       true,
-		"roles_for_user":     true,
-		"roles_for_role":     true,
-		"dives":              true,
-		"dive":               true,
-		"dive_versions":      true,
-		"flights":            true,
-		"flight":             true,
-		"flight_versions":    true,
-		"flight_runs":        true,
-		"flight_logs":        true,
-		"guides":             true,
-		"guide":              true,
-		"guide_grantees":     true,
-		"guide_versions":     true,
+		"databases":           true,
+		"attached_databases":  true,
+		"database_snapshots":  true,
+		"owned_shares":        true,
+		"shared_with_me":      true,
+		"share_grants":        true,
+		"secrets":             true,
+		"buckets_for_secret":  true,
+		"files":               true,
+		"roles":               true,
+		"role_members":        true,
+		"roles_for_user":      true,
+		"roles_for_role":      true,
+		"dives":               true,
+		"dive":                true,
+		"dive_versions":       true,
+		"flights":             true,
+		"flight":              true,
+		"flight_versions":     true,
+		"flight_runs":         true,
+		"flight_logs":         true,
+		"guides":              true,
+		"guide":               true,
+		"guide_grantees":      true,
+		"guide_versions":      true,
+		"current_user_tokens": true,
+		"storage_info":        true,
 	}
 	got := map[string]bool{}
 	for _, spec := range rowSpecs() {
@@ -62,6 +64,7 @@ func TestSQLDataSourceSchemasHaveDescriptions(t *testing.T) {
 		NewVersionDataSource(),
 		NewLiveDucklingSizeDataSource(),
 		NewOwnedShareDataSource(),
+		NewShareDataSource(),
 		NewDatabaseDataSource(),
 		NewSecretDataSource(),
 	} {
@@ -140,22 +143,23 @@ func TestOwnedShareDataSourceSchema(t *testing.T) {
 func TestRowsSpecsDeclareRequiredFunctions(t *testing.T) {
 	// #nosec G101 -- function names include "secret" but are not credentials.
 	want := map[string]string{
-		"attached_databases": "md_attached_databases",
-		"buckets_for_secret": "md_list_buckets_for_secret",
-		"files":              "md_list_files",
-		"dives":              "md_list_dives",
-		"dive":               "md_get_dive",
-		"dive_versions":      "md_list_dive_versions",
-		"flights":            "md_list_flights",
-		"flight":             "md_get_flight",
-		"flight_versions":    "md_list_flight_versions",
-		"flight_runs":        "md_list_flight_runs",
-		"flight_logs":        "md_get_flight_logs",
-		"guides":             "md_list_guides",
-		"guide":              "md_get_guide",
-		"guide_grantees":     "md_set_guide_access",
-		"guide_versions":     "md_list_guide_versions",
-		"share_grants":       "md_list_share_grantees",
+		"attached_databases":  "md_attached_databases",
+		"buckets_for_secret":  "md_list_buckets_for_secret",
+		"files":               "md_list_files",
+		"dives":               "md_list_dives",
+		"dive":                "md_get_dive",
+		"dive_versions":       "md_list_dive_versions",
+		"flights":             "md_list_flights",
+		"flight":              "md_get_flight",
+		"flight_versions":     "md_list_flight_versions",
+		"flight_runs":         "md_list_flight_runs",
+		"flight_logs":         "md_get_flight_logs",
+		"guides":              "md_list_guides",
+		"guide":               "md_get_guide",
+		"guide_grantees":      "md_set_guide_access",
+		"guide_versions":      "md_list_guide_versions",
+		"share_grants":        "md_list_share_grantees",
+		"current_user_tokens": "md_access_tokens",
 	}
 	for name, fn := range want {
 		if got := findSpec(t, name).requiredFunction; got != fn {
@@ -214,6 +218,8 @@ func TestRowsSpecAttributesAreSupportedByConfigAndStateSwitches(t *testing.T) {
 		"reference_macro":    true,
 		"reference_uuid":     true,
 		"run_number":         true,
+		"version":            true,
+		"include_history":    true,
 		"limit":              true,
 		"offset":             true,
 		"order":              true,
@@ -477,22 +483,26 @@ func TestRowsSpecShareGrantsQueriesGranteesForOneShare(t *testing.T) {
 
 func TestRowsSpecSchemasExposeOnlyRelevantAttributes(t *testing.T) {
 	tests := map[string][]string{
-		"databases":          {"limit", "name", "offset", "rows", "rows_json"},
-		"owned_shares":       {"limit", "name", "offset", "rows", "rows_json"},
-		"shared_with_me":     {"limit", "name", "offset", "rows", "rows_json"},
-		"attached_databases": {"rows_json"},
-		"dives":              {"include_org_shares", "limit", "offset", "rows_json"},
-		"flight_logs":        {"flight_id", "limit", "offset", "order", "rows", "rows_json", "run_number"},
-		"files":              {"limit", "offset", "path", "rows_json"},
-		"buckets_for_secret": {"limit", "offset", "rows_json", "secret_name"},
-		"flights":            {"limit", "offset", "owner_only", "rows", "rows_json"},
-		"roles":              {"rows", "rows_json"},
-		"role_members":       {"role_name", "rows", "rows_json"},
-		"share_grants":       {"share_name", "rows", "rows_json"},
-		"guides":             {"limit", "offset", "reference_column", "reference_macro", "reference_schema", "reference_table", "reference_type", "reference_url", "reference_uuid", "reference_view", "rows", "rows_json", "topic"},
-		"guide":              {"guide_id", "rows_json"},
-		"guide_grantees":     {"guide_id", "rows", "rows_json"},
-		"guide_versions":     {"guide_id", "limit", "offset", "rows_json"},
+		"databases":           {"limit", "name", "offset", "rows", "rows_json"},
+		"owned_shares":        {"limit", "name", "offset", "rows", "rows_json"},
+		"shared_with_me":      {"limit", "name", "offset", "rows", "rows_json"},
+		"attached_databases":  {"rows", "rows_json"},
+		"dives":               {"include_org_shares", "limit", "offset", "rows", "rows_json"},
+		"dive":                {"dive_id", "rows", "rows_json"},
+		"dive_versions":       {"dive_id", "limit", "offset", "rows", "rows_json"},
+		"flight_logs":         {"flight_id", "limit", "offset", "order", "rows", "rows_json", "run_number"},
+		"files":               {"limit", "offset", "path", "rows", "rows_json"},
+		"buckets_for_secret":  {"limit", "offset", "rows", "rows_json", "secret_name"},
+		"flights":             {"limit", "offset", "owner_only", "rows", "rows_json"},
+		"roles":               {"rows", "rows_json"},
+		"role_members":        {"role_name", "rows", "rows_json"},
+		"share_grants":        {"share_name", "rows", "rows_json"},
+		"guides":              {"limit", "offset", "reference_column", "reference_macro", "reference_schema", "reference_table", "reference_type", "reference_url", "reference_uuid", "reference_view", "rows", "rows_json", "topic"},
+		"guide":               {"guide_id", "rows", "rows_json", "version"},
+		"guide_grantees":      {"guide_id", "rows", "rows_json"},
+		"guide_versions":      {"guide_id", "limit", "offset", "rows", "rows_json"},
+		"current_user_tokens": {"rows", "rows_json"},
+		"storage_info":        {"database_name", "include_history", "limit", "offset", "rows", "rows_json"},
 	}
 	for name, want := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -583,34 +593,17 @@ func TestStableCatalogRowsSupportLimitOffset(t *testing.T) {
 	}
 }
 
-func TestStableRowsDataSourcesExposeTypedRows(t *testing.T) {
-	stable := map[string]bool{
-		"databases":          true,
-		"database_snapshots": true,
-		"owned_shares":       true,
-		"shared_with_me":     true,
-		"share_grants":       true,
-		"secrets":            true,
-		"flights":            true,
-		"flight_logs":        true,
-		"roles":              true,
-		"role_members":       true,
-		"roles_for_user":     true,
-		"roles_for_role":     true,
-		"guides":             true,
-		"guide_grantees":     true,
-	}
+// Every row data source mirrors its live columns as typed rows, so callers
+// never need to decode the sensitive rows_json for non-sensitive fields.
+func TestRowsDataSourcesExposeTypedRows(t *testing.T) {
 	for _, spec := range rowSpecs() {
 		t.Run(spec.name, func(t *testing.T) {
 			ds := &rowsDataSource{spec: spec}
 			var resp datasource.SchemaResponse
 			ds.Schema(t.Context(), datasource.SchemaRequest{}, &resp)
 			attr, hasRows := resp.Schema.Attributes["rows"]
-			if stable[spec.name] != hasRows {
-				t.Fatalf("rows attribute present = %v, want %v", hasRows, stable[spec.name])
-			}
-			if !stable[spec.name] {
-				return
+			if !hasRows {
+				t.Fatal("rows attribute is missing")
 			}
 			rows, ok := attr.(schema.ListNestedAttribute)
 			if !ok {

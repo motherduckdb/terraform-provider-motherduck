@@ -2,12 +2,12 @@
 page_title: "motherduck_current_user Data Source - motherduck"
 subcategory: "Identity and compute"
 description: |-
-  Reads the MotherDuck user for the current SQL session.
+  Reads the MotherDuck user for the current SQL session. value is the session user from md_user(). The other attributes come from md_user_info() and are null when the session does not expose them. When md_user_info() fails, they are null and the read adds a warning instead of failing.
 ---
 
 # motherduck_current_user (Data Source)
 
-Reads the MotherDuck user for the current SQL session.
+Reads the MotherDuck user for the current SQL session. `value` is the session user from `md_user()`. The other attributes come from `md_user_info()` and are null when the session does not expose them. When `md_user_info()` fails, they are null and the read adds a warning instead of failing.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read
@@ -24,4 +24,10 @@ data "motherduck_current_user" "current" {}
 
 ### Read-Only
 
+- `org_id` (String) ID of the organization of the current user.
+- `org_name` (String) Name of the organization of the current user.
+- `org_type` (String) Plan type of the organization of the current user.
+- `region` (String) MotherDuck region of the current session. Null when the MotherDuck client does not report it.
+- `user_id` (String) ID of the current user.
+- `username` (String) Username of the current user.
 - `value` (String) Scalar value returned by the MotherDuck SQL data source.

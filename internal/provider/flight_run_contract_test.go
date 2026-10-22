@@ -4,6 +4,7 @@ package provider
 
 import (
 	"context"
+	stdsql "database/sql"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -36,17 +37,29 @@ func (c *flightRunContractSQL) QueryRow(_ context.Context, query string, _ ...an
 	return flightRunContractRow{}
 }
 
-type flightRunContractRow struct{}
+// flightRunContractRow is the run MD_RUN_FLIGHT returns. An empty status
+// reads as SUCCEEDED.
+type flightRunContractRow struct{ status string }
 
-func (flightRunContractRow) Scan(dest ...any) error {
-	if len(dest) != 5 {
+func (r flightRunContractRow) Scan(dest ...any) error {
+	if len(dest) != 11 {
 		return fmt.Errorf("unexpected scan width %d", len(dest))
 	}
+	status := r.status
+	if status == "" {
+		status = "SUCCEEDED"
+	}
 	*dest[0].(*string) = "11111111-1111-4111-8111-111111111112"
-	*dest[1].(*string) = "SUCCEEDED"
+	*dest[1].(*string) = status
 	*dest[2].(*int64) = 1
 	*dest[3].(*int64) = 1
 	*dest[4].(*string) = "2026-09-06T00:00:00Z"
+	*dest[5].(*stdsql.NullBool) = stdsql.NullBool{Valid: true}
+	*dest[6].(*stdsql.NullString) = stdsql.NullString{String: "2026-09-06T00:00:05Z", Valid: true}
+	*dest[7].(*stdsql.NullString) = stdsql.NullString{String: "2026-09-06T00:01:00Z", Valid: true}
+	*dest[8].(*stdsql.NullString) = stdsql.NullString{}
+	*dest[9].(*stdsql.NullString) = stdsql.NullString{}
+	*dest[10].(*stdsql.NullInt64) = stdsql.NullInt64{Int64: 0, Valid: true}
 	return nil
 }
 
@@ -67,6 +80,12 @@ resource "motherduck_flight_run" "test" {
 		resource.TestCheckResourceAttr("motherduck_flight_run.test", "run_number", "1"),
 		resource.TestCheckResourceAttr("motherduck_flight_run.test", "flight_version", "1"),
 		resource.TestCheckResourceAttr("motherduck_flight_run.test", "created_at", "2026-09-06T00:00:00Z"),
+		resource.TestCheckResourceAttr("motherduck_flight_run.test", "is_scheduled", "false"),
+		resource.TestCheckResourceAttr("motherduck_flight_run.test", "started_at", "2026-09-06T00:00:05Z"),
+		resource.TestCheckResourceAttr("motherduck_flight_run.test", "ended_at", "2026-09-06T00:01:00Z"),
+		resource.TestCheckNoResourceAttr("motherduck_flight_run.test", "scheduled_at"),
+		resource.TestCheckNoResourceAttr("motherduck_flight_run.test", "cancelled_at"),
+		resource.TestCheckResourceAttr("motherduck_flight_run.test", "exit_code", "0"),
 	)
 	resource.UnitTest(t, resource.TestCase{
 		ProtoV6ProviderFactories: contractProviderFactories(client),

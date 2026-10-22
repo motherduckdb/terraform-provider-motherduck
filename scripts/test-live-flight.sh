@@ -107,6 +107,31 @@ if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_di
   exit 1
 fi
 
+if [[ "${run_flight_hcl}" == "true" ]]; then
+  # Refresh the on-demand run and check the timing attributes against its status.
+  TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -refresh-only -auto-approve -input=false
+  TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -json flight_run_timing | python3 -c '
+import json, sys
+run = json.load(sys.stdin)
+status = run["status"].lower().removeprefix("run_status_")
+problems = []
+if run["is_scheduled"] is not False:
+    problems.append("is_scheduled should be false for an on-demand run")
+if not run["scheduled_at"]:
+    problems.append("scheduled_at should be set, MotherDuck reports it for on-demand runs too")
+if status == "succeeded":
+    if run["exit_code"] != 0:
+        problems.append("exit_code should be 0 after success")
+    if not run["started_at"] or not run["ended_at"]:
+        problems.append("started_at and ended_at should be set after success")
+elif status in ("pending", "queued", "running"):
+    if run["exit_code"] is not None or run["ended_at"] is not None:
+        problems.append("exit_code and ended_at should stay null until the run finishes")
+if problems:
+    sys.exit("Unexpected Flight run timing for status %s: %s" % (run["status"], ", ".join(problems)))
+'
+fi
+
 set +e
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
 plan_exit=$?

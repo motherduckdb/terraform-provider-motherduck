@@ -44,10 +44,10 @@ output "service_account_usernames" {
 Read-Only:
 
 - `email` (String) Email address MotherDuck has on record for the user.
-- `first_name` (String) First name. Null when MotherDuck has none, as for most service accounts.
+- `first_name` (String) First name. Null when MotherDuck has none. Service accounts normally report `service`.
 - `id` (String) User ID.
 - `is_deprovisioned` (Boolean) Whether the user is deprovisioned.
 - `is_service_account` (Boolean) Whether the user is a service account.
-- `last_name` (String) Last name. Null when MotherDuck has none, as for most service accounts.
+- `last_name` (String) Last name. Null when MotherDuck has none. Service accounts normally report `account`.
 - `roles` (List of String) Names of the roles granted directly to the user, sorted. Roles inherited through other roles are not listed. Use `motherduck_roles_for_user` for those.
 - `username` (String) Username. Service account names can be passed to `motherduck_user_tokens` and `motherduck_access_token`.

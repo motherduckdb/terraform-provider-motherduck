@@ -4,6 +4,10 @@ Each release has a versioned notes file under `release-notes/`, which is also th
 body of the matching [GitHub release](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
 This index lists the headline change for every release.
 
+## v0.3.8
+
+Sync the provider with the MotherDuck production surface, refuse to manage or delete human users through `motherduck_service_account`, and fix several refresh and plan issues. Constraints such as `~> 0.3.0` select it. See the [v0.3.8 release notes](release-notes/v0.3.8.md).
+
 ## v0.3.7
 
 Build with Go 1.27.3 to fix the `crypto/x509` certificate trust vulnerability GO-2026-6809, and update Go, workflow and example dependencies. Constraints such as `~> 0.3.0` select it. See the [v0.3.7 release notes](release-notes/v0.3.7.md).

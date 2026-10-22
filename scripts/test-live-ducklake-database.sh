@@ -73,6 +73,19 @@ if [[ "${row_count}" != "1" ]]; then
   exit 1
 fi
 
+if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw data_inlining_row_limit)" != "25" ]]; then
+  echo "Expected DuckLake data_inlining_row_limit to stay 25 in state" >&2
+  exit 1
+fi
+# The default inlining limit writes a 20-row insert to a data file. With
+# DATA_INLINING_ROW_LIMIT 25 the rows stay inlined in the catalog.
+go run "${ROOT_DIR}/internal/dev/mdexec" -database "${database_name}" -sql "INSERT INTO \"${database_name}\".app.facts SELECT range::INTEGER, 'inlined' FROM range(20)"
+data_file_count="$(go run "${ROOT_DIR}/internal/dev/mdexec" -database "${database_name}" -scalar "SELECT count(*)::VARCHAR FROM ducklake_list_files('${database_name}', 'facts', schema => 'app')")"
+if [[ "${data_file_count}" != "0" ]]; then
+  echo "Expected a 20-row insert to stay inlined with data_inlining_row_limit = 25, got ${data_file_count} data files" >&2
+  exit 1
+fi
+
 cat > "${import_dir}/terraform.tfvars" <<HCL
 database_name = "${database_name}"
 HCL

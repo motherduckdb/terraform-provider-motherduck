@@ -3,12 +3,12 @@
 page_title: "motherduck_dive_embed_session Ephemeral Resource - motherduck"
 subcategory: ""
 description: |-
-  Creates a short-lived MotherDuck Dive embed session without writing the session credential to Terraform state.
+  Creates a short-lived MotherDuck Dive embed session without writing the session credential to Terraform state. The session is valid for 24 hours. Embedding needs a Business plan or an active free trial, and username must be a service account in the same organization.
 ---
 
 # motherduck_dive_embed_session (Ephemeral Resource)
 
-Creates a short-lived MotherDuck Dive embed session without writing the session credential to Terraform state.
+Creates a short-lived MotherDuck Dive embed session without writing the session credential to Terraform state. The session is valid for 24 hours. Embedding needs a Business plan or an active free trial, and `username` must be a service account in the same organization.
 
 ## Example Usage
 

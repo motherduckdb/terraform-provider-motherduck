@@ -50,11 +50,13 @@ scheduled:
 | Plan | Default `instance_type` | Offered sizes |
 | --- | --- | --- |
 | Business | `F16` | `F4`, `F16`, `F32` |
-| Free trial | `F16` | `F4`, `F16` |
+| Free trial | `F16` | `F4`, `F16`, `F32` |
 | Lite | `F16` | `F4`, `F16` |
 | Free | `F4` | `F4` |
 
-`F4`, `F16`, and `F32` have 4, 16, and 32 GB of memory. A Flight created
+An expired free trial gets the Free plan limits and sizes.
+
+`F4`,`F16`, and `F32` have 4, 16, and 32 GB of memory. A Flight created
 before sizes existed reads back as `F16`. MotherDuck checks a size against the
 plan only when it is set, so a Flight keeps its size after the organization
 changes plans. An update that sets a size the new plan does not offer is

@@ -25,6 +25,7 @@ resource "motherduck_database" "ducklake" {
   database_type           = "ducklake"
   encrypted               = true
   snapshot_retention_days = 7
+  data_inlining_row_limit = 25
 }
 
 resource "motherduck_schema" "app" {
@@ -59,6 +60,10 @@ output "database_type" {
 
 output "snapshot_retention_days" {
   value = motherduck_database.ducklake.snapshot_retention_days
+}
+
+output "data_inlining_row_limit" {
+  value = motherduck_database.ducklake.data_inlining_row_limit
 }
 
 output "database_rows_json" {

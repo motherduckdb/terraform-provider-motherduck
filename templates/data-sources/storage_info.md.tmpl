@@ -1,0 +1,30 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Catalog and storage"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Storage usage covers every database in the organization, so MotherDuck only
+returns it to organization admins. Configure the provider `token` (or
+`MOTHERDUCK_TOKEN`) with an organization admin token for this data source. A
+non-admin token fails the read with an organization admin permission error.
+
+By default each database has one row with its latest storage figures. Set
+`include_history = true` to read every recorded computation from
+`STORAGE_INFO_HISTORY`, and use `limit` and `offset` to page through long
+histories. Byte counts are reported as decimal strings.
+
+This data source inspects existing objects without taking lifecycle ownership.
+Use it after the referenced objects exist and with credentials that can read
+them. See [authentication](../guides/authentication.md).
+
+## Example Usage
+
+{{ tffile "examples/data-sources/motherduck_storage_info/data-source.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}

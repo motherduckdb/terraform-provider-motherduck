@@ -353,10 +353,16 @@ func TestDiveMetadataArgs(t *testing.T) {
 			want:    map[string]string{"title": "'Revenue v2'", "description": "'Updated'"},
 			wantRun: true,
 		},
-		"empty description": {
+		"empty description with nothing to clear": {
 			plan:    &diveModel{Title: types.StringValue("Revenue"), Description: types.StringValue("")},
-			state:   &diveModel{Title: types.StringValue("Revenue"), Description: types.StringValue("Published")},
-			want:    map[string]string{"description": "''"},
+			state:   &diveModel{Title: types.StringValue("Revenue"), Description: types.StringNull()},
+			want:    map[string]string{},
+			wantRun: false,
+		},
+		"removing an empty description": {
+			plan:    &diveModel{Title: types.StringValue("Revenue v2"), Description: types.StringNull()},
+			state:   &diveModel{Title: types.StringValue("Revenue"), Description: types.StringValue("")},
+			want:    map[string]string{"title": "'Revenue v2'"},
 			wantRun: true,
 		},
 		"omitted unmanaged description": {
@@ -385,15 +391,22 @@ func TestDiveMetadataArgs(t *testing.T) {
 }
 
 func TestDiveMetadataArgsRejectsDescriptionClear(t *testing.T) {
-	plan := &diveModel{Title: types.StringValue("Revenue"), Description: types.StringNull()}
-	state := &diveModel{Title: types.StringValue("Revenue"), Description: types.StringValue("Published")}
+	// MotherDuck ignores an empty description in a metadata update, so both
+	// removing the value and setting it to an empty string would leave the old
+	// description in place.
+	for name, planned := range map[string]types.String{"removed": types.StringNull(), "empty": types.StringValue("")} {
+		t.Run(name, func(t *testing.T) {
+			plan := &diveModel{Title: types.StringValue("Revenue"), Description: planned}
+			state := &diveModel{Title: types.StringValue("Revenue"), Description: types.StringValue("Published")}
 
-	var diags diag.Diagnostics
-	if _, ok := diveMetadataArgs(plan, state, &diags); ok {
-		t.Fatal("expected description removal to fail")
-	}
-	if !diags.HasError() || !strings.Contains(diags[0].Detail(), `description = ""`) {
-		t.Fatalf("expected empty-string clear diagnostic, got %v", diags)
+			var diags diag.Diagnostics
+			if _, ok := diveMetadataArgs(plan, state, &diags); ok {
+				t.Fatal("expected description clear to fail")
+			}
+			if !diags.HasError() || !strings.Contains(diags[0].Detail(), "ignores an empty description") || strings.Contains(diags[0].Detail(), `description = ""`) {
+				t.Fatalf("expected a diagnostic that explains empty descriptions are ignored, got %v", diags)
+			}
+		})
 	}
 }
 

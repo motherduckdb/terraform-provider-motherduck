@@ -2,12 +2,12 @@
 page_title: "motherduck_dive Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Reads metadata for one MotherDuck Dive.
+  Reads metadata for one MotherDuck Dive, including its current version and content.
 ---
 
 # motherduck_dive (Data Source)
 
-Reads metadata for one MotherDuck Dive.
+Reads metadata for one MotherDuck Dive, including its current version and content.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read
@@ -30,4 +30,31 @@ data "motherduck_dive" "revenue" {
 
 ### Read-Only
 
+- `rows` (Attributes List) Typed catalog rows for stable MotherDuck metadata. `rows_json` remains available for raw server columns. (see [below for nested schema](#nestedatt--rows))
 - `rows_json` (String, Sensitive) Raw MotherDuck catalog rows encoded as JSON. Sensitive because catalog rows can include share URLs and account metadata.
+
+<a id="nestedatt--rows"></a>
+### Nested Schema for `rows`
+
+Read-Only:
+
+- `content` (String, Sensitive) Dive source code of the current version. Sensitive because it can embed queries and account details.
+- `created_at` (String) Dive creation timestamp.
+- `current_version` (String) Current Dive version.
+- `description` (String) Dive description.
+- `id` (String) Dive ID.
+- `owner_id` (String) Dive owner ID.
+- `owner_name` (String) Dive owner name.
+- `required_resources` (String, Sensitive) JSON list of resources the current Dive version requires. Sensitive because entries can include share URLs.
+- `status` (String) Dive status.
+- `status_applies_to_version` (String) Dive version the status applies to.
+- `status_changed_at` (String) Timestamp of the latest status change.
+- `status_set_by` (String) ID of the user that set the status.
+- `title` (String) Dive title.
+- `updated_at` (String) Dive update timestamp.
+- `version_api_version` (String) Dive API version of the current Dive version.
+- `version_created_at` (String) Creation timestamp of the current Dive version.
+- `version_description` (String) Description of the current Dive version.
+- `version_id` (String) ID of the current Dive version.
+- `version_required_resources` (String, Sensitive) JSON list of resources the current Dive version requires. Sensitive because entries can include share URLs.
+- `version_storage_url` (String, Sensitive) Storage URL of the current Dive version. Sensitive because it locates the Dive content.

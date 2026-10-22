@@ -1,0 +1,38 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Access control"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Set exactly one lookup input:
+
+- `name` reads a share owned by the account behind the token. MotherDuck does
+  not resolve the name of a share received from another account.
+- `url` reads any share the caller can access, including a received share.
+  The URL is sensitive, so pass it through a sensitive variable or another
+  sensitive value and keep it out of logs. The data source keeps the
+  configured spelling of `url` instead of the canonical one MotherDuck
+  reports, and redacts share URLs from error messages.
+
+`motherduck_shared_with_me` does not report the source database of received
+shares. Use this data source with the share URL to read `source_database` and
+`source_database_uuid` for a received share.
+
+`access`, `visibility`, and `update_mode` are lowercase so they compare
+directly with the [motherduck_share](../resources/share.md) resource arguments.
+A share that does not exist or is not visible to the caller fails the read.
+
+This data source inspects existing objects without taking lifecycle ownership.
+Use it after the referenced objects exist and with credentials that can read
+them. See [authentication](../guides/authentication.md).
+
+## Example Usage
+
+{{ tffile "examples/data-sources/motherduck_share/data-source.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}

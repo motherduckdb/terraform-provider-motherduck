@@ -99,7 +99,7 @@ func (r *flightResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"instance_type": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Runner size for Flight runs: `F4`, `F16`, or `F32`, with 4, 16, or 32 GB of memory. Each plan offers a subset: `F4`, `F16`, and `F32` on the Business plan, `F4` and `F16` on the Lite plan and during a free trial, and `F4` on the Free plan. MotherDuck rejects a size the plan does not offer. When omitted at creation, MotherDuck applies the plan default: `F16` on the Business and Lite plans and during a free trial, and `F4` on the Free plan. Removing a configured value keeps the last applied size, so set the value explicitly to change it. A change creates a new Flight version.",
+				MarkdownDescription: "Runner size for Flight runs: `F4`, `F16`, or `F32`, with 4, 16, or 32 GB of memory. Each plan offers a subset: `F4`, `F16`, and `F32` on the Business plan and during a free trial, `F4` and `F16` on the Lite plan, and `F4` on the Free plan. An expired free trial gets the Free plan sizes. MotherDuck rejects a size the plan does not offer. When omitted at creation, MotherDuck applies the plan default: `F16` on the Business and Lite plans and during a free trial, and `F4` on the Free plan. Removing a configured value keeps the last applied size, so set the value explicitly to change it. A change creates a new Flight version.",
 				PlanModifiers:       stringUseStateForUnknown(),
 				Validators:          []validator.String{flightInstanceTypeValidator{}},
 			},

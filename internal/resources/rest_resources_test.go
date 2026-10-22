@@ -2,8 +2,11 @@ package resources
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -97,87 +100,179 @@ func TestServiceAccountImportRejectsInvalidUsername(t *testing.T) {
 	}
 }
 
-// TestServiceAccountReadProbesRealEndpoint pins the two halves of the refresh
-// bug: the endpoint the read probes, and what it does with a 404 it cannot
-// attribute to a missing account.
-//
-// A read aimed at GET /v1/users/{username}, which MotherDuck does not route,
-// used to return a plain-text 404 that read as "account deleted", so every
-// refresh emptied state and the next apply tried to recreate a live account.
-func TestServiceAccountReadProbesRealEndpoint(t *testing.T) {
-	const username = "svc_reader"
+// serviceAccountListingWithProbe serves GET /v1/users with the given body and
+// status and records every request, so tests can assert that nothing else was
+// called. probeStatus sets the GET /v1/users/{username}/instances answer. A
+// 404 means the user is gone, and a 200 simulates a live account that an
+// offset page shift hid from the listing. The listing honors the
+// is_service_account filter like MotherDuck.
+func serviceAccountListingWithProbe(t *testing.T, status int, body string, probeStatus int) (*serviceAccountResource, *[]string) {
+	t.Helper()
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.Path)
+		switch r.Method + " " + r.URL.Path {
+		case "GET /v1/users":
+			if status != http.StatusOK {
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(body))
+				return
+			}
+			var listing mdrest.ListUsersResponse
+			if err := json.Unmarshal([]byte(body), &listing); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if filter := r.URL.Query().Get("is_service_account"); filter != "" {
+				listing.Users = slices.DeleteFunc(listing.Users, func(u mdrest.User) bool {
+					return strconv.FormatBool(u.IsServiceAccount) != filter
+				})
+			}
+			_ = json.NewEncoder(w).Encode(listing)
+		case "GET /v1/users/svc_reader/instances", "GET /v1/users/SVC_Reader/instances":
+			if probeStatus == http.StatusNotFound {
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"code":"NOT_FOUND","message":"User not found"}`))
+				return
+			}
+			w.WriteHeader(probeStatus)
+			_, _ = w.Write([]byte(`{}`))
+		case "DELETE /v1/users/svc_reader", "DELETE /v1/users/SVC_Reader":
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.Error(w, "unexpected request", http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(server.Close)
+	client, err := mdrest.New(server.URL, "admin-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &serviceAccountResource{baseResource: baseResource{provider: &providerctx.Context{REST: client}}}, &calls
+}
+
+func serviceAccountState(t *testing.T, username string) tfsdk.State {
+	t.Helper()
+	var schemaResp resource.SchemaResponse
+	NewServiceAccountResource().Schema(context.Background(), resource.SchemaRequest{}, &schemaResp)
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(context.Background(), serviceAccountModel{
+		ID:          types.StringValue(username),
+		Username:    types.StringValue(username),
+		Description: types.StringNull(),
+	}); diags.HasError() {
+		t.Fatalf("seeding prior state: %v", diags)
+	}
+	return state
+}
+
+const (
+	listedServiceAccount = `{"users":[{"id":"u1","username":"svc_reader","is_service_account":true,"roles":[]}],"total_count":1,"next_page_token":null}`
+	listedHuman          = `{"users":[{"id":"u1","username":"svc_reader","first_name":"Ada","is_service_account":false,"roles":[]}],"total_count":1,"next_page_token":null}`
+	listedNobody         = `{"users":[{"id":"u2","username":"other_svc","is_service_account":true,"roles":[]}],"total_count":1,"next_page_token":null}`
+)
+
+// TestServiceAccountReadRequiresServiceAccount pins how refresh treats the
+// organization listing. MotherDuck has no per-user GET, and the old Duckling
+// config probe succeeded for human users too, so a human could be imported
+// and later deleted with all of its data.
+func TestServiceAccountReadRequiresServiceAccount(t *testing.T) {
+	const (
+		serviceAccounts = "GET /v1/users"
+		bothListings    = "GET /v1/users,GET /v1/users"
+		withProbe       = "GET /v1/users,GET /v1/users,GET /v1/users/svc_reader/instances"
+	)
 	tests := map[string]struct {
+		username    string
 		status      int
 		body        string
+		probeStatus int
 		wantRemoved bool
-		wantErr     bool
+		wantErr     string
+		wantCalls   string
 	}{
-		"live account keeps state": {
-			status: http.StatusOK,
-			body:   `{"read_write":{"instance_size":"standard"},"read_scaling":{"instance_size":"standard","flock_size":4}}`,
-		},
-		"deleted account drops state": {
-			status:      http.StatusNotFound,
-			body:        `{"message":"entity not found","code":"NOT_FOUND"}`,
-			wantRemoved: true,
-		},
-		// An unrouted path must raise an error, never quietly empty state.
-		"unrouted 404 errors": {
-			status:  http.StatusNotFound,
-			body:    "Not Found",
-			wantErr: true,
-		},
+		"service account keeps state":         {username: "svc_reader", status: http.StatusOK, body: listedServiceAccount, wantCalls: serviceAccounts},
+		"case-insensitive match keeps state":  {username: "SVC_Reader", status: http.StatusOK, body: listedServiceAccount, wantCalls: serviceAccounts},
+		"human user errors and keeps state":   {username: "svc_reader", status: http.StatusOK, body: listedHuman, wantErr: "not a service account", wantCalls: bothListings},
+		"absent account drops state":          {username: "svc_reader", status: http.StatusOK, body: listedNobody, wantRemoved: true, wantCalls: withProbe},
+		"page shift errors and keeps state":   {username: "svc_reader", status: http.StatusOK, body: listedNobody, probeStatus: http.StatusOK, wantErr: "could not confirm", wantCalls: withProbe},
+		"probe failure errors, keeps state":   {username: "svc_reader", status: http.StatusOK, body: listedNobody, probeStatus: http.StatusForbidden, wantErr: "403", wantCalls: withProbe},
+		"listing failure errors, keeps state": {username: "svc_reader", status: http.StatusForbidden, body: `{"code":"FORBIDDEN","message":"denied"}`, wantErr: "denied", wantCalls: serviceAccounts},
 	}
-
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			ctx := context.Background()
-			var gotPath string
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				gotPath = r.URL.Path
-				w.WriteHeader(tc.status)
-				_, _ = w.Write([]byte(tc.body))
-			}))
-			defer server.Close()
-
-			client, err := mdrest.New(server.URL, "admin-token")
-			if err != nil {
-				t.Fatal(err)
+			probeStatus := tc.probeStatus
+			if probeStatus == 0 {
+				probeStatus = http.StatusNotFound
 			}
-			res := NewServiceAccountResource().(*serviceAccountResource)
-			var configureResp resource.ConfigureResponse
-			res.Configure(ctx, resource.ConfigureRequest{ProviderData: &providerctx.Context{REST: client}}, &configureResp)
-			if configureResp.Diagnostics.HasError() {
-				t.Fatalf("configure diagnostics: %v", configureResp.Diagnostics)
+			res, calls := serviceAccountListingWithProbe(t, tc.status, tc.body, probeStatus)
+			prior := serviceAccountState(t, tc.username)
+			resp := resource.ReadResponse{State: prior}
+			res.Read(context.Background(), resource.ReadRequest{State: prior}, &resp)
+			if got := strings.Join(*calls, ","); got != tc.wantCalls {
+				t.Fatalf("requests = %s, want %s", got, tc.wantCalls)
 			}
-
-			var schemaResp resource.SchemaResponse
-			res.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
-			if schemaResp.Diagnostics.HasError() {
-				t.Fatalf("schema diagnostics: %v", schemaResp.Diagnostics)
+			if tc.wantErr == "" && resp.Diagnostics.HasError() {
+				t.Fatalf("read diagnostics: %v", resp.Diagnostics)
 			}
-			priorState := tfsdk.State{Schema: schemaResp.Schema}
-			if diags := priorState.Set(ctx, serviceAccountModel{
-				ID:       types.StringValue(username),
-				Username: types.StringValue(username),
-			}); diags.HasError() {
-				t.Fatalf("seeding prior state: %v", diags)
+			if tc.wantErr != "" && !diagnosticsContain(resp.Diagnostics, tc.wantErr) {
+				t.Fatalf("read diagnostics = %v, want %q", resp.Diagnostics, tc.wantErr)
 			}
-
-			readResp := resource.ReadResponse{State: priorState}
-			res.Read(ctx, resource.ReadRequest{State: priorState}, &readResp)
-
-			if want := "/v1/users/" + username + "/instances"; gotPath != want {
-				t.Fatalf("probed path = %q, want %q", gotPath, want)
-			}
-			if gotErr := readResp.Diagnostics.HasError(); gotErr != tc.wantErr {
-				t.Fatalf("read error = %t, want %t: %v", gotErr, tc.wantErr, readResp.Diagnostics)
-			}
-			if gotRemoved := readResp.State.Raw.IsNull(); gotRemoved != tc.wantRemoved {
+			if gotRemoved := resp.State.Raw.IsNull(); gotRemoved != tc.wantRemoved {
 				t.Fatalf("state removed = %t, want %t", gotRemoved, tc.wantRemoved)
 			}
 		})
 	}
+}
+
+func TestServiceAccountDeleteRefusesHumanUsers(t *testing.T) {
+	tests := map[string]struct {
+		username    string
+		status      int
+		body        string
+		probeStatus int
+		wantDelete  bool
+		wantErr     string
+	}{
+		"service account is deleted":       {username: "svc_reader", status: http.StatusOK, body: listedServiceAccount, wantDelete: true},
+		"case-insensitive match deleted":   {username: "SVC_Reader", status: http.StatusOK, body: listedServiceAccount, wantDelete: true},
+		"human user is never deleted":      {username: "svc_reader", status: http.StatusOK, body: listedHuman, wantErr: "not a service account"},
+		"absent account needs no delete":   {username: "svc_reader", status: http.StatusOK, body: listedNobody},
+		"page shift is not deleted":        {username: "svc_reader", status: http.StatusOK, body: listedNobody, probeStatus: http.StatusOK, wantErr: "could not confirm"},
+		"failed probe is not deleted":      {username: "svc_reader", status: http.StatusOK, body: listedNobody, probeStatus: http.StatusForbidden, wantErr: "verify"},
+		"unverifiable account not deleted": {username: "svc_reader", status: http.StatusBadGateway, body: "bad gateway", wantErr: "verify"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			probeStatus := tc.probeStatus
+			if probeStatus == 0 {
+				probeStatus = http.StatusNotFound
+			}
+			res, calls := serviceAccountListingWithProbe(t, tc.status, tc.body, probeStatus)
+			prior := serviceAccountState(t, tc.username)
+			resp := resource.DeleteResponse{State: prior}
+			res.Delete(context.Background(), resource.DeleteRequest{State: prior}, &resp)
+			deleted := slices.Contains(*calls, "DELETE /v1/users/"+tc.username)
+			if deleted != tc.wantDelete {
+				t.Fatalf("requests = %v, want delete %t", *calls, tc.wantDelete)
+			}
+			if tc.wantErr == "" && resp.Diagnostics.HasError() {
+				t.Fatalf("delete diagnostics: %v", resp.Diagnostics)
+			}
+			if tc.wantErr != "" && !diagnosticsContain(resp.Diagnostics, tc.wantErr) {
+				t.Fatalf("delete diagnostics = %v, want %q", resp.Diagnostics, tc.wantErr)
+			}
+		})
+	}
+}
+
+func diagnosticsContain(diags diag.Diagnostics, text string) bool {
+	for _, d := range diags {
+		if d.Severity() == diag.SeverityError && (strings.Contains(d.Summary(), text) || strings.Contains(d.Detail(), text)) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestDucklingConfigImportRejectsInvalidUsername(t *testing.T) {
@@ -206,13 +301,20 @@ func TestServiceAccountUsernameValidator(t *testing.T) {
 		value   types.String
 		wantErr bool
 	}{
-		"simple":       {value: types.StringValue("svc_reader_1"), wantErr: false},
-		"unicode":      {value: types.StringValue("équipe_1"), wantErr: true},
-		"starts digit": {value: types.StringValue("1_reader"), wantErr: true},
-		"hyphen":       {value: types.StringValue("svc-reader"), wantErr: true},
-		"space":        {value: types.StringValue("svc reader"), wantErr: true},
-		"blank":        {value: types.StringValue(" "), wantErr: true},
-		"unknown":      {value: types.StringUnknown(), wantErr: false},
+		"simple": {value: types.StringValue("svc_reader_1"), wantErr: false},
+		// MotherDuck accepts any Unicode letter, as /\p{L}/u does.
+		"unicode letters":      {value: types.StringValue("équipe_1"), wantErr: false},
+		"non-latin letters":    {value: types.StringValue("データ_reader")},
+		"starts unicode digit": {value: types.StringValue("١reader"), wantErr: true},
+		// JavaScript \d matches only ASCII digits, even with the u flag.
+		"non-ascii digit": {value: types.StringValue("reader١"), wantErr: true},
+		"starts digit":    {value: types.StringValue("1_reader"), wantErr: true},
+		"starts _":        {value: types.StringValue("_reader"), wantErr: true},
+		"hyphen":          {value: types.StringValue("svc-reader"), wantErr: true},
+		"space":           {value: types.StringValue("svc reader"), wantErr: true},
+		"emoji":           {value: types.StringValue("svc🦆reader"), wantErr: true},
+		"blank":           {value: types.StringValue(" "), wantErr: true},
+		"unknown":         {value: types.StringUnknown(), wantErr: false},
 	}
 
 	for name, tc := range tests {

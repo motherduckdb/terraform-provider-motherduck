@@ -84,8 +84,16 @@ func (e APIError) IsEntityNotFound() bool {
 	return e.StatusCode == 404 && e.Code == "NOT_FOUND"
 }
 
+// CreateServiceAccountRequest is the body of POST /v1/users. MotherDuck
+// stores the description only at creation and has no API to read or change it.
+type CreateServiceAccountRequest struct {
+	Username    string `json:"username"`
+	Description string `json:"description,omitempty"`
+}
+
 type ServiceAccount struct {
-	Username string `json:"username"`
+	Username    string `json:"username"`
+	Description string `json:"description,omitempty"`
 }
 
 type CreateTokenRequest struct {

@@ -13,9 +13,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 )
 
 type databaseResource struct{ baseResource }
@@ -28,6 +31,7 @@ type databaseModel struct {
 	DatabaseType          types.String           `tfsdk:"database_type"`
 	DataPath              types.String           `tfsdk:"data_path"`
 	Encrypted             types.Bool             `tfsdk:"encrypted"`
+	DataInliningRowLimit  types.Int64            `tfsdk:"data_inlining_row_limit"`
 	Iceberg               types.Object           `tfsdk:"iceberg"`
 	UUID                  types.String           `tfsdk:"uuid"`
 	CreatedTS             types.String           `tfsdk:"created_ts"`
@@ -86,6 +90,12 @@ func (r *databaseResource) Schema(ctx context.Context, req resource.SchemaReques
 				MarkdownDescription: "DuckLake-only. When true, emits the `ENCRYPTED` database option at creation. When false, omits the option.",
 				PlanModifiers:       boolRequiresReplace(),
 			},
+			"data_inlining_row_limit": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "DuckLake-only. Maximum number of rows an insert can keep inline in the DuckLake catalog instead of writing a data file. Emits the `DATA_INLINING_ROW_LIMIT` database option at creation. MotherDuck accepts this option only when creating a DuckLake database and does not report it back, so Terraform keeps the configured value. Changing a recorded value replaces the database. Adding it to a database whose state has no recorded value, such as an imported database or one created by an earlier provider release, records the value in place without SQL and does not verify it. Removing it keeps the database.",
+				PlanModifiers:       []planmodifier.Int64{databaseDataInliningRowLimitPlanModifier{}},
+				Validators:          []validator.Int64{tfvalidators.Int64Min("MotherDuck DuckLake data inlining row limit", 0)},
+			},
 			"iceberg": databaseIcebergAttribute(),
 			"uuid": schema.StringAttribute{
 				Computed:            true,
@@ -109,6 +119,40 @@ func (r *databaseResource) Schema(ctx context.Context, req resource.SchemaReques
 			}),
 		},
 	}
+}
+
+// databaseDataInliningRowLimitPlanModifier replaces a DuckLake database only
+// when a recorded data_inlining_row_limit changes to a different known value.
+// MotherDuck cannot report or change the option after creation, so a value
+// added to state that has none, for example after import or an upgrade from a
+// release without the attribute, is recorded in place instead of dropping the
+// database and its data.
+type databaseDataInliningRowLimitPlanModifier struct{}
+
+func (databaseDataInliningRowLimitPlanModifier) Description(context.Context) string {
+	return "Replaces the database only when a recorded value changes to a different configured value."
+}
+
+func (m databaseDataInliningRowLimitPlanModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (databaseDataInliningRowLimitPlanModifier) PlanModifyInt64(ctx context.Context, req planmodifier.Int64Request, resp *planmodifier.Int64Response) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	if req.ConfigValue.IsNull() || req.ConfigValue.Equal(req.StateValue) {
+		return
+	}
+	if req.StateValue.IsNull() {
+		resp.Diagnostics.AddAttributeWarning(req.Path, "DuckLake data inlining row limit recorded without verification",
+			"Terraform will record `data_inlining_row_limit` for this existing database without running SQL. MotherDuck cannot report or change this option after creation, so the recorded value is not verified against the live database.")
+		return
+	}
+	if req.ConfigValue.IsUnknown() || req.StateValue.IsUnknown() {
+		return
+	}
+	resp.RequiresReplace = true
 }
 
 func (r *databaseResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
@@ -139,6 +183,9 @@ func validateDatabaseConfig(ctx context.Context, config databaseModel, diags *di
 	if databaseTypeKnown && !config.Encrypted.IsNull() && !config.Encrypted.IsUnknown() && databaseType != "ducklake" {
 		diags.AddAttributeError(path.Root("encrypted"), "Invalid MotherDuck database configuration", "`encrypted` is only valid when `database_type = \"ducklake\"`.")
 	}
+	if databaseTypeKnown && !config.DataInliningRowLimit.IsNull() && !config.DataInliningRowLimit.IsUnknown() && databaseType != "ducklake" {
+		diags.AddAttributeError(path.Root("data_inlining_row_limit"), "Invalid MotherDuck database configuration", "`data_inlining_row_limit` is only valid when `database_type = \"ducklake\"`.")
+	}
 	validateDatabaseIcebergConfig(ctx, config, databaseType, databaseTypeKnown, diags)
 }
 
@@ -157,30 +204,10 @@ func (r *databaseResource) Create(ctx context.Context, req resource.CreateReques
 	if client == nil {
 		return
 	}
-	options := make([]string, 0)
-	if !plan.Transient.IsNull() && plan.Transient.ValueBool() {
-		options = append(options, "TRANSIENT")
+	query := databaseCreateStatement(ctx, plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	if !plan.DatabaseType.IsNull() && strings.EqualFold(plan.DatabaseType.ValueString(), "ducklake") {
-		options = append(options, "TYPE DUCKLAKE")
-	}
-	if !plan.DatabaseType.IsNull() && strings.EqualFold(plan.DatabaseType.ValueString(), "iceberg") {
-		options = append(options, "TYPE ICEBERG")
-		options = append(options, databaseIcebergCreateOptions(databaseIcebergOptions(ctx, plan.Iceberg, &resp.Diagnostics))...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-	}
-	if !plan.DataPath.IsNull() && plan.DataPath.ValueString() != "" {
-		options = append(options, "DATA_PATH "+sqlbuild.StringLiteral(plan.DataPath.ValueString()))
-	}
-	if !plan.Encrypted.IsNull() && plan.Encrypted.ValueBool() {
-		options = append(options, "ENCRYPTED")
-	}
-	if knownInt64(plan.SnapshotRetentionDays) {
-		options = append(options, fmt.Sprintf("SNAPSHOT_RETENTION_DAYS %d", plan.SnapshotRetentionDays.ValueInt64()))
-	}
-	query := "CREATE DATABASE " + sqlbuild.QuoteIdentifier(plan.Name.ValueString()) + sqlbuild.Options(options...)
 	if err := client.Exec(ctx, query); err != nil {
 		resp.Diagnostics.AddError("Unable to create MotherDuck database", err.Error())
 		return
@@ -210,6 +237,38 @@ func (r *databaseResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// databaseCreateStatement builds the CREATE DATABASE statement for a plan.
+// Create-only options appear only when configured.
+func databaseCreateStatement(ctx context.Context, plan databaseModel, diags *diag.Diagnostics) string {
+	options := make([]string, 0)
+	if !plan.Transient.IsNull() && plan.Transient.ValueBool() {
+		options = append(options, "TRANSIENT")
+	}
+	if !plan.DatabaseType.IsNull() && strings.EqualFold(plan.DatabaseType.ValueString(), "ducklake") {
+		options = append(options, "TYPE DUCKLAKE")
+	}
+	if !plan.DatabaseType.IsNull() && strings.EqualFold(plan.DatabaseType.ValueString(), "iceberg") {
+		options = append(options, "TYPE ICEBERG")
+		options = append(options, databaseIcebergCreateOptions(databaseIcebergOptions(ctx, plan.Iceberg, diags))...)
+		if diags.HasError() {
+			return ""
+		}
+	}
+	if !plan.DataPath.IsNull() && plan.DataPath.ValueString() != "" {
+		options = append(options, "DATA_PATH "+sqlbuild.StringLiteral(plan.DataPath.ValueString()))
+	}
+	if !plan.Encrypted.IsNull() && plan.Encrypted.ValueBool() {
+		options = append(options, "ENCRYPTED")
+	}
+	if knownInt64(plan.DataInliningRowLimit) {
+		options = append(options, fmt.Sprintf("DATA_INLINING_ROW_LIMIT %d", plan.DataInliningRowLimit.ValueInt64()))
+	}
+	if knownInt64(plan.SnapshotRetentionDays) {
+		options = append(options, fmt.Sprintf("SNAPSHOT_RETENTION_DAYS %d", plan.SnapshotRetentionDays.ValueInt64()))
+	}
+	return "CREATE DATABASE " + sqlbuild.QuoteIdentifier(plan.Name.ValueString()) + sqlbuild.Options(options...)
 }
 
 func (r *databaseResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -272,6 +331,12 @@ func (r *databaseResource) Update(ctx context.Context, req resource.UpdateReques
 			resp.Diagnostics.AddError("Unable to update MotherDuck database", err.Error())
 			return
 		}
+	}
+	if knownInt64(plan.DataInliningRowLimit) && knownInt64(state.DataInliningRowLimit) && !plan.DataInliningRowLimit.Equal(state.DataInliningRowLimit) {
+		// The configured value was unknown at plan time, so the database was
+		// not replaced. Record it, but say it was not applied.
+		resp.Diagnostics.AddAttributeWarning(path.Root("data_inlining_row_limit"), "DuckLake data inlining row limit recorded without verification",
+			"Terraform recorded a new `data_inlining_row_limit` without replacing the database because the value was unknown during planning. MotherDuck cannot change this option after creation, so the live database keeps its original limit.")
 	}
 	plan.ID = types.StringValue(plan.Name.ValueString())
 	found := r.readDatabase(ctx, &plan, &resp.Diagnostics)

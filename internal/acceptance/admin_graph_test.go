@@ -59,10 +59,13 @@ func TestPluginTestingAdminGraphLifecycle(t *testing.T) {
 		proxy.ServeHTTP(w, req)
 	}))
 	t.Cleanup(server.Close)
-	config := func(cooldown int, tokenName string) string {
+	configFor := func(username, description string, cooldown int, tokenName string) string {
 		return fmt.Sprintf(`
 provider "motherduck" { api_base_url = %q }
-resource "motherduck_service_account" "test" { username = %q }
+resource "motherduck_service_account" "test" {
+ username = %q
+ description = %q
+}
 resource "motherduck_duckling_config" "test" {
  username = motherduck_service_account.test.username
  read_write_instance_size = "standard"
@@ -80,13 +83,30 @@ resource "motherduck_access_token" "test" {
 resource "motherduck_role" "test" { name = %q }
 resource "motherduck_role_grant" "test" {
  role_name = motherduck_role.test.name
- grantee_name = motherduck_service_account.test.username
+ # The grant names the canonical lowercase username, so the case-only
+ # username step below leaves it untouched.
+ grantee_name = %q
  grantee_type = "user"
+ depends_on = [motherduck_service_account.test]
 }
-`, server.URL, name, cooldown, tokenName, name)
+`, server.URL, username, description, cooldown, tokenName, name, name)
+	}
+	const description = "Terraform admin graph lifecycle"
+	config := func(cooldown int, tokenName string) string {
+		return configFor(name, description, cooldown, tokenName)
 	}
 	initial := config(60, "initial")
 	updated := config(90, "rotated")
+	// MotherDuck compares usernames case-insensitively, so this names the same
+	// service account and must update every dependent in place.
+	updatedUpper := configFor(strings.ToUpper(name), description, 90, "rotated")
+	// The description is create-only. Changing it must fail the plan, never
+	// replace the account and delete its data.
+	updatedDescription := configFor(name, description+" changed", 90, "rotated")
+	humanStep, err := humanServiceAccountImportStep(t, admin, initial)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var tokenID string
 	var initialTokenSecret string
 	check := func(wantCooldown int) resource.TestCheckFunc {
@@ -144,9 +164,14 @@ resource "motherduck_role_grant" "test" {
 			}
 			return nil
 		},
-		Steps: []resource.TestStep{
-			{Config: initial, Check: check(60), ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
-			{Config: initial, ResourceName: "motherduck_service_account.test", ImportState: true, ImportStateVerify: true},
+		Steps: append([]resource.TestStep{
+			{Config: initial, Check: resource.ComposeAggregateTestCheckFunc(
+				check(60),
+				resource.TestCheckResourceAttr("motherduck_service_account.test", "description", description),
+			), ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			// No MotherDuck API returns a service account description. The
+			// first step's state check covers the description sent on create.
+			{Config: initial, ResourceName: "motherduck_service_account.test", ImportState: true, ImportStateVerify: true, ImportStateVerifyIgnore: []string{"description"}},
 			{Config: initial, ResourceName: "motherduck_duckling_config.test", ImportState: true, ImportStateVerify: true},
 			{Config: initial, ResourceName: "motherduck_role_grant.test", ImportState: true, ImportStateVerify: true},
 			{
@@ -204,6 +229,47 @@ resource "motherduck_role_grant" "test" {
 				PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_role_grant.test", plancheck.ResourceActionCreate), plancheck.ExpectResourceAction("motherduck_access_token.test", plancheck.ResourceActionCreate)},
 				PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 			}},
-		},
+			{Config: updatedDescription, ExpectError: regexp.MustCompile("Service account description cannot change")},
+			// check(90) also proves the token kept its ID through the case change.
+			{Config: updatedUpper, Check: check(90), ConfigPlanChecks: resource.ConfigPlanChecks{
+				PreApply: []plancheck.PlanCheck{
+					plancheck.ExpectResourceAction("motherduck_service_account.test", plancheck.ResourceActionUpdate),
+					plancheck.ExpectResourceAction("motherduck_access_token.test", plancheck.ResourceActionUpdate),
+					plancheck.ExpectResourceAction("motherduck_duckling_config.test", plancheck.ResourceActionUpdate),
+					plancheck.ExpectResourceAction("motherduck_role_grant.test", plancheck.ResourceActionNoop),
+				},
+				PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+			}},
+		}, humanStep...),
 	})
+}
+
+// humanServiceAccountImportStep tries to import a human user of the admin
+// organization as a service account and expects refusal, because destroying
+// a motherduck_service_account deletes the user and its data. The step never
+// persists the imported state, so even a regression cannot destroy the user.
+// It returns no step when the organization has no human user whose username
+// the resource accepts.
+func humanServiceAccountImportStep(t *testing.T, admin *mdrest.Client, config string) ([]resource.TestStep, error) {
+	notServiceAccount := false
+	active := false
+	humans, err := admin.ListUsers(t.Context(), mdrest.ListUsersFilter{IsServiceAccount: &notServiceAccount, IsDeprovisioned: &active})
+	if err != nil {
+		return nil, err
+	}
+	accepted := regexp.MustCompile(`^\p{L}[\p{L}0-9_]{2,254}$`)
+	for _, human := range humans {
+		if human.IsServiceAccount || !accepted.MatchString(human.Username) {
+			continue
+		}
+		return []resource.TestStep{{
+			Config:        config + fmt.Sprintf("resource \"motherduck_service_account\" \"human\" { username = %q }\n", human.Username),
+			ResourceName:  "motherduck_service_account.human",
+			ImportState:   true,
+			ImportStateId: human.Username,
+			ExpectError:   regexp.MustCompile("is a human user, not a service account"),
+		}}, nil
+	}
+	t.Log("no human user with a service-account-shaped username, so the human import refusal step is skipped")
+	return nil, nil
 }

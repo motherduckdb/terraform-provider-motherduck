@@ -117,7 +117,7 @@ func TestPOSTIsNotRetriedOnTooManyRequests(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
-	if _, err := client.CreateServiceAccount(ctx, "svc"); err == nil {
+	if _, err := client.CreateServiceAccount(ctx, CreateServiceAccountRequest{Username: "svc"}); err == nil {
 		t.Fatal("expected the 429 to be returned")
 	}
 	if got := attempts.Load(); got != 1 {

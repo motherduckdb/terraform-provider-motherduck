@@ -2,12 +2,12 @@
 page_title: "motherduck_files Data Source - motherduck"
 subcategory: "Catalog and storage"
 description: |-
-  Lists files for an object-storage path through MotherDuck SQL. Rows are sorted by path. Set limit and offset to page through large listings. Paging orders the listing by all of its columns, so pages are stable, and rows within each page are then sorted.
+  Lists files and folders for an object-storage path through MotherDuck SQL. Rows are sorted by name. Set limit and offset to page through large listings. Paging follows object key order, where a folder sorts as its name followed by a slash, so pages are stable. MotherDuck stops listing once it has returned limit plus offset entries.
 ---
 
 # motherduck_files (Data Source)
 
-Lists files for an object-storage path through MotherDuck SQL. Rows are sorted by path. Set `limit` and `offset` to page through large listings. Paging orders the listing by all of its columns, so pages are stable, and rows within each page are then sorted.
+Lists files and folders for an object-storage path through MotherDuck SQL. Rows are sorted by name. Set `limit` and `offset` to page through large listings. Paging follows object key order, where a folder sorts as its name followed by a slash, so pages are stable. MotherDuck stops listing once it has returned `limit` plus `offset` entries.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read
@@ -35,4 +35,15 @@ data "motherduck_files" "landing" {
 
 ### Read-Only
 
+- `rows` (Attributes List) Typed catalog rows for stable MotherDuck metadata. `rows_json` remains available for raw server columns. (see [below for nested schema](#nestedatt--rows))
 - `rows_json` (String, Sensitive) Raw MotherDuck catalog rows encoded as JSON. Sensitive because catalog rows can include share URLs and account metadata.
+
+<a id="nestedatt--rows"></a>
+### Nested Schema for `rows`
+
+Read-Only:
+
+- `last_modified` (String) File modification timestamp. Null for folders.
+- `name` (String) File or folder name relative to `path`.
+- `size` (String) File size in bytes. Null for folders.
+- `type` (String) Entry type: `file` or `folder`.

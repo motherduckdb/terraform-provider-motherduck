@@ -25,6 +25,12 @@ func TestFlightRunReadUpdatesAllMetadataAndPreservesConfiguration(t *testing.T) 
 				largeFlightRunMetadataValue,
 				largeFlightRunMetadataValue - 1,
 				"",
+				false,
+				"2026-09-01 00:00:05+00",
+				"2026-09-01 00:01:00+00",
+				nil,
+				nil,
+				int64(0),
 			}}
 		}
 		return scannedRow{err: errors.New("unexpected query")}
@@ -54,6 +60,9 @@ func TestFlightRunReadUpdatesAllMetadataAndPreservesConfiguration(t *testing.T) 
 		t.Fatal(d)
 	}
 	assertFlightRunMetadata(t, got, "run-with-empty-created-at", "RUN_STATUS_SUCCEEDED", largeFlightRunMetadataValue, largeFlightRunMetadataValue-1, "")
+	if got.IsScheduled.IsNull() || got.IsScheduled.ValueBool() || got.StartedAt.ValueString() != "2026-09-01 00:00:05+00" || got.EndedAt.ValueString() != "2026-09-01 00:01:00+00" || !got.ScheduledAt.IsNull() || !got.CancelledAt.IsNull() || got.ExitCode.IsNull() || got.ExitCode.ValueInt64() != 0 {
+		t.Fatalf("run timing = is_scheduled %s started_at %s ended_at %s scheduled_at %s cancelled_at %s exit_code %s", got.IsScheduled, got.StartedAt, got.EndedAt, got.ScheduledAt, got.CancelledAt, got.ExitCode)
+	}
 	if !got.Config.IsNull() || !got.WaitForStatus.IsUnknown() || !got.PollIntervalSeconds.IsNull() || got.TimeoutSeconds.ValueInt64() != 17 || !got.CancelOnDestroy.ValueBool() {
 		t.Fatalf("configured state changed during read: %#v", got)
 	}
@@ -68,7 +77,7 @@ func TestFlightRunReadPaginatedMetadataUsesZeroForMalformedVersion(t *testing.T)
 				return runPage(57, 8), nil
 			}
 			if strings.Contains(query, `"OFFSET" := 50)`) {
-				return `[{"run_id":"run-7-empty-created-at","status":"RUN_STATUS_RUNNING","run_number":7,"flight_version":"malformed","created_at":""}]`, nil
+				return `[{"run_id":"run-7-empty-created-at","status":"RUN_STATUS_RUNNING","run_number":7,"flight_version":"malformed","created_at":"","is_scheduled":true,"started_at":"2026-09-01 00:00:05+00","ended_at":null,"scheduled_at":"2026-09-01 00:00:00+00","cancelled_at":null,"exit_code":null}]`, nil
 			}
 			return "", errors.New("unexpected listing query")
 		},
@@ -98,6 +107,9 @@ func TestFlightRunReadPaginatedMetadataUsesZeroForMalformedVersion(t *testing.T)
 		t.Fatal(d)
 	}
 	assertFlightRunMetadata(t, got, "run-7-empty-created-at", "RUN_STATUS_RUNNING", 7, 0, "")
+	if !got.IsScheduled.ValueBool() || got.StartedAt.ValueString() != "2026-09-01 00:00:05+00" || !got.EndedAt.IsNull() || got.ScheduledAt.ValueString() != "2026-09-01 00:00:00+00" || !got.CancelledAt.IsNull() || !got.ExitCode.IsNull() {
+		t.Fatalf("listing run timing = is_scheduled %s started_at %s ended_at %s scheduled_at %s cancelled_at %s exit_code %s", got.IsScheduled, got.StartedAt, got.EndedAt, got.ScheduledAt, got.CancelledAt, got.ExitCode)
+	}
 	if !got.Config.IsNull() || got.WaitForStatus.ValueString() != "succeeded" || got.PollIntervalSeconds.ValueInt64() != 3 || got.TimeoutSeconds.ValueInt64() != 17 || got.CancelOnDestroy.ValueBool() {
 		t.Fatalf("configured state changed during paginated read: %#v", got)
 	}

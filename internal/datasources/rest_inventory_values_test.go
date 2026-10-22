@@ -23,6 +23,10 @@ func TestRESTInventoryEmptyValuesAndDiagnostics(t *testing.T) {
 		{"empty tokens", NewUserTokensDataSource(), "tokens", func(d *diag.Diagnostics) types.List { return userTokensListValue([]mdrest.Token{}, d) }},
 		{"nil users", NewUsersDataSource(), "users", func(d *diag.Diagnostics) types.List { return usersListValue(nil, d) }},
 		{"empty users", NewUsersDataSource(), "users", func(d *diag.Diagnostics) types.List { return usersListValue([]mdrest.User{}, d) }},
+		{"nil accounts", NewActiveAccountsDataSource(), "accounts", func(d *diag.Diagnostics) types.List { return activeAccountsListValue(nil, d) }},
+		{"empty accounts", NewActiveAccountsDataSource(), "accounts", func(d *diag.Diagnostics) types.List {
+			return activeAccountsListValue([]mdrest.ActiveAccount{}, d)
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -93,6 +97,35 @@ func TestUserValuesPreserveFieldSemanticsAndCallerOwnership(t *testing.T) {
 	assertInventoryRows(t, got, want)
 	if !reflect.DeepEqual(users, original) {
 		t.Fatal("conversion mutated caller users or role slices")
+	}
+}
+
+func TestActiveAccountValuesSortAndPreserveCallerOwnership(t *testing.T) {
+	accounts := []mdrest.ActiveAccount{
+		{Username: "svc_b", Ducklings: []mdrest.Duckling{{ID: "rw", Type: "read_write", Status: "active"}, {ID: "rs.1", Type: "read_scaling", Status: "cooldown"}}},
+		{Username: "svc_a", Ducklings: nil},
+	}
+	original := []mdrest.ActiveAccount{accounts[0], accounts[1]}
+	original[0].Ducklings = append([]mdrest.Duckling(nil), accounts[0].Ducklings...)
+	var d diag.Diagnostics
+	got := activeAccountsListValue(accounts, &d)
+	if d.HasError() {
+		t.Fatal(d)
+	}
+	ducklingType := activeAccountsAttribute().NestedObject.Type().(types.ObjectType).AttrTypes["ducklings"].(types.ListType).ElemType.(types.ObjectType)
+	duckling := func(id, kind, status string) attr.Value {
+		return types.ObjectValueMust(ducklingType.AttrTypes, map[string]attr.Value{"id": types.StringValue(id), "type": types.StringValue(kind), "status": types.StringValue(status)})
+	}
+	want := []map[string]attr.Value{
+		{"username": types.StringValue("svc_a"), "ducklings": types.ListValueMust(ducklingType, []attr.Value{})},
+		{"username": types.StringValue("svc_b"), "ducklings": types.ListValueMust(ducklingType, []attr.Value{
+			duckling("rs.1", "read_scaling", "cooldown"),
+			duckling("rw", "read_write", "active"),
+		})},
+	}
+	assertInventoryRows(t, got, want)
+	if !reflect.DeepEqual(accounts, original) {
+		t.Fatal("conversion mutated caller accounts or duckling slices")
 	}
 }
 
