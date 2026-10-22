@@ -9,7 +9,7 @@ packages:
     version: 1.4.0
     parameters:
       - registry.terraform.io/motherduckdb/motherduck
-      - 0.3.6
+      - 0.3.7
 
 config:
   runId:
