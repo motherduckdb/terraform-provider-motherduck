@@ -50,7 +50,7 @@ SHA-256. The dlt loading implementation is not copied or maintained here. The
 local fixture adapter replaces only the source generator. The adapter checks
 that the Terraform database exists before invoking the recipe.
 
-This companion pins DuckDB 1.5.5 and dlt 1.27.2. The original recipe used dlt
+This companion pins DuckDB 1.5.6 and dlt 1.31.0. The original recipe used dlt
 1.27.0, which PyPI yanked for a merge data-loss bug. Keep the corrected pin when
 reproducing this example. Review supported DuckDB versions before upgrades.
 
