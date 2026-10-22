@@ -30,8 +30,8 @@ data "motherduck_dive_versions" "revenue" {
 
 ### Optional
 
-- `limit` (Number) Maximum number of rows to return. Must be between 0 and 4294967295.
-- `offset` (Number) Number of rows to skip. Must be between 0 and 4294967295.
+- `limit` (Number) Maximum number of rows to return. Must be between 0 and 2147483647. A limit of 0 returns no rows.
+- `offset` (Number) Number of rows to skip. Must be between 0 and 2147483647.
 
 ### Read-Only
 

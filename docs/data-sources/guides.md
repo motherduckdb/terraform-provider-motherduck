@@ -28,14 +28,14 @@ data "motherduck_guides" "metrics" {
 
 ### Optional
 
-- `limit` (Number) Maximum number of rows to return when the underlying MotherDuck catalog function supports limits.
-- `offset` (Number) Number of rows to skip when the underlying MotherDuck catalog function supports offsets.
+- `limit` (Number) Maximum number of rows to return. Must be between 0 and 4294967295. A limit of 0 returns no rows.
+- `offset` (Number) Number of rows to skip. Must be between 0 and 4294967295.
 - `reference_column` (String) Optional column narrowing for a catalog Guide reference filter.
 - `reference_macro` (String) Optional macro narrowing for a catalog Guide reference filter.
 - `reference_schema` (String) Optional schema narrowing for a catalog Guide reference filter.
 - `reference_table` (String) Optional table narrowing for a catalog Guide reference filter.
 - `reference_type` (String) Optional Guide reference filter type: catalog, dive, flight, or guide.
-- `reference_url` (String) MotherDuck database or share URL for a catalog Guide reference filter.
+- `reference_url` (String, Sensitive) MotherDuck database or share URL for a catalog Guide reference filter. Sensitive because unrestricted share URLs can grant access.
 - `reference_uuid` (String) Dive, Flight, or Guide UUID for a Guide reference filter.
 - `reference_view` (String) Optional view narrowing for a catalog Guide reference filter.
 - `topic` (String) Optional slash-separated Guide topic subtree filter.

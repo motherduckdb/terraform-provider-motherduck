@@ -30,7 +30,7 @@ data "motherduck_guide" "revenue" {
 
 ### Optional
 
-- `version` (Number) Version number to read. Reads the current version when unset.
+- `version` (Number) Version number to read. Must be between 1 and 2147483647. Reads the current version when unset.
 
 ### Read-Only
 

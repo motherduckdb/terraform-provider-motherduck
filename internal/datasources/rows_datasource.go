@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
@@ -24,10 +25,11 @@ import (
 )
 
 var (
-	_ datasource.DataSource              = &scalarDataSource{}
-	_ datasource.DataSourceWithConfigure = &scalarDataSource{}
-	_ datasource.DataSource              = &rowsDataSource{}
-	_ datasource.DataSourceWithConfigure = &rowsDataSource{}
+	_ datasource.DataSource                   = &scalarDataSource{}
+	_ datasource.DataSourceWithConfigure      = &scalarDataSource{}
+	_ datasource.DataSource                   = &rowsDataSource{}
+	_ datasource.DataSourceWithConfigure      = &rowsDataSource{}
+	_ datasource.DataSourceWithValidateConfig = &rowsDataSource{}
 )
 
 type rowsDataSource struct {
@@ -80,8 +82,8 @@ func (d *rowsDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 	}
 	for _, attr := range d.spec.attrs {
 		attrs[attr] = rowAttribute(attr, d.spec.attrRequired(attr))
-		if d.spec.uint32Paging && (attr == "limit" || attr == "offset") {
-			attrs[attr] = uint32PagingAttribute(attr, d.spec.attrRequired(attr))
+		if d.spec.pagingMax > 0 && (attr == "limit" || attr == "offset") {
+			attrs[attr] = cappedPagingAttribute(attr, d.spec.attrRequired(attr), d.spec.pagingMax)
 		}
 	}
 	if len(d.spec.typedRows) > 0 {
@@ -194,18 +196,21 @@ func (d *rowsDataSource) queryRows(ctx context.Context, client interface {
 		return readErr
 	})
 	if err != nil {
-		if d.spec.permissionHint != "" && strings.Contains(strings.ToLower(err.Error()), "admin only") {
-			diags.AddError("MotherDuck organization admin permission required", d.spec.permissionHint+" MotherDuck reported: "+err.Error())
+		// Queries and MotherDuck errors can carry share URLs from filters
+		// such as the Guide reference_url, so diagnostics redact them.
+		message := redactShareURL(err.Error(), types.StringNull())
+		if d.spec.permissionHint != "" && strings.Contains(strings.ToLower(message), "admin only") {
+			diags.AddError("MotherDuck organization admin permission required", d.spec.permissionHint+" MotherDuck reported: "+message)
 			return "", false
 		}
 		if mdsql.IsUnsupportedCommand(err) {
 			diags.AddError(
 				"MotherDuck SQL command unavailable",
-				fmt.Sprintf("%s is not supported by the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_%s data source.", query, d.spec.name),
+				fmt.Sprintf("%s is not supported by the current MotherDuck SQL session. Confirm the account, region, and client support this feature before using the motherduck_%s data source. MotherDuck reported: %s", redactShareURL(query, types.StringNull()), d.spec.name, message),
 			)
 			return "", false
 		}
-		diags.AddError("Unable to read MotherDuck rows data source", err.Error())
+		diags.AddError("Unable to read MotherDuck rows data source", message)
 		return "", false
 	}
 	if d.spec.postProcess == nil {
@@ -382,7 +387,7 @@ func rowAttribute(name string, required bool) schema.Attribute {
 	case "run_number":
 		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Min("MotherDuck data source run number", 1)}, "MotherDuck Flight run number.")
 	case "version":
-		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Min("MotherDuck data source version", 1)}, "Version number to read. Reads the current version when unset.")
+		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Range("MotherDuck data source version", 1, maxInteger)}, "Version number to read. Must be between 1 and 2147483647. Reads the current version when unset.")
 	case "order":
 		return rowStringAttribute(required, flightLogOrderValidators(), "Which end of the Flight run log `limit` counts from. `asc`, the default, reads from the first line. `desc` reads the most recent lines. Lines are always returned in ascending line order. Applies only when `limit` is set.")
 	case "dive_id":
@@ -400,7 +405,9 @@ func rowAttribute(name string, required bool) schema.Attribute {
 	case "reference_type":
 		return rowStringAttribute(required, nil, "Optional Guide reference filter type: catalog, dive, flight, or guide.")
 	case "reference_url":
-		return rowStringAttribute(required, nil, "MotherDuck database or share URL for a catalog Guide reference filter.")
+		// A share URL can grant access, so the filter is sensitive like the
+		// reference URLs motherduck_guide reports.
+		return schema.StringAttribute{Required: required, Optional: !required, Sensitive: true, MarkdownDescription: "MotherDuck database or share URL for a catalog Guide reference filter. Sensitive because unrestricted share URLs can grant access."}
 	case "reference_schema":
 		return rowStringAttribute(required, nil, "Optional schema narrowing for a catalog Guide reference filter.")
 	case "reference_table":
@@ -443,16 +450,20 @@ func rowAttribute(name string, required bool) schema.Attribute {
 	}
 }
 
-// maxUInteger is the largest DuckDB UINTEGER value.
-const maxUInteger = 4294967295
+const (
+	// maxInteger is the largest DuckDB INTEGER value.
+	maxInteger = 2147483647
+	// maxUInteger is the largest DuckDB UINTEGER value.
+	maxUInteger = 4294967295
+)
 
-// uint32PagingAttribute is limit or offset for a function that takes them as
-// UINTEGER.
-func uint32PagingAttribute(name string, required bool) schema.Attribute {
+// cappedPagingAttribute is limit or offset for a function that reads them as
+// a type with the given maximum.
+func cappedPagingAttribute(name string, required bool, maximum int64) schema.Attribute {
 	if name == "limit" {
-		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Range("MotherDuck data source limit", 0, maxUInteger)}, "Maximum number of rows to return. Must be between 0 and 4294967295.")
+		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Range("MotherDuck data source limit", 0, maximum)}, fmt.Sprintf("Maximum number of rows to return. Must be between 0 and %d. A limit of 0 returns no rows.", maximum))
 	}
-	return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Range("MotherDuck data source offset", 0, maxUInteger)}, "Number of rows to skip. Must be between 0 and 4294967295.")
+	return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Range("MotherDuck data source offset", 0, maximum)}, fmt.Sprintf("Number of rows to skip. Must be between 0 and %d.", maximum))
 }
 
 func rowInt64Attribute(required bool, validators []validator.Int64, description string) schema.Attribute {
@@ -533,13 +544,32 @@ func (m *rowsModel) attribute(name string) attr.Value {
 }
 
 func (d *rowsDataSource) readConfig(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) rowsModel {
-	var config rowsModel
+	return d.configModel(ctx, req.Config, &resp.Diagnostics)
+}
+
+func (d *rowsDataSource) configModel(ctx context.Context, config tfsdk.Config, diags *diag.Diagnostics) rowsModel {
+	var model rowsModel
 	for _, name := range d.spec.attrs {
-		if target := config.attribute(name); target != nil {
-			resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root(name), target)...)
+		if target := model.attribute(name); target != nil {
+			diags.Append(config.GetAttribute(ctx, path.Root(name), target)...)
 		}
 	}
-	return config
+	return model
+}
+
+// ValidateConfig runs the spec checks that span several attributes, so an
+// invalid configuration fails at plan time before any MotherDuck call.
+func (d *rowsDataSource) ValidateConfig(ctx context.Context, req datasource.ValidateConfigRequest, resp *datasource.ValidateConfigResponse) {
+	if d.spec.validate == nil {
+		return
+	}
+	model := d.configModel(ctx, req.Config, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if err := d.spec.validate(model); err != nil {
+		resp.Diagnostics.AddAttributeError(path.Root("offset"), "Invalid MotherDuck data source paging", err.Error())
+	}
 }
 
 func (d *rowsDataSource) setState(ctx context.Context, state interface {
