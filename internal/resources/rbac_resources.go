@@ -268,8 +268,8 @@ func (r *roleGrantResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			"grantee_name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "User, service-account, or role principal receiving the role.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "User, service-account, or role principal receiving the role. MotherDuck resolves principals case-insensitively, so changing only the letter case updates state in place instead of revoking and granting the same principal.",
+				PlanModifiers:       identifierRequiresReplace(),
 				Validators:          shareGrantPrincipalValidators(),
 			},
 			"grantee_type": schema.StringAttribute{
@@ -331,8 +331,23 @@ func (r *roleGrantResource) Read(ctx context.Context, req resource.ReadRequest, 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update runs only when the principal changes letter case, because any other
+// change replaces the grant. MotherDuck resolves principals case-insensitively,
+// so the grant is unchanged and only state is updated.
 func (r *roleGrantResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Role grant updates are not supported", "Replace the grant to change its role or principal.")
+	var plan, state roleGrantModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if plan.RoleName.ValueString() != state.RoleName.ValueString() || plan.GranteeType.ValueString() != state.GranteeType.ValueString() || !strings.EqualFold(plan.GranteeName.ValueString(), state.GranteeName.ValueString()) {
+		resp.Diagnostics.AddError("Role grant updates are not supported", "Replace the grant to change its role or principal.")
+		return
+	}
+	plan.ID = roleGrantID(plan)
+	plan.GrantedAt = state.GrantedAt
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *roleGrantResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

@@ -18,7 +18,8 @@ and verify that load before creating the snapshot.
 
 Changing the name renames the snapshot. Refresh tracks the snapshot by its
 `snapshot_id`, so a rename outside Terraform plans an in-place rename back. Changing its database requires
-replacement. Destroy removes the managed name rather than promising immediate
+replacement, except that a change in the letter case of the database name only
+updates state. Destroy removes the managed name rather than promising immediate
 physical deletion of retained history.
 
 If creation succeeds but catalog readback fails, Terraform keeps the database

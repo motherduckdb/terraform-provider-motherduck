@@ -2,12 +2,16 @@ package resources
 
 import (
 	"context"
+	stdsql "database/sql"
 	"reflect"
 	"testing"
+
+	_ "github.com/duckdb/duckdb-go/v2"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
 )
 
 func TestValidateSecretConfig(t *testing.T) {
@@ -108,7 +112,9 @@ func TestDesiredSecretScopeFromParams(t *testing.T) {
 	if !ok {
 		t.Fatal("expected scope to be detected")
 	}
-	want := "['s3://bucket/path/with''quote/']"
+	// The configured value is returned as is. DuckDB renders it for the
+	// comparison with the live scope.
+	want := "s3://bucket/path/with'quote/"
 	if got != want {
 		t.Fatalf("desired scope = %q, want %q", got, want)
 	}
@@ -148,5 +154,50 @@ func TestSecretApplyRejectsUnsafeValues(t *testing.T) {
 				t.Fatalf("expected no SQL to run, got %q", client.execs)
 			}
 		})
+	}
+}
+
+type duckDBScalarStringer struct{ db *stdsql.DB }
+
+func (c duckDBScalarStringer) ScalarString(ctx context.Context, query string, args ...any) (string, error) {
+	var value string
+	err := c.db.QueryRowContext(ctx, query, args...).Scan(&value)
+	return value, err
+}
+
+// duckdb_secrets() reports scope through DuckDB's list cast, which leaves
+// plain words unquoted and escapes quotes with a backslash. The plan-time
+// comparison must render the configured scope the same way.
+func TestRenderSecretScopeMatchesDuckDBListCast(t *testing.T) {
+	db, err := stdsql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	client := duckDBScalarStringer{db: db}
+	for scope, want := range map[string]string{
+		"mybucket":                     "[mybucket]",
+		"s3://bucket/path/with'quote/": `['s3://bucket/path/with\'quote/']`,
+		"s3://bucket/a, b/":            "['s3://bucket/a, b/']",
+	} {
+		got, err := renderSecretScope(context.Background(), client, scope)
+		if err != nil {
+			t.Fatalf("rendering %q: %v", scope, err)
+		}
+		if got != want {
+			t.Fatalf("rendered scope %q = %q, want %q", scope, got, want)
+		}
+		// A temporary secret is read back through the same column that the
+		// resource reads.
+		if _, err := db.Exec("CREATE OR REPLACE TEMPORARY SECRET scope_probe (TYPE s3, SCOPE " + sqlbuild.StringLiteral(scope) + ")"); err != nil {
+			t.Fatal(err)
+		}
+		var live string
+		if err := db.QueryRow("SELECT scope::VARCHAR FROM duckdb_secrets() WHERE name = 'scope_probe'").Scan(&live); err != nil {
+			t.Fatal(err)
+		}
+		if got != live {
+			t.Fatalf("rendered scope %q = %q, but duckdb_secrets() reports %q", scope, got, live)
+		}
 	}
 }

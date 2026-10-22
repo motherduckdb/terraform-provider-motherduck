@@ -39,14 +39,14 @@ func (r *shareGrantResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"share": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Restricted share name to grant.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Restricted share name to grant. MotherDuck compares share names case-insensitively, so changing only the letter case updates state in place.",
+				PlanModifiers:       identifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"username": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Grantable MotherDuck user or service-account principal. Must be non-blank and must not include leading or trailing whitespace. Email-like principals are allowed. The PAT email, PAT session name, and `motherduck_current_user` value may not be valid share-grant usernames.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Grantable MotherDuck user or service-account principal. Must be non-blank and must not include leading or trailing whitespace. Email-like principals are allowed. The PAT email, PAT session name, and `motherduck_current_user` value may not be valid share-grant usernames. MotherDuck resolves principals case-insensitively, so changing only the letter case updates state in place instead of revoking and granting the same principal.",
+				PlanModifiers:       identifierRequiresReplace(),
 				Validators:          shareGrantPrincipalValidators(),
 			},
 			"grantee_type": schema.StringAttribute{
@@ -115,8 +115,22 @@ func (r *shareGrantResource) Read(ctx context.Context, req resource.ReadRequest,
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// Update runs only when the share or principal changes letter case, because
+// any other change replaces the grant. MotherDuck resolves both names
+// case-insensitively, so the grant is unchanged and only state is updated.
 func (r *shareGrantResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	resp.Diagnostics.AddError("Share grant updates are not supported", "Replace the grant to change share or username.")
+	var plan, state shareGrantModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !strings.EqualFold(plan.Share.ValueString(), state.Share.ValueString()) || !strings.EqualFold(plan.Username.ValueString(), state.Username.ValueString()) || !strings.EqualFold(plan.GranteeType.ValueString(), state.GranteeType.ValueString()) {
+		resp.Diagnostics.AddError("Share grant updates are not supported", "Replace the grant to change share or username.")
+		return
+	}
+	plan.ID = shareGrantID(plan)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r *shareGrantResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

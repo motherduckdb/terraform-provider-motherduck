@@ -28,7 +28,11 @@ These changes affect the values the column accepts. Review any replacement plan
 before applying because replacing a table removes its rows. To retain the live
 type and data, update the configured type to match it instead.
 
-The database, schema, and name also require replacement when changed. Destroy
+The database, schema, and name also require replacement when changed. A change
+in their letter case only updates state because MotherDuck resolves names
+case-insensitively. If the provider cannot compare column types during
+planning, for example after a connection error, the plan fails instead of
+replacing the table. Destroy
 drops the table. Import uses `<database>.<schema>.<table>` and reads its existing
 column definitions.
 
@@ -66,9 +70,9 @@ resource "motherduck_table" "events" {
 ### Required
 
 - `columns` (Map of String) Map of column name to DuckDB SQL type. Column changes replace the table. Type aliases such as `INT` and `INTEGER` are compared semantically, so a change that only respells a type updates state in place without replacing the table.
-- `database` (String) Database that contains the table.
-- `name` (String) Table name.
-- `schema` (String) Schema that contains the table.
+- `database` (String) Database that contains the table. Changing only the letter case updates state in place.
+- `name` (String) Table name. Changing only the letter case updates state in place.
+- `schema` (String) Schema that contains the table. Changing only the letter case updates state in place.
 
 ### Read-Only
 
