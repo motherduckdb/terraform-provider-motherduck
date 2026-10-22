@@ -78,8 +78,8 @@ func TestSensitiveWriteDiagnosticContextErrors(t *testing.T) {
 
 func TestDiveSensitiveValuesCollectsURLs(t *testing.T) {
 	ctx := context.Background()
-	objType := types.ObjectType{AttrTypes: map[string]attr.Type{"alias": types.StringType, "url": types.StringType}}
-	first, diags := types.ObjectValue(objType.AttrTypes, map[string]attr.Value{"alias": types.StringValue("a"), "url": types.StringValue(testSensitiveShareURL)})
+	objType := diveRequiredResourceObjectType()
+	first, diags := types.ObjectValue(objType.AttrTypes, map[string]attr.Value{"alias": types.StringValue("a"), "url": types.StringValue(testSensitiveShareURL), "resource_type": types.StringNull()})
 	if diags.HasError() {
 		t.Fatalf("object value: %v", diags)
 	}
@@ -134,7 +134,7 @@ func TestDiveSensitiveValuesCharacterizesTerraformValues(t *testing.T) {
 	objType := diveRequiredResourceObjectType()
 	object := func(alias, url attr.Value) attr.Value {
 		t.Helper()
-		return types.ObjectValueMust(objType.AttrTypes, map[string]attr.Value{"alias": alias, "url": url})
+		return types.ObjectValueMust(objType.AttrTypes, map[string]attr.Value{"alias": alias, "url": url, "resource_type": types.StringNull()})
 	}
 	list := func(elements ...attr.Value) types.List {
 		t.Helper()
@@ -305,9 +305,9 @@ func TestSensitiveWriteDiagnosticRedactsExtractedURLs(t *testing.T) {
 	t.Run("dive", func(t *testing.T) {
 		objType := diveRequiredResourceObjectType()
 		list := types.ListValueMust(objType, []attr.Value{
-			types.ObjectValueMust(objType.AttrTypes, map[string]attr.Value{"alias": types.StringValue("a"), "url": types.StringValue(short)}),
-			types.ObjectValueMust(objType.AttrTypes, map[string]attr.Value{"alias": types.StringValue("b"), "url": types.StringValue(long)}),
-			types.ObjectValueMust(objType.AttrTypes, map[string]attr.Value{"alias": types.StringValue("c"), "url": types.StringValue(apostrophe)}),
+			types.ObjectValueMust(objType.AttrTypes, map[string]attr.Value{"alias": types.StringValue("a"), "url": types.StringValue(short), "resource_type": types.StringNull()}),
+			types.ObjectValueMust(objType.AttrTypes, map[string]attr.Value{"alias": types.StringValue("b"), "url": types.StringValue(long), "resource_type": types.StringNull()}),
+			types.ObjectValueMust(objType.AttrTypes, map[string]attr.Value{"alias": types.StringValue("c"), "url": types.StringValue(apostrophe), "resource_type": types.StringNull()}),
 		})
 		assertRedactedExtractedURLs(t, message, diveSensitiveValues(context.Background(), list))
 	})

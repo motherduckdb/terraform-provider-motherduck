@@ -50,11 +50,13 @@ scheduled:
 | Plan | Default `instance_type` | Offered sizes |
 | --- | --- | --- |
 | Business | `F16` | `F4`, `F16`, `F32` |
-| Free trial | `F16` | `F4`, `F16` |
+| Free trial | `F16` | `F4`, `F16`, `F32` |
 | Lite | `F16` | `F4`, `F16` |
 | Free | `F4` | `F4` |
 
-`F4`, `F16`, and `F32` have 4, 16, and 32 GB of memory. A Flight created
+An expired free trial gets the Free plan limits and sizes.
+
+`F4`,`F16`, and `F32` have 4, 16, and 32 GB of memory. A Flight created
 before sizes existed reads back as `F16`. MotherDuck checks a size against the
 plan only when it is set, so a Flight keeps its size after the organization
 changes plans. An update that sets a size the new plan does not offer is
@@ -121,7 +123,7 @@ resource "motherduck_flight" "heartbeat" {
 - `access_token_name` (String) Optional MotherDuck access token name for the Flight. When omitted, MotherDuck uses its default Flight token behavior and Terraform keeps this field unset.
 - `config` (Map of String) Optional string configuration passed to the Flight. Keys become Flight runtime environment variables and must be valid Flight config names.
 - `flight_secret_names` (List of String) Optional MotherDuck secret names available to the Flight.
-- `instance_type` (String) Runner size for Flight runs: `F4`, `F16`, or `F32`, with 4, 16, or 32 GB of memory. Each plan offers a subset: `F4`, `F16`, and `F32` on the Business plan, `F4` and `F16` on the Lite plan and during a free trial, and `F4` on the Free plan. MotherDuck rejects a size the plan does not offer. When omitted at creation, MotherDuck applies the plan default: `F16` on the Business and Lite plans and during a free trial, and `F4` on the Free plan. Removing a configured value keeps the last applied size, so set the value explicitly to change it. A change creates a new Flight version.
+- `instance_type` (String) Runner size for Flight runs: `F4`, `F16`, or `F32`, with 4, 16, or 32 GB of memory. Each plan offers a subset: `F4`, `F16`, and `F32` on the Business plan and during a free trial, `F4` and `F16` on the Lite plan, and `F4` on the Free plan. An expired free trial gets the Free plan sizes. MotherDuck rejects a size the plan does not offer. When omitted at creation, MotherDuck applies the plan default: `F16` on the Business and Lite plans and during a free trial, and `F4` on the Free plan. Removing a configured value keeps the last applied size, so set the value explicitly to change it. A change creates a new Flight version.
 - `max_runtime_sec` (Number) Maximum Flight runtime in seconds. MotherDuck enforces a per-plan cap: 3,600 seconds (1 hour) on the Lite and Free plans, 28,800 seconds (8 hours) during a free trial, and no cap on the Business plan. On a capped plan, a value above the cap or `0` is rejected. On the Business plan, `0` removes the runtime limit. When omitted at creation, MotherDuck applies the plan default: 8 hours on the Business plan and during a free trial, and 1 hour on the Lite and Free plans. Removing a configured value keeps the last applied limit, so set the value explicitly to change it.
 - `requirements_txt` (String) Optional Python requirements text for the Flight runtime. Must be at most 20,480 bytes (20 KiB) of UTF-8.
 - `schedule_cron` (String) Optional cron schedule for the Flight. MotherDuck rejects schedules on plans without scheduled runs, such as the Free plan. See `schedule_status` for whether MotherDuck is currently running the schedule.

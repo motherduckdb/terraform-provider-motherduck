@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
@@ -23,25 +24,29 @@ import (
 type diveResource struct{ baseResource }
 
 type diveModel struct {
-	ID                types.String `tfsdk:"id"`
-	Title             types.String `tfsdk:"title"`
-	Description       types.String `tfsdk:"description"`
-	Content           types.String `tfsdk:"content"`
-	APIVersion        types.Int64  `tfsdk:"api_version"`
-	RequiredResources types.List   `tfsdk:"required_resources"`
-	Status            types.String `tfsdk:"status"`
-	StatusChangedAt   types.String `tfsdk:"status_changed_at"`
-	StatusSetBy       types.String `tfsdk:"status_set_by"`
-	StatusVersion     types.Int64  `tfsdk:"status_applies_to_version"`
-	CurrentVersion    types.Int64  `tfsdk:"current_version"`
-	CreatedAt         types.String `tfsdk:"created_at"`
-	UpdatedAt         types.String `tfsdk:"updated_at"`
-	OwnerName         types.String `tfsdk:"owner_name"`
+	ID                 types.String `tfsdk:"id"`
+	Title              types.String `tfsdk:"title"`
+	Description        types.String `tfsdk:"description"`
+	Content            types.String `tfsdk:"content"`
+	VersionDescription types.String `tfsdk:"version_description"`
+	APIVersion         types.Int64  `tfsdk:"api_version"`
+	RequiredResources  types.List   `tfsdk:"required_resources"`
+	Status             types.String `tfsdk:"status"`
+	StatusChangedAt    types.String `tfsdk:"status_changed_at"`
+	StatusSetBy        types.String `tfsdk:"status_set_by"`
+	StatusVersion      types.Int64  `tfsdk:"status_applies_to_version"`
+	CurrentVersion     types.Int64  `tfsdk:"current_version"`
+	VersionCreatedAt   types.String `tfsdk:"version_created_at"`
+	CreatedAt          types.String `tfsdk:"created_at"`
+	UpdatedAt          types.String `tfsdk:"updated_at"`
+	OwnerID            types.String `tfsdk:"owner_id"`
+	OwnerName          types.String `tfsdk:"owner_name"`
 }
 
 type diveRequiredResourceModel struct {
-	Alias types.String `tfsdk:"alias"`
-	URL   types.String `tfsdk:"url"`
+	Alias        types.String `tfsdk:"alias"`
+	URL          types.String `tfsdk:"url"`
+	ResourceType types.String `tfsdk:"resource_type"`
 }
 
 func NewDiveResource() resource.Resource { return &diveResource{} }
@@ -66,11 +71,17 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"description": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional Dive description. Set this to an empty string to clear the visible description. Removing an existing configured value is rejected because the public SQL update surface does not expose a null-clear operation.",
+				MarkdownDescription: "Optional Dive description. MotherDuck ignores an empty description in a metadata update, so an existing description cannot be cleared in place. Setting an existing description to an empty string or removing it is rejected. Replace the Dive to remove its description.",
 			},
 			"content": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "Dive content source sent to MotherDuck.",
+			},
+			"version_description": schema.StringAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "Description of the Dive version written by this configuration, sent as `description` to `MD_UPDATE_DIVE_CONTENT`. MotherDuck stores it on a version, so changing it writes a new Dive version with the same content. `MD_CREATE_DIVE` cannot set it, so setting it at creation writes a second version right away. Refresh and import read the current version's description from `MD_GET_DIVE`. When omitted, a content change writes a version without a description.",
+				PlanModifiers:       []planmodifier.String{diveVersionDescriptionPlanModifier{}},
 			},
 			"api_version": schema.Int64Attribute{
 				Optional:            true,
@@ -81,7 +92,7 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"required_resources": schema.ListNestedAttribute{
 				Optional:            true,
 				Sensitive:           true,
-				MarkdownDescription: "Optional shares or databases to mount into the Dive. Refresh and import read the current version's mounted resources from `MD_GET_DIVE`, so a mount changed outside Terraform plans an update. MotherDuck stores a share URL under the share's name. A configured URL that names the same share token keeps its spelling in state.",
+				MarkdownDescription: "Optional databases or shares to mount into the Dive. Refresh and import read the current version's mounted resources from `MD_GET_DIVE`, so a mount changed outside Terraform plans an update. MotherDuck stores a share URL under the share's name. A configured URL that names the same share token keeps its spelling in state.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"alias": schema.StringAttribute{
@@ -92,8 +103,13 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 						"url": schema.StringAttribute{
 							Required:            true,
 							Sensitive:           true,
-							MarkdownDescription: "MotherDuck share URL to mount into the Dive. This value is sensitive and can be sourced from `motherduck_share.url`.",
-							Validators:          nonBlankStringValidators("MotherDuck Dive required resource URL"),
+							MarkdownDescription: "MotherDuck URL of the database or share to mount into the Dive. It must start with `md:`, for example `md:analytics` for a database or a share URL from `motherduck_share.url`. This value is sensitive.",
+							Validators:          []validator.String{diveRequiredResourceURLValidator{}},
+						},
+						"resource_type": schema.StringAttribute{
+							Computed:            true,
+							MarkdownDescription: "Kind of mounted resource reported by MotherDuck, `database` or `share`.",
+							PlanModifiers:       []planmodifier.String{diveResourceTypePlanModifier{}},
 						},
 					},
 				},
@@ -121,6 +137,10 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Computed:            true,
 				MarkdownDescription: "Current Dive version number reported by MotherDuck.",
 			},
+			"version_created_at": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "Creation timestamp of the current Dive version reported by MotherDuck.",
+			},
 			"created_at": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Dive creation timestamp reported by MotherDuck.",
@@ -128,6 +148,11 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"updated_at": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Dive update timestamp reported by MotherDuck.",
+			},
+			"owner_id": schema.StringAttribute{
+				Computed:            true,
+				PlanModifiers:       stringUseStateForUnknown(),
+				MarkdownDescription: "User UUID of the Dive owner reported by MotherDuck.",
 			},
 			"owner_name": schema.StringAttribute{
 				Computed:            true,
@@ -155,6 +180,7 @@ func (r *diveResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 	requestedStatus := plan.Status
+	requestedVersionDescription := plan.VersionDescription
 	if diveStatusConfigured(requestedStatus) && !r.sqlFunctionAvailable(ctx, client, &resp.Diagnostics, "md_update_dive_status", "motherduck_dive") {
 		return
 	}
@@ -195,7 +221,37 @@ func (r *diveResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
-	if resp.Diagnostics.HasError() || !diveStatusChanged(requestedStatus, plan.Status) {
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	// MD_CREATE_DIVE has no version description, so write it as a second
+	// version with the same content and mounts.
+	if diveVersionDescriptionConfigured(requestedVersionDescription) && !requestedVersionDescription.Equal(plan.VersionDescription) {
+		if !r.sqlFunctionAvailable(ctx, client, &resp.Diagnostics, "md_update_dive_content", "motherduck_dive") {
+			return
+		}
+		plan.VersionDescription = requestedVersionDescription
+		args, ok := diveContentWriteArgs(ctx, &plan, &resp.Diagnostics)
+		if !ok {
+			return
+		}
+		args["id"] = sqlbuild.StringLiteral(plan.ID.ValueString()) + "::UUID"
+		if _, err := client.QueryRowsJSON(ctx, "SELECT * FROM MD_UPDATE_DIVE_CONTENT"+sqlbuild.NamedArgs(args)); err != nil {
+			resp.Diagnostics.AddError("Unable to set MotherDuck Dive version description", sensitiveWriteDiagnostic("Dive", err, diveSensitiveValues(ctx, plan.RequiredResources)))
+			return
+		}
+		if !r.readDive(ctx, &plan, &resp.Diagnostics) {
+			if !resp.Diagnostics.HasError() {
+				resp.Diagnostics.AddError("Unable to read MotherDuck Dive", "Dive version description was written but the Dive could not be read through MD_GET_DIVE.")
+			}
+			return
+		}
+		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+	if !diveStatusChanged(requestedStatus, plan.Status) {
 		return
 	}
 	if !r.updateDiveStatus(ctx, client, plan.ID.ValueString(), requestedStatus.ValueString(), &resp.Diagnostics) {
@@ -328,7 +384,7 @@ func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *di
 	if !r.sqlFunctionAvailable(ctx, client, diags, "md_get_dive", "motherduck_dive") {
 		return false
 	}
-	var title, description, created, updated, ownerName, content, status, statusChangedAt, statusSetBy stdsql.NullString
+	var title, description, created, updated, ownerID, ownerName, content, versionDescription, versionCreated, status, statusChangedAt, statusSetBy stdsql.NullString
 	var currentVersion, statusVersion stdsql.NullInt64
 	statusAvailable, err := sqlFunctionExists(ctx, client, "md_update_dive_status")
 	if err != nil {
@@ -337,8 +393,8 @@ func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *di
 	}
 	var apiVersion stdsql.NullInt64
 	var requiredResourcesJSON stdsql.NullString
-	columns := "title, description, current_version, created_at::VARCHAR, updated_at::VARCHAR, owner_name, content, version_api_version, to_json(version_required_resources)::VARCHAR"
-	scanTargets := []any{&title, &description, &currentVersion, &created, &updated, &ownerName, &content, &apiVersion, &requiredResourcesJSON}
+	columns := "title, description, current_version, created_at::VARCHAR, updated_at::VARCHAR, owner_id::VARCHAR, owner_name, content, version_description, version_created_at::VARCHAR, version_api_version, to_json(version_required_resources)::VARCHAR"
+	scanTargets := []any{&title, &description, &currentVersion, &created, &updated, &ownerID, &ownerName, &content, &versionDescription, &versionCreated, &apiVersion, &requiredResourcesJSON}
 	if statusAvailable {
 		columns += ", status, status_changed_at::VARCHAR, status_set_by::VARCHAR, status_applies_to_version"
 		scanTargets = append(scanTargets, &status, &statusChangedAt, &statusSetBy, &statusVersion)
@@ -361,8 +417,11 @@ func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *di
 	}
 	model.CreatedAt = nullString(created)
 	model.UpdatedAt = nullString(updated)
+	model.OwnerID = nullString(ownerID)
 	model.OwnerName = nullString(ownerName)
 	model.Content = nullString(content)
+	model.VersionDescription = clearableStringFromLive(model.VersionDescription, versionDescription)
+	model.VersionCreatedAt = nullString(versionCreated)
 	if apiVersion.Valid {
 		model.APIVersion = types.Int64Value(apiVersion.Int64)
 	} else {
@@ -419,16 +478,25 @@ func diveMetadataArgs(plan, state *diveModel, diags *diag.Diagnostics) (map[stri
 		args["title"] = sqlbuild.StringLiteral(plan.Title.ValueString())
 	}
 	if !plan.Description.Equal(state.Description) {
-		if plan.Description.IsNull() && !state.Description.IsNull() {
+		switch {
+		case !diveDescriptionEmpty(plan.Description):
+			args["description"] = sqlbuild.StringLiteral(plan.Description.ValueString())
+		case !diveDescriptionEmpty(state.Description):
 			diags.AddError(
 				"Unable to clear MotherDuck Dive description",
-				"The public Dive metadata update API does not currently expose a null-clear operation for description. Set description = \"\" to store an empty description, or replace the Dive resource if you need the live value to be null.",
+				"MotherDuck ignores an empty description in a Dive metadata update, and the public SQL surface has no operation that clears it. Set a new non-empty description, or replace the Dive resource, for example with terraform apply -replace, if the description must be empty.",
 			)
 			return nil, false
 		}
-		args["description"] = sqlbuild.StringLiteral(plan.Description.ValueString())
+		// Both values are empty, so there is nothing to send.
 	}
 	return args, len(args) > 0
+}
+
+// diveDescriptionEmpty reports whether a description has no visible text to
+// store. MotherDuck treats an empty description like a missing one.
+func diveDescriptionEmpty(value types.String) bool {
+	return value.IsNull() || value.IsUnknown() || value.ValueString() == ""
 }
 
 // diveAPIVersionPlanModifier keeps an unconfigured api_version from state
@@ -448,18 +516,138 @@ func (diveAPIVersionPlanModifier) PlanModifyInt64(ctx context.Context, req planm
 	if req.State.Raw.IsNull() || req.StateValue.IsNull() || !req.ConfigValue.IsNull() || !req.PlanValue.IsUnknown() {
 		return
 	}
-	var planContent, stateContent types.String
-	var planResources, stateResources types.List
-	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("content"), &planContent)...)
-	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("content"), &stateContent)...)
-	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("required_resources"), &planResources)...)
-	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("required_resources"), &stateResources)...)
+	var configVersionDescription, stateVersionDescription types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("version_description"), &configVersionDescription)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("version_description"), &stateVersionDescription)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if planContent.Equal(stateContent) && optionalListValuesEqual(planResources, stateResources) {
+	if diveVersionDescriptionConfigured(configVersionDescription) && !configVersionDescription.Equal(stateVersionDescription) {
+		return
+	}
+	if diveContentWriteUnchanged(ctx, req.Plan.GetAttribute, req.State.GetAttribute, &resp.Diagnostics) {
 		resp.PlanValue = req.StateValue
 	}
+}
+
+// diveContentWriteUnchanged reports whether the planned content and mounts
+// match state, so no content write is planned for them.
+func diveContentWriteUnchanged(ctx context.Context, plan, state attributeGetter, diags *diag.Diagnostics) bool {
+	var planContent, stateContent types.String
+	var planResources, stateResources types.List
+	diags.Append(plan(ctx, path.Root("content"), &planContent)...)
+	diags.Append(state(ctx, path.Root("content"), &stateContent)...)
+	diags.Append(plan(ctx, path.Root("required_resources"), &planResources)...)
+	diags.Append(state(ctx, path.Root("required_resources"), &stateResources)...)
+	if diags.HasError() {
+		return false
+	}
+	return planContent.Equal(stateContent) && diveRequiredResourcesEqual(ctx, planResources, stateResources)
+}
+
+// diveVersionDescriptionPlanModifier keeps an unconfigured version_description
+// from state unless the plan writes a new content version, which replaces the
+// current version and its description.
+type diveVersionDescriptionPlanModifier struct{}
+
+func (diveVersionDescriptionPlanModifier) Description(context.Context) string {
+	return "Keeps the prior version description unless the plan writes a new Dive version."
+}
+
+func (m diveVersionDescriptionPlanModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (diveVersionDescriptionPlanModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.State.Raw.IsNull() || !req.ConfigValue.IsNull() || !req.PlanValue.IsUnknown() {
+		return
+	}
+	var configAPIVersion, stateAPIVersion types.Int64
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("api_version"), &configAPIVersion)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("api_version"), &stateAPIVersion)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if diveAPIVersionConfigured(configAPIVersion) && !configAPIVersion.Equal(stateAPIVersion) {
+		return
+	}
+	if diveContentWriteUnchanged(ctx, req.Plan.GetAttribute, req.State.GetAttribute, &resp.Diagnostics) {
+		resp.PlanValue = req.StateValue
+	}
+}
+
+// diveResourceTypePlanModifier plans a mount's resource_type. A mount whose
+// URL names the same resource as the prior mount at that position keeps its
+// type, and a share URL is a share. Any other new mount stays unknown until
+// MotherDuck resolves it.
+type diveResourceTypePlanModifier struct{}
+
+func (diveResourceTypePlanModifier) Description(context.Context) string {
+	return "Keeps the prior resource type while the mount URL is unchanged."
+}
+
+func (m diveResourceTypePlanModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (diveResourceTypePlanModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if !req.PlanValue.IsUnknown() {
+		return
+	}
+	urlPath := req.Path.ParentPath().AtName("url")
+	var planURL types.String
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, urlPath, &planURL)...)
+	if resp.Diagnostics.HasError() || planURL.IsNull() || planURL.IsUnknown() {
+		return
+	}
+	if !req.State.Raw.IsNull() && !req.StateValue.IsNull() && !req.StateValue.IsUnknown() {
+		var stateURL types.String
+		if diags := req.State.GetAttribute(ctx, urlPath, &stateURL); !diags.HasError() && !stateURL.IsNull() && !stateURL.IsUnknown() && diveResourceURLsEquivalent(stateURL.ValueString(), planURL.ValueString()) {
+			resp.PlanValue = req.StateValue
+			return
+		}
+	}
+	if strings.HasPrefix(planURL.ValueString(), diveSharePrefix) {
+		resp.PlanValue = types.StringValue("share")
+	}
+}
+
+const (
+	diveMotherDuckPrefix = "md:"
+	diveSharePrefix      = "md:_share/"
+)
+
+// diveRequiredResourceURLValidator mirrors the MotherDuck client check that a
+// mounted resource URL is a MotherDuck URL. The value is sensitive, so the
+// diagnostic does not repeat it.
+type diveRequiredResourceURLValidator struct{}
+
+func (diveRequiredResourceURLValidator) Description(context.Context) string {
+	return "must be a MotherDuck URL that starts with md:"
+}
+
+func (diveRequiredResourceURLValidator) MarkdownDescription(context.Context) string {
+	return "must be a MotherDuck URL that starts with `md:`"
+}
+
+func (diveRequiredResourceURLValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	value := req.ConfigValue.ValueString()
+	if strings.TrimSpace(value) == "" {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck Dive required resource URL", "Value must not be empty.")
+		return
+	}
+	if !strings.HasPrefix(value, diveMotherDuckPrefix) {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck Dive required resource URL", "Value must be a MotherDuck URL that starts with \"md:\", such as md:<database> for a database or a share URL from motherduck_share.url.")
+	}
+}
+
+// diveVersionDescriptionConfigured reports whether version_description has a
+// planned value to send.
+func diveVersionDescriptionConfigured(value types.String) bool {
+	return !value.IsNull() && !value.IsUnknown()
 }
 
 // diveAPIVersionConfigured reports whether api_version has a planned value to
@@ -470,23 +658,38 @@ func diveAPIVersionConfigured(value types.Int64) bool {
 }
 
 func diveContentArgs(ctx context.Context, plan, state *diveModel, diags *diag.Diagnostics) (map[string]string, bool) {
-	requiredResourcesEqual := optionalListValuesEqual(plan.RequiredResources, state.RequiredResources)
+	requiredResourcesEqual := diveRequiredResourcesEqual(ctx, plan.RequiredResources, state.RequiredResources)
 	apiVersionEqual := !diveAPIVersionConfigured(plan.APIVersion) || plan.APIVersion.Equal(state.APIVersion)
-	if plan.Content.Equal(state.Content) && apiVersionEqual && requiredResourcesEqual {
+	versionDescriptionEqual := !diveVersionDescriptionConfigured(plan.VersionDescription) || plan.VersionDescription.Equal(state.VersionDescription)
+	if plan.Content.Equal(state.Content) && apiVersionEqual && requiredResourcesEqual && versionDescriptionEqual {
 		return nil, false
 	}
+	args, ok := diveContentWriteArgs(ctx, plan, diags)
+	if !ok {
+		return nil, false
+	}
+	if plan.RequiredResources.IsNull() && !requiredResourcesEqual {
+		args["required_resources"] = "NULL"
+	}
+	return args, true
+}
+
+// diveContentWriteArgs builds MD_UPDATE_DIVE_CONTENT arguments for the planned
+// content, API version, mounts, and version description.
+func diveContentWriteArgs(ctx context.Context, plan *diveModel, diags *diag.Diagnostics) (map[string]string, bool) {
 	args := map[string]string{"content": sqlbuild.StringLiteral(plan.Content.ValueString())}
 	if diveAPIVersionConfigured(plan.APIVersion) {
 		args["api_version"] = fmt.Sprintf("%d", plan.APIVersion.ValueInt64())
 	}
-	if !plan.RequiredResources.IsNull() {
+	if !plan.RequiredResources.IsNull() && !plan.RequiredResources.IsUnknown() {
 		requiredResources, ok := diveRequiredResourcesArg(ctx, plan.RequiredResources, diags)
 		if !ok {
 			return nil, false
 		}
 		args["required_resources"] = requiredResources
-	} else if !requiredResourcesEqual {
-		args["required_resources"] = "NULL"
+	}
+	if diveVersionDescriptionConfigured(plan.VersionDescription) {
+		args["description"] = sqlbuild.StringLiteral(plan.VersionDescription.ValueString())
 	}
 	return args, true
 }
@@ -498,15 +701,37 @@ func optionalListValuesEqual(left, right types.List) bool {
 	return left.Equal(right)
 }
 
+// diveRequiredResourcesEqual compares the configured parts of two mount lists,
+// alias and URL, and ignores the computed resource_type.
+func diveRequiredResourcesEqual(ctx context.Context, left, right types.List) bool {
+	if left.IsNull() || right.IsNull() {
+		return left.IsNull() && right.IsNull()
+	}
+	if left.IsUnknown() || right.IsUnknown() {
+		return false
+	}
+	var leftItems, rightItems []diveRequiredResourceModel
+	if left.ElementsAs(ctx, &leftItems, false).HasError() || right.ElementsAs(ctx, &rightItems, false).HasError() || len(leftItems) != len(rightItems) {
+		return false
+	}
+	for i := range leftItems {
+		if !leftItems[i].Alias.Equal(rightItems[i].Alias) || !leftItems[i].URL.Equal(rightItems[i].URL) {
+			return false
+		}
+	}
+	return true
+}
+
 // diveLiveResource is one entry of MD_GET_DIVE version_required_resources.
 type diveLiveResource struct {
-	Name  *string `json:"name"`
-	Alias *string `json:"alias"`
-	URL   string  `json:"url"`
+	Name         *string `json:"name"`
+	Alias        *string `json:"alias"`
+	URL          string  `json:"url"`
+	ResourceType *string `json:"resource_type"`
 }
 
 func diveRequiredResourceObjectType() types.ObjectType {
-	return types.ObjectType{AttrTypes: map[string]attr.Type{"alias": types.StringType, "url": types.StringType}}
+	return types.ObjectType{AttrTypes: map[string]attr.Type{"alias": types.StringType, "url": types.StringType, "resource_type": types.StringType}}
 }
 
 // diveRequiredResourcesFromLive maps the mounted resources of the current Dive
@@ -539,11 +764,15 @@ func diveRequiredResourcesFromLive(ctx context.Context, prior types.List, raw st
 		} else if resource.Name != nil {
 			alias = *resource.Name
 		}
+		resourceType := types.StringNull()
+		if resource.ResourceType != nil {
+			resourceType = types.StringValue(*resource.ResourceType)
+		}
 		if i < len(priorItems) && strings.EqualFold(priorItems[i].Alias.ValueString(), alias) && diveResourceURLsEquivalent(priorItems[i].URL.ValueString(), resource.URL) {
-			items[i] = priorItems[i]
+			items[i] = diveRequiredResourceModel{Alias: priorItems[i].Alias, URL: priorItems[i].URL, ResourceType: resourceType}
 			continue
 		}
-		items[i] = diveRequiredResourceModel{Alias: types.StringValue(alias), URL: types.StringValue(resource.URL)}
+		items[i] = diveRequiredResourceModel{Alias: types.StringValue(alias), URL: types.StringValue(resource.URL), ResourceType: resourceType}
 	}
 	value, valueDiags := types.ListValueFrom(ctx, diveRequiredResourceObjectType(), items)
 	diags.Append(valueDiags...)
@@ -558,9 +787,8 @@ func diveResourceURLsEquivalent(configured, live string) bool {
 	if strings.EqualFold(configured, live) {
 		return true
 	}
-	const sharePrefix = "md:_share/"
 	configured, live = strings.ToLower(configured), strings.ToLower(live)
-	if !strings.HasPrefix(configured, sharePrefix) || !strings.HasPrefix(live, sharePrefix) {
+	if !strings.HasPrefix(configured, diveSharePrefix) || !strings.HasPrefix(live, diveSharePrefix) {
 		return false
 	}
 	configuredToken := configured[strings.LastIndex(configured, "/")+1:]

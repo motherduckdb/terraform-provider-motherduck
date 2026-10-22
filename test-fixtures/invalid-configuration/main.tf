@@ -117,6 +117,27 @@ resource "motherduck_database" "encrypted_default" {
   encrypted = true
 }
 
+resource "motherduck_database" "data_inlining_default" {
+  name                    = "bad_data_inlining_default"
+  data_inlining_row_limit = 10
+}
+
+resource "motherduck_database" "data_inlining_negative" {
+  name                    = "bad_data_inlining_negative"
+  database_type           = "ducklake"
+  data_inlining_row_limit = -1
+}
+
+resource "motherduck_dive" "bad_required_resource_url" {
+  title   = "bad mount"
+  content = "export default () => null"
+
+  required_resources = [{
+    alias = "analytics"
+    url   = "analytics"
+  }]
+}
+
 resource "motherduck_database" "transient_ducklake" {
   name          = "bad_transient_ducklake"
   transient     = true

@@ -316,12 +316,20 @@ func int64RequiresReplace() []planmodifier.Int64 {
 	return []planmodifier.Int64{int64planmodifier.RequiresReplace()}
 }
 
+func int64RequiresReplaceIfConfigured() []planmodifier.Int64 {
+	return []planmodifier.Int64{int64planmodifier.RequiresReplaceIfConfigured()}
+}
+
 func int64UseStateForUnknown() []planmodifier.Int64 {
 	return []planmodifier.Int64{int64planmodifier.UseStateForUnknown()}
 }
 
 func boolRequiresReplace() []planmodifier.Bool {
 	return []planmodifier.Bool{boolplanmodifier.RequiresReplace()}
+}
+
+func boolUseStateForUnknown() []planmodifier.Bool {
+	return []planmodifier.Bool{boolplanmodifier.UseStateForUnknown()}
 }
 
 func boolRequiresReplaceIfConfigured() []planmodifier.Bool {

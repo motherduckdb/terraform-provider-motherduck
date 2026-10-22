@@ -33,8 +33,22 @@ token keeps its configured spelling in state. After import, a configured URL
 spelled differently from the stored one plans a single update. Omit
 `api_version` to let MotherDuck choose it when content changes.
 
-Set `description = ""` to clear an existing description. Removing that field is
-not the same operation. Setting `endorsed` status requires the appropriate
+Each `required_resources` URL must start with `md:`. Mount a database as
+`md:<database>` or a share with its share URL, for example from
+`motherduck_share.url`. Refresh reports each mount's `resource_type`, either
+`database` or `share`.
+
+`version_description` describes the Dive version that Terraform writes.
+MotherDuck stores it on the version, so changing it alone writes a new version
+with the same content and mounts. `MD_CREATE_DIVE` cannot set it, so setting it
+at creation writes version 2 right after the Dive is created. When it is
+omitted, a content change writes a version without a description.
+`version_created_at` and `owner_id` are read from `MD_GET_DIVE`.
+
+MotherDuck ignores an empty `description` in a metadata update, so an existing
+description cannot be cleared in place. Setting it to `""` or removing it fails
+the apply. Set a new non-empty description instead, or replace the Dive if it
+must have none. Setting `endorsed` status requires the appropriate
 organization-admin permission.
 
 Destroy deletes the Dive. To change deployment tools without deleting it,

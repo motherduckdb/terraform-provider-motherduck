@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -39,6 +40,101 @@ func TestValidateDatabaseConfigDefersUnknownDatabaseType(t *testing.T) {
 	validateDatabaseConfig(context.Background(), model, &diags)
 	if diags.HasError() {
 		t.Fatalf("unknown database_type should defer cross-field validation: %v", diags)
+	}
+}
+
+func TestDatabaseCreateStatementDataInliningRowLimit(t *testing.T) {
+	tests := map[string]struct {
+		model databaseModel
+		want  string
+	}{
+		"ducklake with limit": {
+			model: databaseModel{
+				Name:                  types.StringValue("lake"),
+				DatabaseType:          types.StringValue("ducklake"),
+				Encrypted:             types.BoolValue(true),
+				DataInliningRowLimit:  types.Int64Value(25),
+				SnapshotRetentionDays: types.Int64Value(7),
+			},
+			want: `CREATE DATABASE "lake" (TYPE DUCKLAKE, ENCRYPTED, DATA_INLINING_ROW_LIMIT 25, SNAPSHOT_RETENTION_DAYS 7)`,
+		},
+		"zero disables inlining": {
+			model: databaseModel{
+				Name:                 types.StringValue("lake"),
+				DatabaseType:         types.StringValue("ducklake"),
+				DataInliningRowLimit: types.Int64Value(0),
+			},
+			want: `CREATE DATABASE "lake" (TYPE DUCKLAKE, DATA_INLINING_ROW_LIMIT 0)`,
+		},
+		"omitted limit": {
+			model: databaseModel{
+				Name:                 types.StringValue("lake"),
+				DatabaseType:         types.StringValue("ducklake"),
+				DataInliningRowLimit: types.Int64Null(),
+			},
+			want: `CREATE DATABASE "lake" (TYPE DUCKLAKE)`,
+		},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			var diags diag.Diagnostics
+			got := databaseCreateStatement(context.Background(), tc.model, &diags)
+			if diags.HasError() {
+				t.Fatalf("diagnostics: %v", diags)
+			}
+			if got != tc.want {
+				t.Fatalf("statement = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateDatabaseConfigDataInliningRowLimitRequiresDuckLake(t *testing.T) {
+	tests := map[string]struct {
+		databaseType types.String
+		wantErr      bool
+	}{
+		"ducklake": {databaseType: types.StringValue("ducklake"), wantErr: false},
+		"default":  {databaseType: types.StringValue("default"), wantErr: true},
+		"omitted":  {databaseType: types.StringNull(), wantErr: true},
+		"iceberg":  {databaseType: types.StringValue("iceberg"), wantErr: true},
+		"unknown":  {databaseType: types.StringUnknown(), wantErr: false},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			model := databaseModel{
+				DatabaseType:         tc.databaseType,
+				DataInliningRowLimit: types.Int64Value(10),
+			}
+			var diags diag.Diagnostics
+			validateDatabaseConfig(context.Background(), model, &diags)
+			found := false
+			for _, d := range diags.Errors() {
+				if strings.Contains(d.Detail(), "data_inlining_row_limit") {
+					found = true
+				}
+			}
+			if found != tc.wantErr {
+				t.Fatalf("data_inlining_row_limit error = %t, want %t: %v", found, tc.wantErr, diags)
+			}
+		})
+	}
+}
+
+func TestDatabaseDataInliningRowLimitIsCreateOnly(t *testing.T) {
+	var resp resource.SchemaResponse
+	NewDatabaseResource().Schema(context.Background(), resource.SchemaRequest{}, &resp)
+	attr, ok := resp.Schema.Attributes["data_inlining_row_limit"].(resourceschema.Int64Attribute)
+	if !ok {
+		t.Fatalf("data_inlining_row_limit attribute = %T, want schema.Int64Attribute", resp.Schema.Attributes["data_inlining_row_limit"])
+	}
+	if !attr.Optional || attr.Computed || len(attr.PlanModifiers) != 1 || len(attr.Validators) != 1 {
+		t.Fatalf("data_inlining_row_limit = %#v, want optional, not computed, with a replace modifier and a minimum validator", attr)
+	}
+	var vresp validator.Int64Response
+	attr.Validators[0].ValidateInt64(context.Background(), validator.Int64Request{Path: path.Root("data_inlining_row_limit"), ConfigValue: types.Int64Value(-1)}, &vresp)
+	if !vresp.Diagnostics.HasError() {
+		t.Fatal("negative data_inlining_row_limit should be rejected")
 	}
 }
 

@@ -72,6 +72,10 @@ validate_fixture invalid-configuration \
   'must not contain "=".' \
   data_path \
   encrypted \
+  data_inlining_row_limit \
+  'Invalid MotherDuck DuckLake data inlining row limit' \
+  'Invalid MotherDuck Dive required resource URL' \
+  'starts with "md:"' \
   transient \
   ducklake \
   'non-empty DuckLake storage path' \

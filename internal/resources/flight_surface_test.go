@@ -184,7 +184,7 @@ func TestFlightRunReadUsesGetFlightRun(t *testing.T) {
 	client := &scriptedAppSQL{
 		queryRow: func(query string) mdsql.RowScanner {
 			if strings.Contains(query, "MD_GET_FLIGHT_RUN(flight_id := '"+testFlightID+"'::UUID, run_number := 7)") {
-				return scannedRow{values: []any{"run-7", "SUCCEEDED", int64(7), int64(1), "2026-09-01T00:00:00Z"}}
+				return scannedRow{values: flightRunTestRow("run-7", "SUCCEEDED", 7)}
 			}
 			return scannedRow{err: fmt.Errorf("unexpected query %q", query)}
 		},
@@ -250,7 +250,7 @@ func TestFlightRunReadUsesListingWithoutGetFlightRun(t *testing.T) {
 		functionOK: func(name string) bool { return name != "md_get_flight_run" },
 		queryRow: func(query string) mdsql.RowScanner {
 			if strings.Contains(query, "FROM MD_LIST_FLIGHT_RUNS(") && strings.Contains(query, "WHERE run_number = 7") {
-				return scannedRow{values: []any{"run-7", "SUCCEEDED", int64(7), int64(1), "2026-09-01T00:00:00Z"}}
+				return scannedRow{values: flightRunTestRow("run-7", "SUCCEEDED", 7)}
 			}
 			return scannedRow{err: fmt.Errorf("unexpected query %q", query)}
 		},
