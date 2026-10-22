@@ -4,6 +4,10 @@ Each release has a versioned notes file under `release-notes/`, which is also th
 body of the matching [GitHub release](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
 This index lists the headline change for every release.
 
+## v0.3.7
+
+Build with Go 1.27.3 to fix the `crypto/x509` certificate trust vulnerability GO-2026-6809, and update Go, workflow and example dependencies. Constraints such as `~> 0.3.0` select it. See the [v0.3.7 release notes](release-notes/v0.3.7.md).
+
 ## v0.3.6
 
 Keep access tokens in Terraform state when a successful REST response has an empty or null body instead of a token inventory. See the [v0.3.6 release notes](release-notes/v0.3.6.md).
