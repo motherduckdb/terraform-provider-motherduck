@@ -31,8 +31,8 @@ data "motherduck_guide_versions" "revenue" {
 
 ### Optional
 
-- `limit` (Number) Maximum number of rows to return when the underlying MotherDuck catalog function supports limits.
-- `offset` (Number) Number of rows to skip when the underlying MotherDuck catalog function supports offsets.
+- `limit` (Number) Maximum number of rows to return. Must be between 0 and 4294967295. A limit of 0 returns no rows.
+- `offset` (Number) Number of rows to skip. Must be between 0 and 4294967295.
 
 ### Read-Only
 

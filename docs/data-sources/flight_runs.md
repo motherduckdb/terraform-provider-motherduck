@@ -2,12 +2,12 @@
 page_title: "motherduck_flight_runs Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Lists runs for one MotherDuck Flight. MotherDuck returns the 50 newest runs when limit is omitted, so set limit and offset to read more. Rows in the returned page are sorted newest run first.
+  Lists runs for one MotherDuck Flight. MotherDuck returns the 50 newest runs when limit is omitted, so set limit and offset to read more. MotherDuck reads the newest limit plus offset runs, so that sum must not exceed 4294967295, counting an unset limit as 50. Rows in the returned page are sorted newest run first.
 ---
 
 # motherduck_flight_runs (Data Source)
 
-Lists runs for one MotherDuck Flight. MotherDuck returns the 50 newest runs when `limit` is omitted, so set `limit` and `offset` to read more. Rows in the returned page are sorted newest run first.
+Lists runs for one MotherDuck Flight. MotherDuck returns the 50 newest runs when `limit` is omitted, so set `limit` and `offset` to read more. MotherDuck reads the newest `limit` plus `offset` runs, so that sum must not exceed 4294967295, counting an unset `limit` as 50. Rows in the returned page are sorted newest run first.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read
@@ -32,8 +32,8 @@ data "motherduck_flight_runs" "daily_load" {
 
 ### Optional
 
-- `limit` (Number) Maximum number of rows to return when the underlying MotherDuck catalog function supports limits.
-- `offset` (Number) Number of rows to skip when the underlying MotherDuck catalog function supports offsets.
+- `limit` (Number) Maximum number of rows to return. Must be between 0 and 4294967295. A limit of 0 returns no rows.
+- `offset` (Number) Number of rows to skip. Must be between 0 and 4294967295.
 
 ### Read-Only
 

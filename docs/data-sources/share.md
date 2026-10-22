@@ -15,9 +15,11 @@ Set exactly one lookup input:
   not resolve the name of a share received from another account.
 - `url` reads any share the caller can access, including a received share.
   The URL is sensitive, so pass it through a sensitive variable or another
-  sensitive value and keep it out of logs. The data source keeps the
-  configured spelling of `url` instead of the canonical one MotherDuck
-  reports, and redacts share URLs from error messages.
+  sensitive value and keep it out of logs. The data source redacts share
+  URLs from error messages.
+
+The data source keeps the configured spelling of `name` or `url` instead of
+the canonical one MotherDuck reports, so references to it stay stable.
 
 `motherduck_shared_with_me` does not report the source database of received
 shares. Use this data source with the share URL to read `source_database` and
@@ -60,7 +62,7 @@ output "received_share_source_database" {
 
 ### Optional
 
-- `name` (String) Name of a share owned by the current account. Exactly one of `name` or `url` must be set. When `url` is set, this is the name MotherDuck reports for the share.
+- `name` (String) Name of a share owned by the current account. Exactly one of `name` or `url` must be set. A configured name keeps its configured spelling. When `url` is set, this is the name MotherDuck reports for the share.
 - `url` (String, Sensitive) Share URL. Exactly one of `name` or `url` must be set. Use the URL to describe a share received from another account. A configured URL keeps its configured spelling. When `name` is set, this is the URL MotherDuck reports. Sensitive because unrestricted share URLs can grant access.
 
 ### Read-Only

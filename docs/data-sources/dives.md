@@ -29,8 +29,8 @@ data "motherduck_dives" "recent" {
 ### Optional
 
 - `include_org_shares` (Boolean) Whether to include organization-shared Dives when the MotherDuck function supports it.
-- `limit` (Number) Maximum number of rows to return when the underlying MotherDuck catalog function supports limits.
-- `offset` (Number) Number of rows to skip when the underlying MotherDuck catalog function supports offsets.
+- `limit` (Number) Maximum number of rows to return. Must be between 0 and 2147483647. A limit of 0 returns no rows.
+- `offset` (Number) Number of rows to skip. Must be between 0 and 2147483647.
 
 ### Read-Only
 

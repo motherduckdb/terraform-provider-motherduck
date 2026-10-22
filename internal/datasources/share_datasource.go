@@ -69,7 +69,7 @@ func (d *shareDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 				Optional:            true,
 				Computed:            true,
 				Validators:          nonBlank,
-				MarkdownDescription: "Name of a share owned by the current account. Exactly one of `name` or `url` must be set. When `url` is set, this is the name MotherDuck reports for the share.",
+				MarkdownDescription: "Name of a share owned by the current account. Exactly one of `name` or `url` must be set. A configured name keeps its configured spelling. When `url` is set, this is the name MotherDuck reports for the share.",
 			},
 			"url": schema.StringAttribute{
 				Optional:            true,
@@ -151,13 +151,7 @@ func (d *shareDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		resp.Diagnostics.AddError("Unable to read MotherDuck share", redactShareURL(err.Error(), config.URL))
 		return
 	}
-	configuredURL := config.URL
 	setShareModel(&config, share)
-	if !configuredURL.IsNull() {
-		// MotherDuck reports a canonical spelling of the URL. Keep the
-		// configured value so references to it stay stable.
-		config.URL = configuredURL
-	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
@@ -181,9 +175,16 @@ func describeShare(ctx context.Context, client interface {
 	return share, err
 }
 
+// setShareModel fills model from a share description. MotherDuck reports a
+// canonical spelling of the name and URL, so a configured name or URL keeps
+// its configured value and references to it stay stable.
 func setShareModel(model *shareModel, share shareDescription) {
-	model.Name = dataSourceNullString(share.Name)
-	model.URL = dataSourceNullString(share.URL)
+	if model.Name.IsNull() || model.Name.IsUnknown() {
+		model.Name = dataSourceNullString(share.Name)
+	}
+	if model.URL.IsNull() || model.URL.IsUnknown() {
+		model.URL = dataSourceNullString(share.URL)
+	}
 	model.SourceDatabase = dataSourceNullString(share.SourceDatabase)
 	model.SourceDatabaseUUID = dataSourceNullString(share.SourceDatabaseUUID)
 	model.Access = lowerDataSourceNullString(share.Access)
@@ -194,15 +195,22 @@ func setShareModel(model *shareModel, share shareDescription) {
 
 const redactedShareURL = "<redacted share URL>"
 
-// shareURLPattern matches any share URL token, plain or URL-encoded, so a
-// share URL in an error is redacted even when MotherDuck rewrites its case or
-// name segment. Trailing punctuation is left in the message.
-var shareURLPattern = regexp.MustCompile(`(?i)md(?::|%3a)_share(?:/|%2f)[^\s'"]*[^\s'".,;:)\]]`)
+// quotedShareURLPattern matches a share URL that starts a quoted literal, up
+// to the quote that ends the literal. A quote followed by another character
+// of the URL, as in a share name that contains a quote or a doubled SQL
+// quote, does not end it. The quotes are kept in the message.
+var quotedShareURLPattern = regexp.MustCompile(`(?i)(['"])md(?::|%3a)_share(?:/|%2f)[^\r\n]*?(['"](?:[\s.,;:)\]}]|$))`)
+
+// shareURLPattern matches any other share URL token, plain or URL-encoded, up
+// to whitespace, so a share URL in an error is redacted even when MotherDuck
+// rewrites its case or name segment. Trailing punctuation is left in the
+// message.
+var shareURLPattern = regexp.MustCompile(`(?i)md(?::|%3a)_share(?:/|%2f)\S*[^\s'".,;:)\]}]`)
 
 // redactShareURL keeps share URLs out of diagnostics, because MotherDuck
 // errors echo the lookup value and the URL can grant access. It removes the
 // configured URL in any letter case and in its URL-encoded forms, and then any
-// remaining share URL token.
+// remaining share URL, quoted or not.
 func redactShareURL(message string, configured types.String) string {
 	if !configured.IsNull() && !configured.IsUnknown() && configured.ValueString() != "" {
 		value := configured.ValueString()
@@ -210,6 +218,7 @@ func redactShareURL(message string, configured types.String) string {
 			message = regexp.MustCompile(`(?i)`+regexp.QuoteMeta(form)).ReplaceAllLiteralString(message, redactedShareURL)
 		}
 	}
+	message = quotedShareURLPattern.ReplaceAllString(message, "${1}"+redactedShareURL+"${2}")
 	return shareURLPattern.ReplaceAllLiteralString(message, redactedShareURL)
 }
 
