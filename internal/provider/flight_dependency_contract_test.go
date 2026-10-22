@@ -202,7 +202,7 @@ func (c *flightDependencyContractSQL) QueryRow(_ context.Context, query string, 
 		c.runsMu.Lock()
 		c.runsByID[run.id] = run
 		c.runsMu.Unlock()
-		return flightDependencyRow{values: []any{run.id, run.status, run.runNumber, run.flightVersion, run.created}}
+		return flightDependencyRow{values: []any{run.id, run.status, run.runNumber, run.flightVersion, run.created, false, "2026-09-06T00:00:05Z", "2026-09-06T00:01:00Z", nil, nil, int64(0)}}
 	case strings.Contains(query, "FROM MD_GET_FLIGHT_RUN("), strings.Contains(query, "FROM MD_LIST_FLIGHT_RUNS("):
 		id, err := contractFlightID(query)
 		if err != nil {
@@ -230,7 +230,7 @@ func (c *flightDependencyContractSQL) QueryRow(_ context.Context, query string, 
 		if !found {
 			return flightDependencyRow{err: stdsql.ErrNoRows}
 		}
-		return flightDependencyRow{values: []any{run.id, run.status, run.runNumber, run.flightVersion, run.created}}
+		return flightDependencyRow{values: []any{run.id, run.status, run.runNumber, run.flightVersion, run.created, false, "2026-09-06T00:00:05Z", "2026-09-06T00:01:00Z", nil, nil, int64(0)}}
 	default:
 		return flightDependencyRow{err: fmt.Errorf("unexpected Flight query %q", query)}
 	}
@@ -330,6 +330,12 @@ func (r flightDependencyRow) Scan(dest ...any) error {
 				*target = stdsql.NullInt64{}
 			} else {
 				*target = stdsql.NullInt64{Int64: value.(int64), Valid: true}
+			}
+		case *stdsql.NullBool:
+			if value == nil {
+				*target = stdsql.NullBool{}
+			} else {
+				*target = stdsql.NullBool{Bool: value.(bool), Valid: true}
 			}
 		default:
 			return fmt.Errorf("unsupported Flight scan destination %T at index %d", dest[i], i)

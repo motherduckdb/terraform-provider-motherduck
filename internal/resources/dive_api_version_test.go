@@ -44,7 +44,7 @@ func TestDiveAPIVersionPlanModifier(t *testing.T) {
 				t.Fatal(d)
 			}
 			req := planmodifier.Int64Request{
-				Path: path.Root("api_version"), Plan: plan, State: state,
+				Path: path.Root("api_version"), Plan: plan, State: state, Config: tfsdk.Config{Schema: s, Raw: plan.Raw},
 				PlanValue: types.Int64Unknown(), StateValue: types.Int64Value(1), ConfigValue: tc.config,
 			}
 			resp := &planmodifier.Int64Response{PlanValue: req.PlanValue}

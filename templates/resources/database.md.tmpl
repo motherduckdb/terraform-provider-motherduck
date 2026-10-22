@@ -14,7 +14,13 @@ compute must be isolated.
 ## Usage and lifecycle
 
 - Native storage is the default. Select `database_type = "ducklake"` only for a
-  deliberate DuckLake deployment. `data_path` and `encrypted` are DuckLake-only.
+  deliberate DuckLake deployment. `data_path`, `encrypted`, and
+  `data_inlining_row_limit` are DuckLake-only.
+- `data_inlining_row_limit` sets how many rows an insert can keep inline in the
+  DuckLake catalog before MotherDuck writes a data file. MotherDuck accepts it
+  only at creation and does not report it back, so Terraform keeps the
+  configured value. Changing it replaces the database. Removing it from the
+  configuration keeps the database.
 - Select `database_type = "iceberg"` to register an existing Iceberg REST
   catalog as a MotherDuck database. See [Iceberg catalogs](#iceberg-catalogs).
 - Use `transient = true` for a transient database, not a database type named
@@ -28,8 +34,8 @@ compute must be isolated.
   Reference its name from downstream resources instead.
 
 Import uses the database name. Public catalogs do not reconstruct DuckLake
-`data_path` or `encrypted`. Omit those create-only fields after import unless
-replacement is intentional.
+`data_path`, `encrypted`, or `data_inlining_row_limit`. Omit those create-only
+fields after import unless replacement is intentional.
 
 ## Iceberg catalogs
 

@@ -13,9 +13,11 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 )
 
 type databaseResource struct{ baseResource }
@@ -28,6 +30,7 @@ type databaseModel struct {
 	DatabaseType          types.String           `tfsdk:"database_type"`
 	DataPath              types.String           `tfsdk:"data_path"`
 	Encrypted             types.Bool             `tfsdk:"encrypted"`
+	DataInliningRowLimit  types.Int64            `tfsdk:"data_inlining_row_limit"`
 	Iceberg               types.Object           `tfsdk:"iceberg"`
 	UUID                  types.String           `tfsdk:"uuid"`
 	CreatedTS             types.String           `tfsdk:"created_ts"`
@@ -86,6 +89,12 @@ func (r *databaseResource) Schema(ctx context.Context, req resource.SchemaReques
 				MarkdownDescription: "DuckLake-only. When true, emits the `ENCRYPTED` database option at creation. When false, omits the option.",
 				PlanModifiers:       boolRequiresReplace(),
 			},
+			"data_inlining_row_limit": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "DuckLake-only. Maximum number of rows an insert can keep inline in the DuckLake catalog instead of writing a data file. Emits the `DATA_INLINING_ROW_LIMIT` database option at creation. MotherDuck accepts this option only when creating a DuckLake database and does not report it back, so Terraform keeps the configured value. Changing a configured value replaces the database. Removing it keeps the database.",
+				PlanModifiers:       int64RequiresReplaceIfConfigured(),
+				Validators:          []validator.Int64{tfvalidators.Int64Min("MotherDuck DuckLake data inlining row limit", 0)},
+			},
 			"iceberg": databaseIcebergAttribute(),
 			"uuid": schema.StringAttribute{
 				Computed:            true,
@@ -139,6 +148,9 @@ func validateDatabaseConfig(ctx context.Context, config databaseModel, diags *di
 	if databaseTypeKnown && !config.Encrypted.IsNull() && !config.Encrypted.IsUnknown() && databaseType != "ducklake" {
 		diags.AddAttributeError(path.Root("encrypted"), "Invalid MotherDuck database configuration", "`encrypted` is only valid when `database_type = \"ducklake\"`.")
 	}
+	if databaseTypeKnown && !config.DataInliningRowLimit.IsNull() && !config.DataInliningRowLimit.IsUnknown() && databaseType != "ducklake" {
+		diags.AddAttributeError(path.Root("data_inlining_row_limit"), "Invalid MotherDuck database configuration", "`data_inlining_row_limit` is only valid when `database_type = \"ducklake\"`.")
+	}
 	validateDatabaseIcebergConfig(ctx, config, databaseType, databaseTypeKnown, diags)
 }
 
@@ -157,30 +169,10 @@ func (r *databaseResource) Create(ctx context.Context, req resource.CreateReques
 	if client == nil {
 		return
 	}
-	options := make([]string, 0)
-	if !plan.Transient.IsNull() && plan.Transient.ValueBool() {
-		options = append(options, "TRANSIENT")
+	query := databaseCreateStatement(ctx, plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
 	}
-	if !plan.DatabaseType.IsNull() && strings.EqualFold(plan.DatabaseType.ValueString(), "ducklake") {
-		options = append(options, "TYPE DUCKLAKE")
-	}
-	if !plan.DatabaseType.IsNull() && strings.EqualFold(plan.DatabaseType.ValueString(), "iceberg") {
-		options = append(options, "TYPE ICEBERG")
-		options = append(options, databaseIcebergCreateOptions(databaseIcebergOptions(ctx, plan.Iceberg, &resp.Diagnostics))...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-	}
-	if !plan.DataPath.IsNull() && plan.DataPath.ValueString() != "" {
-		options = append(options, "DATA_PATH "+sqlbuild.StringLiteral(plan.DataPath.ValueString()))
-	}
-	if !plan.Encrypted.IsNull() && plan.Encrypted.ValueBool() {
-		options = append(options, "ENCRYPTED")
-	}
-	if knownInt64(plan.SnapshotRetentionDays) {
-		options = append(options, fmt.Sprintf("SNAPSHOT_RETENTION_DAYS %d", plan.SnapshotRetentionDays.ValueInt64()))
-	}
-	query := "CREATE DATABASE " + sqlbuild.QuoteIdentifier(plan.Name.ValueString()) + sqlbuild.Options(options...)
 	if err := client.Exec(ctx, query); err != nil {
 		resp.Diagnostics.AddError("Unable to create MotherDuck database", err.Error())
 		return
@@ -210,6 +202,38 @@ func (r *databaseResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// databaseCreateStatement builds the CREATE DATABASE statement for a plan.
+// Create-only options appear only when configured.
+func databaseCreateStatement(ctx context.Context, plan databaseModel, diags *diag.Diagnostics) string {
+	options := make([]string, 0)
+	if !plan.Transient.IsNull() && plan.Transient.ValueBool() {
+		options = append(options, "TRANSIENT")
+	}
+	if !plan.DatabaseType.IsNull() && strings.EqualFold(plan.DatabaseType.ValueString(), "ducklake") {
+		options = append(options, "TYPE DUCKLAKE")
+	}
+	if !plan.DatabaseType.IsNull() && strings.EqualFold(plan.DatabaseType.ValueString(), "iceberg") {
+		options = append(options, "TYPE ICEBERG")
+		options = append(options, databaseIcebergCreateOptions(databaseIcebergOptions(ctx, plan.Iceberg, diags))...)
+		if diags.HasError() {
+			return ""
+		}
+	}
+	if !plan.DataPath.IsNull() && plan.DataPath.ValueString() != "" {
+		options = append(options, "DATA_PATH "+sqlbuild.StringLiteral(plan.DataPath.ValueString()))
+	}
+	if !plan.Encrypted.IsNull() && plan.Encrypted.ValueBool() {
+		options = append(options, "ENCRYPTED")
+	}
+	if knownInt64(plan.DataInliningRowLimit) {
+		options = append(options, fmt.Sprintf("DATA_INLINING_ROW_LIMIT %d", plan.DataInliningRowLimit.ValueInt64()))
+	}
+	if knownInt64(plan.SnapshotRetentionDays) {
+		options = append(options, fmt.Sprintf("SNAPSHOT_RETENTION_DAYS %d", plan.SnapshotRetentionDays.ValueInt64()))
+	}
+	return "CREATE DATABASE " + sqlbuild.QuoteIdentifier(plan.Name.ValueString()) + sqlbuild.Options(options...)
 }
 
 func (r *databaseResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {

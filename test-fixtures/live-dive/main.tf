@@ -41,6 +41,8 @@ resource "motherduck_dive" "smoke" {
   api_version = 1
   status      = var.status
 
+  version_description = "${var.content_label} notes"
+
   content = <<-JSX
     export default function Dive() {
       return <main>${var.content_label}</main>;
@@ -72,6 +74,10 @@ output "current_version" {
 
 output "status" {
   value = motherduck_dive.smoke.status
+}
+
+output "version_description" {
+  value = motherduck_dive.smoke.version_description
 }
 
 output "status_applies_to_version" {

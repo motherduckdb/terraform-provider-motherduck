@@ -212,7 +212,7 @@ type diveReadbackRow struct{}
 const diveLiveResourcesJSON = `[{"name":"wiki_share","alias":"wiki","url":"md:_share/wiki_share/0f1e2d3c","id":"00000000-0000-4000-8000-000000000001","resource_type":"share"}]`
 
 func (diveReadbackRow) Scan(dest ...any) error {
-	values := []any{"Audit Dive", "", int64(2), "created", "updated", "owner", "content", int64(3), diveLiveResourcesJSON, "ready", "changed", "00000000-0000-4000-8000-000000000000", int64(2)}
+	values := []any{"Audit Dive", "", int64(2), "created", "updated", "00000000-0000-4000-8000-0000000000aa", "owner", "content", "Release notes", "version-created", int64(3), diveLiveResourcesJSON, "ready", "changed", "00000000-0000-4000-8000-000000000000", int64(2)}
 	for i, value := range values {
 		switch target := dest[i].(type) {
 		case *stdsql.NullString:
@@ -238,9 +238,12 @@ func TestReadDiveRecoversAPIVersionAndRequiredResources(t *testing.T) {
 	if got := imported.APIVersion.ValueInt64(); got != 3 {
 		t.Fatalf("imported api_version = %d, want 3 from MD_GET_DIVE", got)
 	}
-	want, _ := types.ListValueFrom(ctx, objectType, []diveRequiredResourceModel{{Alias: types.StringValue("wiki"), URL: types.StringValue("md:_share/wiki_share/0f1e2d3c")}})
+	want, _ := types.ListValueFrom(ctx, objectType, []diveRequiredResourceModel{{Alias: types.StringValue("wiki"), URL: types.StringValue("md:_share/wiki_share/0f1e2d3c"), ResourceType: types.StringValue("share")}})
 	if !imported.RequiredResources.Equal(want) {
 		t.Fatalf("imported required_resources = %s, want %s", imported.RequiredResources, want)
+	}
+	if imported.VersionDescription.ValueString() != "Release notes" || imported.OwnerID.ValueString() != "00000000-0000-4000-8000-0000000000aa" || imported.VersionCreatedAt.ValueString() != "version-created" {
+		t.Fatalf("imported version_description %s, owner_id %s, version_created_at %s", imported.VersionDescription, imported.OwnerID, imported.VersionCreatedAt)
 	}
 
 	configuredURL := "md:_share/wiki_db/0F1E2D3C"
@@ -249,8 +252,9 @@ func TestReadDiveRecoversAPIVersionAndRequiredResources(t *testing.T) {
 	if !resource.readDive(ctx, &managed, &diags) || diags.HasError() {
 		t.Fatalf("readDive diagnostics: %v", diags)
 	}
-	if !managed.RequiredResources.Equal(configured) {
-		t.Fatalf("an equivalent share URL should keep its configured spelling, got %s", managed.RequiredResources)
+	wantManaged, _ := types.ListValueFrom(ctx, objectType, []diveRequiredResourceModel{{Alias: types.StringValue("wiki"), URL: types.StringValue(configuredURL), ResourceType: types.StringValue("share")}})
+	if !managed.RequiredResources.Equal(wantManaged) {
+		t.Fatalf("an equivalent share URL should keep its configured spelling and read its type, got %s", managed.RequiredResources)
 	}
 }
 
@@ -416,13 +420,11 @@ func TestUpdateDiveStatusBuildsPublicFunctionCall(t *testing.T) {
 
 func TestDiveRequiredResourcesArg(t *testing.T) {
 	ctx := context.Background()
-	objectType := types.ObjectType{AttrTypes: map[string]attr.Type{
-		"alias": types.StringType,
-		"url":   types.StringType,
-	}}
+	objectType := diveRequiredResourceObjectType()
 	resourceValue, objectDiags := types.ObjectValue(objectType.AttrTypes, map[string]attr.Value{
-		"alias": types.StringValue("wiki'pageviews"),
-		"url":   types.StringValue("md:_share/abc'def"),
+		"alias":         types.StringValue("wiki'pageviews"),
+		"url":           types.StringValue("md:_share/abc'def"),
+		"resource_type": types.StringNull(),
 	})
 	if objectDiags.HasError() {
 		t.Fatalf("object diagnostics: %v", objectDiags)
@@ -445,10 +447,7 @@ func TestDiveRequiredResourcesArg(t *testing.T) {
 
 func TestDiveRequiredResourcesArgTypesEmptyList(t *testing.T) {
 	ctx := context.Background()
-	objectType := types.ObjectType{AttrTypes: map[string]attr.Type{
-		"alias": types.StringType,
-		"url":   types.StringType,
-	}}
+	objectType := diveRequiredResourceObjectType()
 	listValue, listDiags := types.ListValue(objectType, nil)
 	if listDiags.HasError() {
 		t.Fatalf("list diagnostics: %v", listDiags)
@@ -667,7 +666,7 @@ func TestDiveCreatePersistsIDWhenReadbackFails(t *testing.T) {
 		ID:                types.StringUnknown(),
 		Title:             types.StringValue("Audit Dive"),
 		Content:           types.StringValue("content"),
-		RequiredResources: types.ListNull(types.ObjectType{AttrTypes: map[string]attr.Type{"alias": types.StringType, "url": types.StringType}}),
+		RequiredResources: types.ListNull(diveRequiredResourceObjectType()),
 		Status:            types.StringUnknown(),
 		StatusChangedAt:   types.StringUnknown(),
 		StatusSetBy:       types.StringUnknown(),
@@ -728,7 +727,7 @@ func TestDiveMissingRemoteLifecycle(t *testing.T) {
 			var schemaResp resource.SchemaResponse
 			res.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
 			state := tfsdk.State{Schema: schemaResp.Schema}
-			model := diveModel{ID: types.StringValue("123e4567-e89b-42d3-a456-426614174000"), Title: types.StringValue("test"), Content: types.StringValue("content"), RequiredResources: types.ListNull(types.ObjectType{AttrTypes: map[string]attr.Type{"alias": types.StringType, "url": types.StringType}})}
+			model := diveModel{ID: types.StringValue("123e4567-e89b-42d3-a456-426614174000"), Title: types.StringValue("test"), Content: types.StringValue("content"), RequiredResources: types.ListNull(diveRequiredResourceObjectType())}
 			if d := state.Set(ctx, &model); d.HasError() {
 				t.Fatal(d)
 			}

@@ -121,6 +121,12 @@ func (r scannedRow) Scan(dest ...any) error {
 			} else {
 				*target = stdsql.NullInt64{Int64: value.(int64), Valid: true}
 			}
+		case *stdsql.NullBool:
+			if value == nil {
+				*target = stdsql.NullBool{}
+			} else {
+				*target = stdsql.NullBool{Bool: value.(bool), Valid: true}
+			}
 		default:
 			return fmt.Errorf("unsupported scan destination %T", dest[i])
 		}
@@ -235,7 +241,7 @@ func TestReadDiveKeepsUnsetDescriptionNull(t *testing.T) {
 	client := &scriptedAppSQL{
 		functionOK: func(name string) bool { return name != "md_update_dive_status" },
 		queryRow: func(query string) mdsql.RowScanner {
-			return scannedRow{values: []any{"Dive", "", int64(1), "c", "u", "owner", "content", int64(1), nil}}
+			return scannedRow{values: []any{"Dive", "", int64(1), "c", "u", "owner-id", "owner", "content", nil, "vc", int64(1), nil}}
 		},
 	}
 	res := &diveResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
@@ -446,9 +452,13 @@ func TestFlightRunReadKeepsStateWhileParentFlightExists(t *testing.T) {
 		name        string
 		flightFound bool
 		wantRemoved bool
+		wantWarning string
 	}{
-		{"parent exists", true, false},
-		{"parent deleted", false, true},
+		{"parent exists", true, false, "MotherDuck Flight run not listed"},
+		// A principal with only a Flight run grant cannot see the Flight, and
+		// MotherDuck reports that like a deleted Flight. The run must stay so
+		// the next apply does not start another production run.
+		{"parent not found", false, false, "MotherDuck Flight run cannot be refreshed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client := &scriptedAppSQL{
@@ -473,8 +483,15 @@ func TestFlightRunReadKeepsStateWhileParentFlightExists(t *testing.T) {
 			if removed := resp.State.Raw.IsNull(); removed != tc.wantRemoved {
 				t.Fatalf("state removed = %t, want %t", removed, tc.wantRemoved)
 			}
-			if !tc.wantRemoved && resp.Diagnostics.WarningsCount() != 1 {
-				t.Fatalf("want one warning when the run is kept, got %v", resp.Diagnostics)
+			if !tc.wantRemoved && (resp.Diagnostics.WarningsCount() != 1 || resp.Diagnostics.Warnings()[0].Summary() != tc.wantWarning) {
+				t.Fatalf("want one %q warning when the run is kept, got %v", tc.wantWarning, resp.Diagnostics)
+			}
+			var got flightRunModel
+			if d := resp.State.Get(t.Context(), &got); d.HasError() {
+				t.Fatal(d)
+			}
+			if got.ID.ValueString() != "run-7" || got.RunNumber.ValueInt64() != 7 || got.Status.ValueString() != "RUNNING" {
+				t.Fatalf("kept state = %#v, want the last known run", got)
 			}
 		})
 	}

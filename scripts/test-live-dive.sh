@@ -89,6 +89,10 @@ assert_status "ready"
 write_vars "archived" "Archived Terraform Dive smoke" "Archived content" '"archived"'
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false
 assert_status "archived"
+if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw version_description)" != "Archived content notes" ]]; then
+  echo "Expected Dive version_description to read back from the current version" >&2
+  exit 1
+fi
 if [[ "$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" output -raw dives_listing_ok)" != "true" ]]; then
   echo "Expected motherduck_dives to return decodable rows" >&2
   exit 1

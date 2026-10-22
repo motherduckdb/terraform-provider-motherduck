@@ -37,6 +37,12 @@ type flightRunModel struct {
 	PollIntervalSeconds types.Int64  `tfsdk:"poll_interval_seconds"`
 	TimeoutSeconds      types.Int64  `tfsdk:"timeout_seconds"`
 	CreatedAt           types.String `tfsdk:"created_at"`
+	IsScheduled         types.Bool   `tfsdk:"is_scheduled"`
+	StartedAt           types.String `tfsdk:"started_at"`
+	EndedAt             types.String `tfsdk:"ended_at"`
+	ScheduledAt         types.String `tfsdk:"scheduled_at"`
+	CancelledAt         types.String `tfsdk:"cancelled_at"`
+	ExitCode            types.Int64  `tfsdk:"exit_code"`
 }
 
 const maxDurationSeconds = int64((1<<63 - 1) / int64(time.Second))
@@ -106,6 +112,31 @@ func (r *flightRunResource) Schema(ctx context.Context, req resource.SchemaReque
 				Computed:            true,
 				MarkdownDescription: "Flight run creation timestamp reported by MotherDuck.",
 			},
+			"is_scheduled": schema.BoolAttribute{
+				Computed:            true,
+				PlanModifiers:       boolUseStateForUnknown(),
+				MarkdownDescription: "Whether MotherDuck started the run from the Flight schedule. Runs started by this resource are on-demand, so this is `false`.",
+			},
+			"started_at": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "Timestamp when the run started executing, or null while it is queued.",
+			},
+			"ended_at": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "Timestamp when the run finished, or null until it finishes.",
+			},
+			"scheduled_at": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "Timestamp the run was scheduled for, or null for an on-demand run.",
+			},
+			"cancelled_at": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "Timestamp when the run was cancelled, or null when it was not cancelled.",
+			},
+			"exit_code": schema.Int64Attribute{
+				Computed:            true,
+				MarkdownDescription: "Process exit code of the run, or null until the run finishes.",
+			},
 		},
 	}
 }
@@ -137,14 +168,13 @@ func (r *flightRunResource) Create(ctx context.Context, req resource.CreateReque
 		resp.Diagnostics.Append(plan.Config.ElementsAs(ctx, &config, false)...)
 		args["config"] = sqlbuild.MapLiteral(config)
 	}
-	var runID, status, created string
-	var runNumber, version int64
-	query := "SELECT run_id::VARCHAR, status, run_number, flight_version, created_at::VARCHAR FROM MD_RUN_FLIGHT" + sqlbuild.NamedArgs(args)
-	if err := client.QueryRow(ctx, query).Scan(&runID, &status, &runNumber, &version, &created); err != nil {
+	var row flightRunRow
+	query := "SELECT " + flightRunColumns + " FROM MD_RUN_FLIGHT" + sqlbuild.NamedArgs(args)
+	if err := client.QueryRow(ctx, query).Scan(row.scanTargets()...); err != nil {
 		resp.Diagnostics.AddError("Unable to run MotherDuck Flight", err.Error())
 		return
 	}
-	plan.setMetadata(runID, status, runNumber, version, created)
+	plan.setMetadata(row)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -244,16 +274,50 @@ func (r *flightRunResource) flightRunLookup(ctx context.Context, client sqlfunc.
 	return flightRunLookup{direct: direct, listing: listing}, true
 }
 
-const flightRunColumns = "run_id::VARCHAR, status, run_number, flight_version, created_at::VARCHAR"
+const flightRunColumns = "run_id::VARCHAR, status, run_number, flight_version, created_at::VARCHAR, is_scheduled, started_at::VARCHAR, ended_at::VARCHAR, scheduled_at::VARCHAR, cancelled_at::VARCHAR, exit_code"
+
+// flightRunRow is one run as MD_RUN_FLIGHT, MD_GET_FLIGHT_RUN, and
+// MD_LIST_FLIGHT_RUNS report it, in flightRunColumns order.
+type flightRunRow struct {
+	RunID         string
+	Status        string
+	RunNumber     int64
+	FlightVersion int64
+	CreatedAt     string
+	IsScheduled   stdsql.NullBool
+	StartedAt     stdsql.NullString
+	EndedAt       stdsql.NullString
+	ScheduledAt   stdsql.NullString
+	CancelledAt   stdsql.NullString
+	ExitCode      stdsql.NullInt64
+}
+
+func (r *flightRunRow) scanTargets() []any {
+	return []any{&r.RunID, &r.Status, &r.RunNumber, &r.FlightVersion, &r.CreatedAt, &r.IsScheduled, &r.StartedAt, &r.EndedAt, &r.ScheduledAt, &r.CancelledAt, &r.ExitCode}
+}
 
 // setMetadata applies a successful remote result without changing the run's
 // configured inputs or normalizing the server's status and timestamp strings.
-func (m *flightRunModel) setMetadata(runID, status string, runNumber, version int64, created string) {
-	m.ID = types.StringValue(runID)
-	m.Status = types.StringValue(status)
-	m.RunNumber = types.Int64Value(runNumber)
-	m.FlightVersion = types.Int64Value(version)
-	m.CreatedAt = types.StringValue(created)
+func (m *flightRunModel) setMetadata(row flightRunRow) {
+	m.ID = types.StringValue(row.RunID)
+	m.Status = types.StringValue(row.Status)
+	m.RunNumber = types.Int64Value(row.RunNumber)
+	m.FlightVersion = types.Int64Value(row.FlightVersion)
+	m.CreatedAt = types.StringValue(row.CreatedAt)
+	if row.IsScheduled.Valid {
+		m.IsScheduled = types.BoolValue(row.IsScheduled.Bool)
+	} else {
+		m.IsScheduled = types.BoolNull()
+	}
+	m.StartedAt = nullString(row.StartedAt)
+	m.EndedAt = nullString(row.EndedAt)
+	m.ScheduledAt = nullString(row.ScheduledAt)
+	m.CancelledAt = nullString(row.CancelledAt)
+	if row.ExitCode.Valid {
+		m.ExitCode = types.Int64Value(row.ExitCode.Int64)
+	} else {
+		m.ExitCode = types.Int64Null()
+	}
 }
 
 func (r *flightRunResource) readFlightRunStatus(ctx context.Context, model *flightRunModel, lookup flightRunLookup, diags *diag.Diagnostics) bool {
@@ -261,8 +325,7 @@ func (r *flightRunResource) readFlightRunStatus(ctx context.Context, model *flig
 	if client == nil {
 		return false
 	}
-	var runID, status, created string
-	var runNumber, version int64
+	var row flightRunRow
 	query := fmt.Sprintf(
 		"SELECT "+flightRunColumns+" FROM MD_LIST_FLIGHT_RUNS(flight_id := %s::UUID) WHERE run_number = %d",
 		sqlbuild.StringLiteral(model.FlightID.ValueString()),
@@ -276,7 +339,7 @@ func (r *flightRunResource) readFlightRunStatus(ctx context.Context, model *flig
 		)
 	}
 	err := retry.SQL(ctx, func() error {
-		return client.QueryRow(ctx, query).Scan(&runID, &status, &runNumber, &version, &created)
+		return client.QueryRow(ctx, query).Scan(row.scanTargets()...)
 	})
 	if err == stdsql.ErrNoRows || isNotFound(err) || (lookup.direct && flightRunMissing(err)) {
 		return false
@@ -285,7 +348,7 @@ func (r *flightRunResource) readFlightRunStatus(ctx context.Context, model *flig
 		diags.AddError("Unable to read MotherDuck Flight run", err.Error())
 		return false
 	}
-	model.setMetadata(runID, status, runNumber, version, created)
+	model.setMetadata(row)
 	return true
 }
 
@@ -365,6 +428,20 @@ func (r *flightRunResource) Read(ctx context.Context, req resource.ReadRequest, 
 			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 			return
 		}
+		// MotherDuck reports a deleted Flight and a Flight this principal
+		// cannot see with the same not found error. A Flight run grant lets
+		// a principal start a Flight it cannot read, so a run this state
+		// started can sit under a Flight that only looks deleted. Removing
+		// it would start a new production run on the next apply, so keep a
+		// run that has a run number and say why it was not refreshed.
+		if knownInt64(state.RunNumber) {
+			resp.Diagnostics.AddWarning(
+				"MotherDuck Flight run cannot be refreshed",
+				fmt.Sprintf("Flight %s was not found for the current principal, so Terraform could not refresh Flight run %d and kept its last known state instead of starting a new run. MotherDuck reports a deleted Flight and a Flight the principal cannot see in the same way. A Flight run grant lets a principal start a Flight it cannot read. To refresh the run, give the principal access to the Flight or run Terraform as the Flight owner. If the Flight was deleted, remove this resource from the configuration or from state.", state.FlightID.ValueString(), state.RunNumber.ValueInt64()),
+			)
+			resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+			return
+		}
 		resp.State.RemoveResource(ctx)
 		return
 	}
@@ -384,6 +461,40 @@ type flightRunListRow struct {
 	RunNumber     json.RawMessage `json:"run_number"`
 	FlightVersion json.RawMessage `json:"flight_version"`
 	CreatedAt     string          `json:"created_at"`
+	IsScheduled   json.RawMessage `json:"is_scheduled"`
+	StartedAt     *string         `json:"started_at"`
+	EndedAt       *string         `json:"ended_at"`
+	ScheduledAt   *string         `json:"scheduled_at"`
+	CancelledAt   *string         `json:"cancelled_at"`
+	ExitCode      json.RawMessage `json:"exit_code"`
+}
+
+// flightRunRow converts a listing row. A missing or malformed optional value
+// reads as null, and a malformed flight_version as zero.
+func (l flightRunListRow) flightRunRow(runNumber int64) flightRunRow {
+	version, _ := jsonInt64(l.FlightVersion)
+	row := flightRunRow{RunID: l.RunID, Status: l.Status, RunNumber: runNumber, FlightVersion: version, CreatedAt: l.CreatedAt}
+	switch strings.Trim(strings.TrimSpace(string(l.IsScheduled)), `"`) {
+	case "true":
+		row.IsScheduled = stdsql.NullBool{Bool: true, Valid: true}
+	case "false":
+		row.IsScheduled = stdsql.NullBool{Valid: true}
+	}
+	row.StartedAt = jsonNullString(l.StartedAt)
+	row.EndedAt = jsonNullString(l.EndedAt)
+	row.ScheduledAt = jsonNullString(l.ScheduledAt)
+	row.CancelledAt = jsonNullString(l.CancelledAt)
+	if exitCode, ok := jsonInt64(l.ExitCode); ok {
+		row.ExitCode = stdsql.NullInt64{Int64: exitCode, Valid: true}
+	}
+	return row
+}
+
+func jsonNullString(value *string) stdsql.NullString {
+	if value == nil {
+		return stdsql.NullString{}
+	}
+	return stdsql.NullString{String: *value, Valid: true}
 }
 
 // findFlightRunInListing pages through MD_LIST_FLIGHT_RUNS, which lists runs
@@ -396,7 +507,7 @@ func (r *flightRunResource) findFlightRunInListing(ctx context.Context, client i
 	previousFirstRunID := ""
 	for page := 0; page < flightRunListMaxPages; page++ {
 		query := fmt.Sprintf(
-			`SELECT run_id::VARCHAR AS run_id, status, run_number, flight_version, created_at::VARCHAR AS created_at FROM MD_LIST_FLIGHT_RUNS(flight_id := %s::UUID, "LIMIT" := %d, "OFFSET" := %d)`,
+			`SELECT run_id::VARCHAR AS run_id, status, run_number, flight_version, created_at::VARCHAR AS created_at, is_scheduled, started_at::VARCHAR AS started_at, ended_at::VARCHAR AS ended_at, scheduled_at::VARCHAR AS scheduled_at, cancelled_at::VARCHAR AS cancelled_at, exit_code FROM MD_LIST_FLIGHT_RUNS(flight_id := %s::UUID, "LIMIT" := %d, "OFFSET" := %d)`,
 			sqlbuild.StringLiteral(model.FlightID.ValueString()),
 			flightRunListPageSize,
 			page*flightRunListPageSize,
@@ -431,8 +542,7 @@ func (r *flightRunResource) findFlightRunInListing(ctx context.Context, client i
 				return false
 			}
 			if runNumber == target {
-				version, _ := jsonInt64(row.FlightVersion)
-				model.setMetadata(row.RunID, row.Status, runNumber, version, row.CreatedAt)
+				model.setMetadata(row.flightRunRow(runNumber))
 				return true
 			}
 			if runNumber < target {
@@ -489,6 +599,12 @@ func (r *flightRunResource) Update(ctx context.Context, req resource.UpdateReque
 	plan.Status = state.Status
 	plan.FlightVersion = state.FlightVersion
 	plan.CreatedAt = state.CreatedAt
+	plan.IsScheduled = state.IsScheduled
+	plan.StartedAt = state.StartedAt
+	plan.EndedAt = state.EndedAt
+	plan.ScheduledAt = state.ScheduledAt
+	plan.CancelledAt = state.CancelledAt
+	plan.ExitCode = state.ExitCode
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -507,7 +623,17 @@ func (r *flightRunResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 	query := fmt.Sprintf("CALL MD_CANCEL_FLIGHT_RUN(flight_id := %s::UUID, run_number := %d)", sqlbuild.StringLiteral(state.FlightID.ValueString()), state.RunNumber.ValueInt64())
-	if err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) }); err != nil && !isNotFound(err) && !strings.Contains(strings.ToLower(err.Error()), "terminal") {
+	err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) })
+	switch {
+	case err == nil || strings.Contains(strings.ToLower(err.Error()), "terminal"):
+	case isNotFound(err):
+		// A principal holding only a Flight run grant cannot see the Flight,
+		// so MotherDuck reports it as not found and does not cancel the run.
+		resp.Diagnostics.AddWarning(
+			"MotherDuck Flight run not cancelled",
+			fmt.Sprintf("Flight %s was not found for the current principal, so Terraform removed Flight run %d from state without cancelling it. If the Flight still exists, cancel the run as its owner.", state.FlightID.ValueString(), state.RunNumber.ValueInt64()),
+		)
+	default:
 		resp.Diagnostics.AddError("Unable to cancel MotherDuck Flight run", err.Error())
 	}
 }
