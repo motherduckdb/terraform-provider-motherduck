@@ -392,10 +392,16 @@ func (r *diveResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		contentArgs["id"] = sqlbuild.StringLiteral(state.ID.ValueString()) + "::UUID"
 		if _, err := client.QueryRowsJSON(ctx, "SELECT * FROM MD_UPDATE_DIVE_CONTENT"+sqlbuild.NamedArgs(contentArgs)); err != nil {
 			resp.Diagnostics.AddError("Unable to update MotherDuck Dive content", sensitiveWriteDiagnostic("Dive", err, diveSensitiveValues(ctx, plan.RequiredResources)))
+			if updateMetadata {
+				r.keepAppliedDiveUpdate(ctx, plan, resp)
+			}
 			return
 		}
 	}
 	if updateStatus && !r.updateDiveStatus(ctx, client, state.ID.ValueString(), plan.Status.ValueString(), &resp.Diagnostics) {
+		if updateMetadata || updateContent {
+			r.keepAppliedDiveUpdate(ctx, plan, resp)
+		}
 		return
 	}
 	// On a failed read-back keep the prior state, which the framework returns
@@ -407,6 +413,21 @@ func (r *diveResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// keepAppliedDiveUpdate records the writes that an Update applied before a
+// later write failed. Without it the framework keeps the prior state, and the
+// next apply repeats a content write that already succeeded as another Dive
+// version. State takes the Dive as read back, so the next plan retries only
+// the part that failed. Terraform does not compare the result of a failed
+// apply with the plan. If the read-back fails, the prior state stays.
+func (r *diveResource) keepAppliedDiveUpdate(ctx context.Context, plan diveModel, resp *resource.UpdateResponse) {
+	applied := plan
+	var readDiags diag.Diagnostics
+	if !r.readDive(ctx, &applied, &readDiags) {
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &applied)...)
 }
 
 func (r *diveResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -758,13 +779,6 @@ func diveContentWriteArgs(ctx context.Context, plan *diveModel, diags *diag.Diag
 		args["description"] = sqlbuild.StringLiteral(plan.VersionDescription.ValueString())
 	}
 	return args, true
-}
-
-func optionalListValuesEqual(left, right types.List) bool {
-	if left.IsNull() && right.IsNull() {
-		return true
-	}
-	return left.Equal(right)
 }
 
 // diveRequiredResourcesEqual compares the configured parts of two mount lists,

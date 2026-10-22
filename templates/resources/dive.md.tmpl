@@ -58,6 +58,9 @@ must have none. Setting `endorsed` status requires the appropriate
 organization-admin permission. MotherDuck sets the status of a new Dive after
 creating it. If it rejects that status, the apply keeps the new Dive with a
 warning instead of tainting it, and the next plan retries the status in place.
+When an update writes new content and the status change then fails, the apply
+fails but state records the written content, so the next apply retries only
+the status and does not write the content again.
 
 Destroy deletes the Dive. To change deployment tools without deleting it,
 follow [ownership migration](../guides/resource-scope.md).

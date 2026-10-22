@@ -42,10 +42,16 @@ type appRegressionSQL struct {
 	diveContent string
 	diveStatus  string
 	diveVersion int64
+	// diveContentWrites counts MD_UPDATE_DIVE_CONTENT calls, each of which
+	// writes a new Dive version.
+	diveContentWrites int
 
 	// Guide
 	guideExists bool
 	guideRefs   string
+	// guideVersions counts MD_UPDATE_GUIDE calls, each of which appends a
+	// Guide version.
+	guideVersions int
 }
 
 func newAppRegressionSQL() *appRegressionSQL {
@@ -193,6 +199,12 @@ func (c *appRegressionSQL) QueryRowsJSON(_ context.Context, query string, args .
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	switch {
+	case strings.Contains(query, "FROM MD_UPDATE_DIVE_CONTENT("):
+		c.diveContentWrites++
+		c.diveContent = appRegressionContentArg.FindStringSubmatch(query)[1]
+		c.diveVersion++
+	case strings.Contains(query, "FROM MD_UPDATE_GUIDE("):
+		c.guideVersions++
 	case strings.Contains(query, "FROM MD_UPDATE_DIVE_STATUS("):
 		status := appRegressionStatusArg.FindStringSubmatch(query)[1]
 		if status == "endorsed" {
@@ -482,6 +494,102 @@ resource "motherduck_dive" "test" {
 					}
 					return nil
 				},
+			},
+		},
+	})
+}
+
+// A status failure after a successful content write records the written
+// content in state without an inconsistent result, and the next apply retries
+// only the status, writing the content once. Refresh alone also reads the
+// written content back, so TestDiveUpdateStatusFailureKeepsWrittenContent
+// checks the state of the failed apply itself.
+func TestContractDiveUpdateStatusFailureKeepsWrittenContent(t *testing.T) {
+	sqlClient := newAppRegressionSQL()
+	base := contractProviderConfig("http://127.0.0.1")
+	cfg := func(content, status string) string {
+		return base + `
+resource "motherduck_dive" "test" {
+  title   = "Regression Dive"
+  content = "` + content + `"
+  status  = "` + status + `"
+}
+`
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(sqlClient),
+		Steps: []resource.TestStep{
+			{Config: cfg("v1", "draft")},
+			{Config: cfg("v2", "endorsed"), ExpectError: regexp.MustCompile(`Unable to update MotherDuck Dive status`)},
+			{
+				Config: cfg("v2", "ready"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_dive.test", plancheck.ResourceActionUpdate)},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("motherduck_dive.test", "content", "v2"),
+					resource.TestCheckResourceAttr("motherduck_dive.test", "status", "ready"),
+					resource.TestCheckResourceAttr("motherduck_dive.test", "current_version", "2"),
+					func(*terraform.State) error {
+						sqlClient.mu.Lock()
+						defer sqlClient.mu.Unlock()
+						if sqlClient.diveContentWrites != 1 {
+							return fmt.Errorf("MD_UPDATE_DIVE_CONTENT called %d times for one content change, want 1 (Dive is now at version %d)", sqlClient.diveContentWrites, sqlClient.diveVersion)
+						}
+						return nil
+					},
+				),
+			},
+		},
+	})
+}
+
+// After import, references that name the same objects as the canonical
+// spelling MotherDuck reads back append no Guide version, and state takes the
+// configured spelling.
+func TestContractGuideImportWithEquivalentReferencesWritesNoVersion(t *testing.T) {
+	sqlClient := newAppRegressionSQL()
+	sqlClient.guideExists = true
+	sqlClient.guideRefs = `[` +
+		`{"type":"catalog","url":"md:analytics","schema":null,"table":null,"column":null,"view":null,"macro":null,"guide_id":null,"dive_id":null,"flight_id":null,"description":null},` +
+		`{"type":"dive","url":null,"schema":null,"table":null,"column":null,"view":null,"macro":null,"guide_id":null,"dive_id":"00000000-0000-4000-8000-0000000000ab","flight_id":null,"description":null}` +
+		`]`
+	config := contractProviderConfig("http://127.0.0.1") + `
+resource "motherduck_guide" "test" {
+  title   = "Regression Guide"
+  content = "# Guide"
+  references = [
+    { type = "catalog", url = "md:Analytics" },
+    { type = "dive", uuid = "00000000-0000-4000-8000-0000000000AB" },
+  ]
+}
+`
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(sqlClient),
+		Steps: []resource.TestStep{
+			{
+				Config:             config,
+				ResourceName:       "motherduck_guide.test",
+				ImportState:        true,
+				ImportStateId:      contractGuideID,
+				ImportStatePersist: true,
+			},
+			{
+				Config:           config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("motherduck_guide.test", "references.0.url", "md:Analytics"),
+					resource.TestCheckResourceAttr("motherduck_guide.test", "references.1.uuid", "00000000-0000-4000-8000-0000000000AB"),
+					func(*terraform.State) error {
+						sqlClient.mu.Lock()
+						defer sqlClient.mu.Unlock()
+						if sqlClient.guideVersions != 0 {
+							return fmt.Errorf("MD_UPDATE_GUIDE called %d times, want 0", sqlClient.guideVersions)
+						}
+						return nil
+					},
+				),
 			},
 		},
 	})

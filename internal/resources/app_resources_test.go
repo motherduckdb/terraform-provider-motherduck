@@ -748,6 +748,70 @@ func TestDiveMissingRemoteLifecycle(t *testing.T) {
 	}
 }
 
+// TestDiveUpdateStatusFailureKeepsWrittenContent proves that a failed apply
+// records a content write that succeeded before the status write failed. The
+// prior state would make an apply without refresh write the same content as
+// another Dive version.
+func TestDiveUpdateStatusFailureKeepsWrittenContent(t *testing.T) {
+	ctx := t.Context()
+	content := "v1"
+	var version int64 = 1
+	client := &scriptedAppSQL{
+		queryRow: func(query string) mdsql.RowScanner {
+			if !strings.Contains(query, "FROM MD_GET_DIVE(") {
+				return scannedRow{err: errors.New("unexpected query " + query)}
+			}
+			return scannedRow{values: []any{
+				"Dive", nil, version, "c", "u", "owner-id", "owner", content, nil, "vc", int64(1), "[]",
+				"draft", nil, nil, nil,
+			}}
+		},
+		queryJSON: func(query string) (string, error) {
+			switch {
+			case strings.Contains(query, "FROM MD_UPDATE_DIVE_CONTENT("):
+				content, version = "v2", version+1
+				return "[]", nil
+			case strings.Contains(query, "FROM MD_UPDATE_DIVE_STATUS("):
+				return "", errors.New("Permission Error: Only organization admins can endorse a Dive")
+			}
+			return "", errors.New("unexpected JSON query " + query)
+		},
+	}
+	res := &diveResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	var schemaResp resource.SchemaResponse
+	res.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+	prior := diveModel{
+		ID: types.StringValue(testAppID), Title: types.StringValue("Dive"), Content: types.StringValue("v1"),
+		APIVersion: types.Int64Value(1), Status: types.StringValue("draft"), CurrentVersion: types.Int64Value(1),
+		RequiredResources: types.ListNull(diveRequiredResourceObjectType()),
+	}
+	planned := prior
+	planned.Content = types.StringValue("v2")
+	planned.Status = types.StringValue("endorsed")
+	planned.CurrentVersion = types.Int64Unknown()
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	plan := tfsdk.Plan{Schema: schemaResp.Schema}
+	if d := state.Set(ctx, &prior); d.HasError() {
+		t.Fatal(d)
+	}
+	if d := plan.Set(ctx, &planned); d.HasError() {
+		t.Fatal(d)
+	}
+	// The framework starts an Update response from the prior state.
+	resp := resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: state.Raw.Copy()}}
+	res.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, &resp)
+	if !resp.Diagnostics.HasError() || resp.Diagnostics.Errors()[0].Summary() != "Unable to update MotherDuck Dive status" {
+		t.Fatalf("expected the status error, got %v", resp.Diagnostics)
+	}
+	var got diveModel
+	if d := resp.State.Get(ctx, &got); d.HasError() {
+		t.Fatal(d)
+	}
+	if got.Content.ValueString() != "v2" || got.CurrentVersion.ValueInt64() != 2 || got.Status.ValueString() != "draft" {
+		t.Fatalf("state content = %s, version = %s, status = %s, want the written v2 at version 2 with the draft status MotherDuck kept", got.Content, got.CurrentVersion, got.Status)
+	}
+}
+
 func TestFlightWaitReportsConfiguredTimeout(t *testing.T) {
 	res := &flightRunResource{}
 	model := flightRunModel{
