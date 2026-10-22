@@ -8,6 +8,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
@@ -58,6 +60,65 @@ type stateSetter interface {
 	Set(context.Context, any) diag.Diagnostics
 }
 
+// identifierRequiresReplace replaces the resource when a SQL identifier
+// changes, except for a change in letter case. DuckDB and MotherDuck resolve
+// identifiers case-insensitively and never allow two names that differ only in
+// case, so a case-only edit names the same object. Terraform then updates
+// state in place to the new spelling instead of dropping the object.
+func identifierRequiresReplace() []planmodifier.String {
+	return []planmodifier.String{stringplanmodifier.RequiresReplaceIf(
+		func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+			resp.RequiresReplace = !strings.EqualFold(req.StateValue.ValueString(), req.PlanValue.ValueString())
+		},
+		identifierRequiresReplaceDescription,
+		identifierRequiresReplaceDescription,
+	)}
+}
+
+const identifierRequiresReplaceDescription = "Changing the name replaces the resource unless only its letter case changes."
+
+// identifierIDPlanModifier keeps the prior ID like UseStateForUnknown, except
+// that it plans the ID from the configured identifiers. When an identifier
+// changes only in letter case, the resource is updated in place and its ID
+// takes the new spelling, so the planned ID must match what Update writes.
+type identifierIDPlanModifier struct {
+	parts []path.Path
+}
+
+// identifierID returns the ID plan modifier for an ID that joins the given
+// identifier attributes with dots.
+func identifierID(parts ...string) []planmodifier.String {
+	paths := make([]path.Path, 0, len(parts))
+	for _, part := range parts {
+		paths = append(paths, path.Root(part))
+	}
+	return []planmodifier.String{identifierIDPlanModifier{parts: paths}}
+}
+
+func (identifierIDPlanModifier) Description(context.Context) string {
+	return "Keeps the prior ID, using the configured spelling of its identifiers."
+}
+
+func (m identifierIDPlanModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m identifierIDPlanModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() || req.StateValue.IsNull() || !req.PlanValue.IsUnknown() {
+		return
+	}
+	values := make([]string, 0, len(m.parts))
+	for _, part := range m.parts {
+		var value types.String
+		resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, part, &value)...)
+		if resp.Diagnostics.HasError() || value.IsNull() || value.IsUnknown() {
+			return
+		}
+		values = append(values, value.ValueString())
+	}
+	resp.PlanValue = types.StringValue(strings.Join(values, "."))
+}
+
 func relationExists(ctx context.Context, r interface {
 	sql(context.Context, *diag.Diagnostics) providerctx.SQLClient
 }, database, schemaName, name, tableType string, diags *diag.Diagnostics) bool {
@@ -71,7 +132,9 @@ func relationExists(ctx context.Context, r interface {
 			return err
 		}
 		var existsErr error
-		exists, existsErr = client.Exists(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_catalog = ? AND table_schema = ? AND table_name = ? AND table_type = ?`, database, schemaName, name, tableType)
+		// DuckDB resolves identifiers case-insensitively, but the catalog
+		// reports the spelling the object was created with.
+		exists, existsErr = client.Exists(ctx, `SELECT count(*) FROM information_schema.tables WHERE lower(table_catalog) = lower(?) AND lower(table_schema) = lower(?) AND lower(table_name) = lower(?) AND table_type = ?`, database, schemaName, name, tableType)
 		return existsErr
 	})
 	if err != nil && isNotFoundFor(err, database, schemaName, name) {

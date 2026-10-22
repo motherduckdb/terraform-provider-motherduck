@@ -52,12 +52,12 @@ func (r *databaseResource) Schema(ctx context.Context, req resource.SchemaReques
 			"id": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Database resource ID. This is the database name.",
-				PlanModifiers:       stringUseStateForUnknown(),
+				PlanModifiers:       identifierID("name"),
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Database name. Must be a single MotherDuck SQL identifier.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Database name. Must be a single MotherDuck SQL identifier. MotherDuck compares database names case-insensitively, so changing only the letter case updates state in place instead of replacing the database.",
+				PlanModifiers:       identifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"transient": schema.BoolAttribute{
@@ -382,7 +382,10 @@ func (r *databaseResource) readDatabase(ctx context.Context, model *databaseMode
 	var transient stdsql.NullBool
 	var retention stdsql.NullString
 	err := retry.SQL(ctx, func() error {
-		return client.QueryRow(ctx, `SELECT uuid::VARCHAR, created_ts::VARCHAR, transient, historical_snapshot_retention::VARCHAR, type FROM MD_INFORMATION_SCHEMA.DATABASES WHERE name = ?`, model.Name.ValueString()).Scan(&uuid, &createdTS, &transient, &retention, &dbType)
+		// MotherDuck compares database names case-insensitively and reports the
+		// spelling the database was created with. State keeps the configured
+		// spelling.
+		return client.QueryRow(ctx, `SELECT uuid::VARCHAR, created_ts::VARCHAR, transient, historical_snapshot_retention::VARCHAR, type FROM MD_INFORMATION_SCHEMA.DATABASES WHERE lower(name) = lower(?)`, model.Name.ValueString()).Scan(&uuid, &createdTS, &transient, &retention, &dbType)
 	})
 	if errors.Is(err, stdsql.ErrNoRows) {
 		return false

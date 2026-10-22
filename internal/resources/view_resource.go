@@ -47,25 +47,25 @@ func (r *viewResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
-				PlanModifiers:       stringUseStateForUnknown(),
+				PlanModifiers:       identifierID("database", "schema", "name"),
 				MarkdownDescription: "View resource ID in `<database>.<schema>.<view>` form.",
 			},
 			"database": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Database that contains the view.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Database that contains the view. Changing only the letter case updates state in place.",
+				PlanModifiers:       identifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"schema": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Schema that contains the view.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Schema that contains the view. Changing only the letter case updates state in place.",
+				PlanModifiers:       identifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "View name.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "View name. Changing only the letter case updates state in place.",
+				PlanModifiers:       identifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"query": schema.StringAttribute{
@@ -139,6 +139,19 @@ func (r *viewResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 }
 
 func (r *viewResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var plan, state viewModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if plan.Query.Equal(state.Query) {
+		// Only the letter case of an identifier changed. The view is the same
+		// object, so record the new spelling without running SQL.
+		plan.ID = types.StringValue(qualifiedObjectID(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString()))
+		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+		return
+	}
 	r.writeView(ctx, req.Plan, &resp.State, resp.Private, true, &resp.Diagnostics)
 }
 
@@ -203,7 +216,7 @@ func readViewServerDefinition(ctx context.Context, client providerctx.SQLClient,
 		if err := client.AttachDatabase(ctx, database); err != nil {
 			return err
 		}
-		return client.QueryRow(ctx, `SELECT view_definition FROM information_schema.views WHERE table_catalog = ? AND table_schema = ? AND table_name = ?`, database, schemaName, name).Scan(&definition)
+		return client.QueryRow(ctx, `SELECT view_definition FROM information_schema.views WHERE lower(table_catalog) = lower(?) AND lower(table_schema) = lower(?) AND lower(table_name) = lower(?)`, database, schemaName, name).Scan(&definition)
 	})
 	if err != nil && isNotFoundFor(err, database, schemaName, name) {
 		return "", false

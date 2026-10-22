@@ -25,10 +25,13 @@ type ownedShareClient interface {
 	QueryRow(context.Context, string, ...any) mdsql.RowScanner
 }
 
+// ReadOwnedShare reads one owned share by name. MotherDuck compares share
+// names case-insensitively and never allows two names that differ only in
+// case, so the lookup ignores letter case.
 func ReadOwnedShare(ctx context.Context, client ownedShareClient, name string) (OwnedShare, error) {
 	var share OwnedShare
 	err := retry.SQL(ctx, func() error {
-		return client.QueryRow(ctx, `SELECT url, source_db_name, access, visibility, update, to_json(include_pattern)::VARCHAR, created_ts::VARCHAR, source_db_uuid::VARCHAR FROM MD_INFORMATION_SCHEMA.OWNED_SHARES WHERE name = ?`, name).Scan(
+		return client.QueryRow(ctx, `SELECT url, source_db_name, access, visibility, update, to_json(include_pattern)::VARCHAR, created_ts::VARCHAR, source_db_uuid::VARCHAR FROM MD_INFORMATION_SCHEMA.OWNED_SHARES WHERE lower(name) = lower(?)`, name).Scan(
 			&share.URL,
 			&share.SourceDatabase,
 			&share.Access,

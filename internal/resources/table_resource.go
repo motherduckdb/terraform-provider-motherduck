@@ -40,25 +40,25 @@ func (r *tableResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
-				PlanModifiers:       stringUseStateForUnknown(),
+				PlanModifiers:       identifierID("database", "schema", "name"),
 				MarkdownDescription: "Table resource ID in `<database>.<schema>.<table>` form.",
 			},
 			"database": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Database that contains the table.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Database that contains the table. Changing only the letter case updates state in place.",
+				PlanModifiers:       identifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"schema": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Schema that contains the table.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Schema that contains the table. Changing only the letter case updates state in place.",
+				PlanModifiers:       identifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Table name.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Table name. Changing only the letter case updates state in place.",
+				PlanModifiers:       identifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"columns": schema.MapAttribute{
@@ -161,20 +161,19 @@ func (r *tableResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("columns"))
 		return
 	}
-	var clientDiags diag.Diagnostics
-	client := r.sql(ctx, &clientDiags)
+	client := r.sql(ctx, &resp.Diagnostics)
 	if client == nil {
-		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("columns"))
 		return
 	}
 	var compareDiags diag.Diagnostics
 	equivalent := tableColumnMapsEquivalent(ctx, client, plan.Columns, state.Columns, &compareDiags)
 	if compareDiags.HasError() {
-		// A type the session cannot resolve, such as a user-defined type in
-		// another database, keeps the previous replace-on-change behavior.
-		resp.Diagnostics.AddAttributeWarning(path.Root("columns"), "Unable to compare MotherDuck table column types",
-			"The provider could not normalize the planned column types, so the change replaces the table. "+compareDiags.Errors()[0].Detail())
-		equivalent = false
+		// Replacing drops the table and its data, so a failed comparison, such
+		// as a transient connection error, must fail the plan instead of
+		// planning a replacement that the types may not need.
+		resp.Diagnostics.AddAttributeError(path.Root("columns"), "Unable to compare MotherDuck table column types",
+			"The provider could not normalize the planned column types, so it cannot tell whether the change needs to replace the table. Retry the plan. "+compareDiags.Errors()[0].Detail())
+		return
 	}
 	if !equivalent {
 		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("columns"))
@@ -200,7 +199,7 @@ func (r *tableResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		}
 		return
 	}
-	plan.ID = state.ID
+	plan.ID = types.StringValue(qualifiedObjectID(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString()))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -270,7 +269,7 @@ func readTableColumnTypes(ctx context.Context, client providerctx.SQLClient, dat
 	var rowsJSON string
 	err := retry.SQL(ctx, func() error {
 		var queryErr error
-		rowsJSON, queryErr = client.QueryRowsJSON(ctx, `SELECT column_name, data_type FROM information_schema.columns WHERE table_catalog = ? AND table_schema = ? AND table_name = ? ORDER BY ordinal_position`, database, schemaName, name)
+		rowsJSON, queryErr = client.QueryRowsJSON(ctx, `SELECT column_name, data_type FROM information_schema.columns WHERE lower(table_catalog) = lower(?) AND lower(table_schema) = lower(?) AND lower(table_name) = lower(?) ORDER BY ordinal_position`, database, schemaName, name)
 		return queryErr
 	})
 	if err != nil {

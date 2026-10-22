@@ -95,7 +95,7 @@ reference for role assignment and inheritance.
 
 ### Required
 
-- `grantee_name` (String) User, service-account, or role principal receiving the role.
+- `grantee_name` (String) User, service-account, or role principal receiving the role. MotherDuck resolves principals case-insensitively, so changing only the letter case updates state in place instead of revoking and granting the same principal.
 - `role_name` (String) Role to grant, including preset roles or existing custom roles. Uses the lowercase MotherDuck role-name form: 3 to 255 characters, starting with a letter, containing only letters, digits, hyphens, and underscores.
 
 ### Optional

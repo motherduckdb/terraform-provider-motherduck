@@ -140,9 +140,33 @@ func (r *secretResource) ModifyPlan(ctx context.Context, req resource.ModifyPlan
 	if !ok || state.Scope.IsNull() || state.Scope.IsUnknown() {
 		return
 	}
-	if state.Scope.ValueString() != desiredScope {
-		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("scope"), desiredScope)...)
+	// The live scope is DuckDB's rendering of the scope list, whose quoting
+	// and escaping depend on the value. Render the configured scope with the
+	// same cast instead of predicting it, so an unchanged scope plans no diff.
+	var clientDiags diag.Diagnostics
+	client := r.sql(ctx, &clientDiags)
+	if client == nil {
+		return
 	}
+	rendered, err := renderSecretScope(ctx, client, desiredScope)
+	if err != nil {
+		resp.Diagnostics.AddAttributeWarning(path.Root("scope"), "Unable to compare MotherDuck secret scope",
+			"The provider could not render the configured scope to compare it with the live secret, so this plan does not detect a changed scope. "+err.Error())
+		return
+	}
+	if state.Scope.ValueString() != rendered {
+		// Plan the scope as unknown so the update reads back what DuckDB
+		// reports instead of a predicted value that could differ.
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("scope"), types.StringUnknown())...)
+	}
+}
+
+// scopeListCastQuery renders a scope the way duckdb_secrets() reports it,
+// as a one-element list cast to VARCHAR.
+const scopeListCastQuery = "SELECT [?::VARCHAR]::VARCHAR"
+
+func renderSecretScope(ctx context.Context, client scalarStringer, scope string) (string, error) {
+	return client.ScalarString(ctx, scopeListCastQuery, scope)
 }
 
 func (r *secretResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -428,11 +452,7 @@ func desiredSecretScopeFromParams(params types.Map) (string, bool) {
 		if !ok || scope.IsNull() || scope.IsUnknown() {
 			return "", false
 		}
-		return secretScopeStateValue(scope.ValueString()), true
+		return scope.ValueString(), true
 	}
 	return "", false
-}
-
-func secretScopeStateValue(scope string) string {
-	return "['" + strings.ReplaceAll(scope, "'", "''") + "']"
 }

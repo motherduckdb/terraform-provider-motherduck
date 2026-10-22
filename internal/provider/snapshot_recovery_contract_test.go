@@ -85,8 +85,8 @@ func (c *snapshotContractSQL) WithDatabaseUse(ctx context.Context, database stri
 func (c *snapshotContractSQL) QueryRow(_ context.Context, query string, args ...any) mdsql.RowScanner {
 	c.snapshotMu.Lock()
 	defer c.snapshotMu.Unlock()
-	byName := `SELECT snapshot_id::VARCHAR, created_ts::VARCHAR, count(*) OVER () FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE database_name = ? AND snapshot_name = ?`
-	byID := `SELECT snapshot_name, created_ts::VARCHAR FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE database_name = ? AND snapshot_id::VARCHAR = ?`
+	byName := `SELECT snapshot_id::VARCHAR, created_ts::VARCHAR, count(*) OVER () FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE lower(database_name) = lower(?) AND snapshot_name = ?`
+	byID := `SELECT snapshot_name, created_ts::VARCHAR FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE lower(database_name) = lower(?) AND snapshot_id::VARCHAR = ?`
 	native := `SELECT name FROM MD_INFORMATION_SCHEMA.DATABASES WHERE upper(type) = 'DEFAULT' ORDER BY name LIMIT 1`
 	want := "contract_snapshot"
 	if query == native {

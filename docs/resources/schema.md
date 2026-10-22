@@ -14,7 +14,9 @@ account or compute boundary.
 ## Usage and lifecycle
 
 Reference the database resource's `.name` so Terraform orders creation and
-destruction. The database and schema name are replacement-only.
+destruction. Changing the database or schema name replaces the schema. MotherDuck
+resolves names case-insensitively, so a change in letter case only updates
+state.
 
 Destroy is restrictive by default: unmanaged objects prevent removal. Set
 `cascade_on_delete = true` only when removing every contained object is intended.
@@ -43,8 +45,8 @@ resource "motherduck_schema" "mart" {
 
 ### Required
 
-- `database` (String) Database that contains the schema.
-- `name` (String) Schema name.
+- `database` (String) Database that contains the schema. Changing only the letter case updates state in place.
+- `name` (String) Schema name. Changing only the letter case updates state in place.
 
 ### Optional
 

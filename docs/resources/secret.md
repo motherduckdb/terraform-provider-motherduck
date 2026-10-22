@@ -23,6 +23,11 @@ replacement. MotherDuck stores secret names in lowercase, so use lowercase
 names to keep plans and imports readable. Destroy drops the named secret and
 succeeds when it is already gone.
 
+The computed `scope` attribute is the scope list as DuckDB reports it, for
+example `[mybucket]`. When `params` sets `scope`, planning renders the
+configured value the same way and plans an update only when the live scope
+differs.
+
 MotherDuck redacts secret values on reads, but the configured values are still
 stored in Terraform state. Here, "write-only" describes the service response,
 not Terraform write-only arguments. Protect state and saved plans.

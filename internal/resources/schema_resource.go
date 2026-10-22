@@ -33,19 +33,19 @@ func (r *schemaResource) Schema(ctx context.Context, req resource.SchemaRequest,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
-				PlanModifiers:       stringUseStateForUnknown(),
+				PlanModifiers:       identifierID("database", "name"),
 				MarkdownDescription: "Schema resource ID in `<database>.<schema>` form.",
 			},
 			"database": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Database that contains the schema.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Database that contains the schema. Changing only the letter case updates state in place.",
+				PlanModifiers:       identifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Schema name.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Schema name. Changing only the letter case updates state in place.",
+				PlanModifiers:       identifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"cascade_on_delete": schema.BoolAttribute{
@@ -95,7 +95,7 @@ func (r *schemaResource) Read(ctx context.Context, req resource.ReadRequest, res
 			return err
 		}
 		var existsErr error
-		exists, existsErr = client.Exists(ctx, `SELECT count(*) FROM information_schema.schemata WHERE catalog_name = ? AND schema_name = ?`, state.Database.ValueString(), state.Name.ValueString())
+		exists, existsErr = client.Exists(ctx, `SELECT count(*) FROM information_schema.schemata WHERE lower(catalog_name) = lower(?) AND lower(schema_name) = lower(?)`, state.Database.ValueString(), state.Name.ValueString())
 		return existsErr
 	})
 	if err != nil && isNotFoundFor(err, state.Database.ValueString(), state.Name.ValueString()) {
