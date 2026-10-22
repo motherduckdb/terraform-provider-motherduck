@@ -83,28 +83,37 @@ func TestFlightRunReadRemovesRunWithoutRunNumberWhenParentFlightIsGone(t *testin
 }
 
 func TestFlightRunDeleteWarnsWhenCancelCannotSeeFlight(t *testing.T) {
-	client := &scriptedAppSQL{exec: func(query string) error {
-		if strings.HasPrefix(query, "CALL MD_CANCEL_FLIGHT_RUN(") {
-			return flightNotVisibleError()
-		}
-		return nil
-	}}
-	res := &flightRunResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
-	model := flightRunModel{
-		ID:              types.StringValue("run-7"),
-		FlightID:        types.StringValue(testFlightID),
-		Config:          types.MapNull(types.StringType),
-		RunNumber:       types.Int64Value(7),
-		CancelOnDestroy: types.BoolValue(true),
-	}
-	state := resourceStateWithFlightRunModel(t, res, &model)
-	resp := resource.DeleteResponse{State: tfsdk.State{Schema: state.Schema, Raw: state.Raw}}
-	res.Delete(context.Background(), resource.DeleteRequest{State: state}, &resp)
-	if resp.Diagnostics.HasError() {
-		t.Fatalf("delete diagnostics: %v", resp.Diagnostics)
-	}
-	if resp.Diagnostics.WarningsCount() != 1 || resp.Diagnostics.Warnings()[0].Summary() != "MotherDuck Flight run not cancelled" {
-		t.Fatalf("want one not-cancelled warning, got %v", resp.Diagnostics)
+	// The Duckling raises the job service NOT_FOUND as a catalog error. The
+	// same text under another error type must still read as not found.
+	for name, cancelErr := range map[string]error{
+		"catalog error": flightNotVisibleError(),
+		"other error":   &duckdb.Error{Type: duckdb.ErrorTypeInvalid, Msg: `Invalid Error: Flight "` + testFlightID + `" not found`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			client := &scriptedAppSQL{exec: func(query string) error {
+				if strings.HasPrefix(query, "CALL MD_CANCEL_FLIGHT_RUN(") {
+					return cancelErr
+				}
+				return nil
+			}}
+			res := &flightRunResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+			model := flightRunModel{
+				ID:              types.StringValue("run-7"),
+				FlightID:        types.StringValue(testFlightID),
+				Config:          types.MapNull(types.StringType),
+				RunNumber:       types.Int64Value(7),
+				CancelOnDestroy: types.BoolValue(true),
+			}
+			state := resourceStateWithFlightRunModel(t, res, &model)
+			resp := resource.DeleteResponse{State: tfsdk.State{Schema: state.Schema, Raw: state.Raw}}
+			res.Delete(context.Background(), resource.DeleteRequest{State: state}, &resp)
+			if resp.Diagnostics.HasError() {
+				t.Fatalf("delete diagnostics: %v", resp.Diagnostics)
+			}
+			if resp.Diagnostics.WarningsCount() != 1 || resp.Diagnostics.Warnings()[0].Summary() != "MotherDuck Flight run not cancelled" {
+				t.Fatalf("want one not-cancelled warning, got %v", resp.Diagnostics)
+			}
+		})
 	}
 }
 

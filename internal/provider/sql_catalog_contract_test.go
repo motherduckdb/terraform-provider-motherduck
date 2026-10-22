@@ -82,7 +82,8 @@ func (c *catalogSQL) QueryRow(ctx context.Context, query string, args ...any) md
 	if !strings.Contains(query, "MD_DESCRIBE_DATABASE_SHARE(") {
 		return c.contractSQL.QueryRow(ctx, query, args...)
 	}
-	if want := "MD_DESCRIBE_DATABASE_SHARE('" + contractReceivedShareURL + "')"; !strings.HasSuffix(query, want) {
+	// MotherDuck resolves a share URL case-insensitively.
+	if want := "MD_DESCRIBE_DATABASE_SHARE('" + contractReceivedShareURL + "')"; !strings.HasSuffix(strings.ToLower(query), strings.ToLower(want)) {
 		return contractRow{err: fmt.Errorf("unexpected share describe query %q", query)}
 	}
 	if c.shareErr != nil {
@@ -174,6 +175,47 @@ data "motherduck_version" "test" {}
 	})
 }
 
+// TestContractShareKeepsConfiguredURL reads a share by a URL spelled
+// differently from the canonical URL MotherDuck reports. State keeps the
+// configured spelling.
+func TestContractShareKeepsConfiguredURL(t *testing.T) {
+	client := newCatalogSQL()
+	configured := strings.Replace(contractReceivedShareURL, "tenant", "Tenant", 1)
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(client),
+		Steps: []resource.TestStep{{
+			Config: contractProviderConfig("http://127.0.0.1") + `
+data "motherduck_share" "test" { url = "` + configured + `" }
+`,
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("data.motherduck_share.test", "url", configured),
+				resource.TestCheckResourceAttr("data.motherduck_share.test", "name", "tenant"),
+			),
+		}},
+	})
+}
+
+// TestContractCurrentUserDetailFailureKeepsValue fails md_user_info with an
+// error other than SaaS mode. The data source still reads `value` and leaves
+// the detail attributes null with a warning.
+func TestContractCurrentUserDetailFailureKeepsValue(t *testing.T) {
+	client := newCatalogSQL()
+	client.rowsErr["SELECT * FROM md_user_info()"] = errors.New("Invalid Error: MDExternalException: user service unavailable")
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(client),
+		Steps: []resource.TestStep{{
+			Config: contractProviderConfig("http://127.0.0.1") + `
+data "motherduck_current_user" "test" {}
+`,
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("data.motherduck_current_user.test", "value", "svc_writer"),
+				resource.TestCheckNoResourceAttr("data.motherduck_current_user.test", "user_id"),
+				resource.TestCheckNoResourceAttr("data.motherduck_current_user.test", "org_id"),
+			),
+		}},
+	})
+}
+
 func TestContractCatalogDataSourceErrors(t *testing.T) {
 	storageQuery := "SELECT * FROM MD_INFORMATION_SCHEMA.STORAGE_INFO ORDER BY database_name, database_id, computed_ts"
 	for name, tc := range map[string]struct {
@@ -205,6 +247,13 @@ func TestContractCatalogDataSourceErrors(t *testing.T) {
 			},
 			config:    `data "motherduck_share" "test" { url = "` + contractReceivedShareURL + `" }`,
 			wantError: `could not resolve <redacted share URL>`,
+		},
+		"share errors redact a respelled url": {
+			configure: func(c *catalogSQL) {
+				c.shareErr = errors.New("IO Error: could not resolve " + strings.ToUpper(contractReceivedShareURL) + " or md%3A_share%2Ftenant%2F0a9a026ec5a55946a9de39851087ed81")
+			},
+			config:    `data "motherduck_share" "test" { url = "` + contractReceivedShareURL + `" }`,
+			wantError: `could not resolve <redacted share URL> or <redacted share URL>`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

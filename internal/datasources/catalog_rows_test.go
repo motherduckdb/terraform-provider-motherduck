@@ -9,6 +9,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -185,6 +187,26 @@ func TestDiveVersionsPassesPagingNatively(t *testing.T) {
 	query, err = spec.build(rowsModel{DiveID: types.StringValue(id), Limit: types.Int64Value(5), Offset: types.Int64Value(10)})
 	if err != nil || query != `SELECT * FROM MD_LIST_DIVE_VERSIONS("limit" := 5, "offset" := 10, id := '`+id+`'::UUID)` {
 		t.Fatalf("paged dive_versions = %q, %v", query, err)
+	}
+}
+
+// TestDiveVersionsPagingFitsUInteger rejects a limit or offset that does not
+// fit the UINTEGER parameter of MD_LIST_DIVE_VERSIONS at plan time.
+func TestDiveVersionsPagingFitsUInteger(t *testing.T) {
+	var resp datasource.SchemaResponse
+	(&rowsDataSource{spec: findSpec(t, "dive_versions")}).Schema(t.Context(), datasource.SchemaRequest{}, &resp)
+	for _, name := range []string{"limit", "offset"} {
+		attr, ok := resp.Schema.Attributes[name].(schema.Int64Attribute)
+		if !ok || len(attr.Validators) != 1 {
+			t.Fatalf("%s = %#v, want one Int64 validator", name, resp.Schema.Attributes[name])
+		}
+		for value, wantErr := range map[int64]bool{0: false, 4294967295: false, 4294967296: true, -1: true} {
+			var vresp validator.Int64Response
+			attr.Validators[0].ValidateInt64(t.Context(), validator.Int64Request{Path: path.Root(name), ConfigValue: types.Int64Value(value)}, &vresp)
+			if vresp.Diagnostics.HasError() != wantErr {
+				t.Fatalf("%s = %d error = %t, want %t", name, value, vresp.Diagnostics.HasError(), wantErr)
+			}
+		}
 	}
 }
 

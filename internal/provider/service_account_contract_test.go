@@ -21,9 +21,13 @@ import (
 // userContractREST is an organization with service accounts, human users,
 // their tokens, and their Duckling configuration. Like MotherDuck it matches
 // usernames case-insensitively and keeps the spelling a user was created with.
+// It honors the is_service_account listing filter. A hidden user still exists
+// but is left out of GET /v1/users, as when an offset page shift skips it.
 type userContractREST struct {
 	mu           sync.Mutex
 	users        map[string]*mdrest.User
+	hidden       map[string]bool
+	listFilters  []string
 	descriptions map[string]string
 	tokens       map[string][]mdrest.Token
 	ducklings    map[string]mdrest.DucklingConfig
@@ -37,6 +41,7 @@ func newUserContractREST(t *testing.T) *userContractREST {
 	t.Helper()
 	fake := &userContractREST{
 		users:        map[string]*mdrest.User{},
+		hidden:       map[string]bool{},
 		descriptions: map[string]string{},
 		tokens:       map[string][]mdrest.Token{},
 		ducklings:    map[string]mdrest.DucklingConfig{},
@@ -74,8 +79,13 @@ func (f *userContractREST) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	segments := strings.Split(strings.TrimPrefix(req.URL.Path, "/v1/users"), "/")
 	switch {
 	case req.Method == http.MethodGet && req.URL.Path == "/v1/users":
+		filter := req.URL.Query().Get("is_service_account")
+		f.listFilters = append(f.listFilters, filter)
 		users := []mdrest.User{}
-		for _, user := range f.users {
+		for key, user := range f.users {
+			if f.hidden[key] || (filter != "" && fmt.Sprint(user.IsServiceAccount) != filter) {
+				continue
+			}
 			users = append(users, *user)
 		}
 		_ = json.NewEncoder(w).Encode(mdrest.ListUsersResponse{Users: users, TotalCount: int64(len(users))})
@@ -264,6 +274,61 @@ resource "motherduck_service_account" "test" {
 	})
 }
 
+// TestContractServiceAccountPageShiftKeepsState hides a live service account
+// from GET /v1/users, as an offset page shift during concurrent deletes does.
+// Refresh and destroy must confirm with the Duckling config probe, keep the
+// account in state, and never send DELETE for an account they cannot classify.
+func TestContractServiceAccountPageShiftKeepsState(t *testing.T) {
+	fake := newUserContractREST(t)
+	config := contractProviderConfig(fake.server.URL) + `
+resource "motherduck_service_account" "test" {
+  username = "contract_service"
+}
+`
+	hide := func(hidden bool) func() {
+		return func() {
+			fake.mu.Lock()
+			defer fake.mu.Unlock()
+			fake.hidden["contract_service"] = hidden
+		}
+	}
+	unconfirmed := regexp.MustCompile("Unable to confirm MotherDuck service account")
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(newContractSQL()),
+		CheckDestroy: func(*terraform.State) error {
+			fake.mu.Lock()
+			defer fake.mu.Unlock()
+			if strings.Join(fake.deletes, ",") != "contract_service" || fake.creates != 1 {
+				return fmt.Errorf("creates=%d deletes=%v, want one account deleted once", fake.creates, fake.deletes)
+			}
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{Config: config},
+			// Refresh cannot classify the account, so it errors and keeps state.
+			{Config: config, PreConfig: hide(true), ExpectError: unconfirmed},
+			// Destroy cannot classify the account, so it sends no DELETE.
+			{Config: config, Destroy: true, ExpectError: unconfirmed},
+			{
+				Config: config, PreConfig: hide(false),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+				Check: func(*terraform.State) error {
+					fake.mu.Lock()
+					defer fake.mu.Unlock()
+					if len(fake.deletes) != 0 || fake.creates != 1 {
+						return fmt.Errorf("creates=%d deletes=%v, want the original account untouched", fake.creates, fake.deletes)
+					}
+					// The lookup lists service accounts first.
+					if len(fake.listFilters) == 0 || fake.listFilters[0] != "true" {
+						return fmt.Errorf("listing filters = %v, want service accounts first", fake.listFilters)
+					}
+					return nil
+				},
+			},
+		},
+	})
+}
+
 // TestContractUsernameCaseChangeUpdatesInPlace changes only the letter case
 // of a username. MotherDuck matches usernames case-insensitively, so the
 // accounts are the same and nothing is recreated. Replacing the service
@@ -368,6 +433,14 @@ resource "motherduck_service_account" "imported" {
 }
 `, description)
 	}
+	withoutDescription := contractProviderConfig(fake.server.URL) + `
+resource "motherduck_service_account" "created" {
+  username = "contract_created"
+}
+resource "motherduck_service_account" "imported" {
+  username = "contract_imported"
+}
+`
 	createOnly := regexp.MustCompile("Service account description cannot change")
 	onlyCreated := func(*terraform.State) error {
 		fake.mu.Lock()
@@ -404,9 +477,38 @@ resource "motherduck_service_account" "imported" {
 					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
 			},
-			// After creation or adoption the description is create-only.
+			// After creation or adoption the description is create-only, and the
+			// error points to the path that keeps the account.
 			{Config: config("Contract reader"), ExpectError: createOnly},
+			{Config: config("Contract reader"), ExpectError: regexp.MustCompile("terraform state rm")},
 			{Config: config("Contract loader"), Check: onlyCreated, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}}},
+			// Removing the description only clears it from state.
+			{
+				Config: withoutDescription,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("motherduck_service_account.created", "description"),
+					resource.TestCheckNoResourceAttr("motherduck_service_account.imported", "description"),
+					onlyCreated,
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("motherduck_service_account.created", plancheck.ResourceActionUpdate),
+						plancheck.ExpectResourceAction("motherduck_service_account.imported", plancheck.ResourceActionUpdate),
+					},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
+			// A description added back is adopted once without an API call.
+			{
+				Config: config("Contract reader"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("motherduck_service_account.created", "description", "Contract reader"),
+					onlyCreated,
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+			},
+			{Config: config("Contract loader"), ExpectError: createOnly},
+			{Config: config("Contract reader"), Check: onlyCreated},
 		},
 	})
 }

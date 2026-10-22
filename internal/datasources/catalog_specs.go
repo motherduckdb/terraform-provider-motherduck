@@ -22,8 +22,12 @@ type rowSpec struct {
 	// permissionHint, when set, replaces the generic read error for
 	// MotherDuck functions that only organization admins can call.
 	permissionHint string
-	build          func(rowsModel) (string, error)
-	postProcess    func([]map[string]any) []map[string]any
+	// uint32Paging caps limit and offset at the UINTEGER maximum, for
+	// functions that take them as UINTEGER, so a larger value fails at plan
+	// time instead of in MotherDuck.
+	uint32Paging bool
+	build        func(rowsModel) (string, error)
+	postProcess  func([]map[string]any) []map[string]any
 }
 
 type typedRowAttribute struct {
@@ -220,7 +224,7 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_GET_DIVE(id := " + sqlbuild.StringLiteral(m.DiveID.ValueString()) + "::UUID)", nil
 		}},
-		{name: "dive_versions", description: "Lists versions for one MotherDuck Dive. Set `limit` and `offset` to page through the version history. Rows in the returned page are sorted newest version first.", requiredFunction: "md_list_dive_versions", attrs: []string{"dive_id", "limit", "offset"}, requiredAttrs: []string{"dive_id"}, typedRows: []typedRowAttribute{
+		{name: "dive_versions", description: "Lists versions for one MotherDuck Dive. Set `limit` and `offset` to page through the version history. Rows in the returned page are sorted newest version first.", requiredFunction: "md_list_dive_versions", uint32Paging: true, attrs: []string{"dive_id", "limit", "offset"}, requiredAttrs: []string{"dive_id"}, typedRows: []typedRowAttribute{
 			{name: "id", description: "Dive ID."},
 			{name: "version", description: "Dive version number."},
 			{name: "storage_url", description: "Storage URL of the version. Sensitive because it locates the Dive content.", sensitive: true},

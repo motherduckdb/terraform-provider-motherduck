@@ -57,7 +57,8 @@ func (d *activeAccountsDataSource) Schema(ctx context.Context, req datasource.Sc
 func activeAccountsAttribute() schema.ListNestedAttribute {
 	return schema.ListNestedAttribute{
 		Computed:            true,
-		MarkdownDescription: "Accounts that have an active or cooling-down Duckling, sorted by username. It holds the same inventory as `accounts_json`, without the sensitive marking, so it can be used in expressions and outputs.",
+		Sensitive:           true,
+		MarkdownDescription: "Accounts that have an active or cooling-down Duckling, sorted by username. It holds the same inventory as `accounts_json` as typed objects for expressions. Sensitive like `accounts_json` because it can reveal account and Duckling metadata, so an output that exposes it must set `sensitive = true` or wrap the value in `nonsensitive()`.",
 		NestedObject: schema.NestedAttributeObject{
 			Attributes: map[string]schema.Attribute{
 				"username": schema.StringAttribute{

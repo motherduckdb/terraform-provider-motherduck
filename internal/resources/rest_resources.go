@@ -44,10 +44,16 @@ type serviceAccountModel struct {
 	Description types.String `tfsdk:"description"`
 }
 
-// serviceAccountDescriptionUnverified marks state written by import. No
-// MotherDuck API returns a service account description, so an imported account
-// may adopt the configured description once without a plan-time error.
-const serviceAccountDescriptionUnverified = "description_unverified"
+// serviceAccountDescriptionUnverified marks state with no recorded
+// description that may adopt the configured one once without a plan-time
+// error. No MotherDuck API returns a service account description. Import sets
+// it to serviceAccountDescriptionImported, and removing the description from
+// the configuration sets it to serviceAccountDescriptionRemoved.
+const (
+	serviceAccountDescriptionUnverified = "description_unverified"
+	serviceAccountDescriptionImported   = "true"
+	serviceAccountDescriptionRemoved    = `"removed"`
+)
 
 func NewServiceAccountResource() resource.Resource { return &serviceAccountResource{} }
 
@@ -73,7 +79,7 @@ func (r *serviceAccountResource) Schema(ctx context.Context, req resource.Schema
 			},
 			"description": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional free-form notes on the account's purpose. Must be non-blank and 1-1000 characters. MotherDuck sets the description only when it creates the account and has no API to read or change it, so changing it after creation fails at plan time instead of replacing the account and deleting its data.",
+				MarkdownDescription: "Optional free-form notes on the account's purpose. Must be non-blank and 1-1000 characters. MotherDuck sets the description only when it creates the account and has no API to read or change it, so changing it after creation fails at plan time instead of replacing the account and deleting its data. Removing it from the configuration only clears it from state.",
 				Validators:          serviceAccountDescriptionValidators(),
 			},
 		},
@@ -125,14 +131,24 @@ func (r *serviceAccountResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 	// MotherDuck has no GET /v1/users/{username}, so the organization listing
 	// is the only source that says whether a username is a service account.
-	// The client walks every page, so a username absent from it was deleted.
+	// The listing pages by offset and can skip a live user, so a username
+	// absent from it is removed only after a probe confirms it is gone.
 	user, err := findUser(ctx, client, state.Username.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read MotherDuck service account", err.Error())
 		return
 	}
 	if user == nil {
-		resp.State.RemoveResource(ctx)
+		gone, err := confirmUserGone(ctx, client, state.Username.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to read MotherDuck service account", err.Error())
+			return
+		}
+		if gone {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.Append(serviceAccountUnconfirmedDiagnostic(state.Username.ValueString()))
 		return
 	}
 	if !user.IsServiceAccount {
@@ -142,8 +158,10 @@ func (r *serviceAccountResource) Read(ctx context.Context, req resource.ReadRequ
 
 // ModifyPlan rejects a description change. MotherDuck cannot change a
 // service account description, and replacing the account to apply one would
-// delete its data. An imported account has no recorded description, so it may
-// adopt the configured one.
+// delete its data. Removing the description only clears it from state. An
+// imported account, or one whose description was removed from the
+// configuration, has no recorded description, so it may adopt the configured
+// one.
 func (r *serviceAccountResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
 		return
@@ -153,7 +171,7 @@ func (r *serviceAccountResource) ModifyPlan(ctx context.Context, req resource.Mo
 	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("description"), &current)...)
 	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("username"), &plannedUsername)...)
 	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("username"), &currentUsername)...)
-	if resp.Diagnostics.HasError() || planned.IsUnknown() || planned.Equal(current) {
+	if resp.Diagnostics.HasError() || planned.IsUnknown() || planned.IsNull() || planned.Equal(current) {
 		return
 	}
 	// A rename already replaces the account, and the new account is created
@@ -173,13 +191,15 @@ func (r *serviceAccountResource) ModifyPlan(ctx context.Context, req resource.Mo
 		"Service account description cannot change",
 		"MotherDuck sets a service account description only when it creates the account and has no API to change it. "+
 			"Replacing the account to apply a new description would delete all data the account owns, so the provider does not plan that. "+
-			"Restore the previous description in the configuration. To recreate the account with a new description and lose its data, destroy it first with `terraform destroy -target`.",
+			"Restore the previous description in the configuration. To record the new description without changing the account or its data, remove the resource from state with `terraform state rm` and import it again with `terraform import`. "+
+			"MotherDuck keeps the description the account was created with. To recreate the account with the new description and lose its data, destroy it first with `terraform destroy -target`.",
 	)
 }
 
 // Update applies only changes that need no API call. The plan replaces the
 // account for any username change other than letter case, and ModifyPlan
-// rejects description changes except the one adopted after import.
+// rejects description changes except a removal or the adoption of a
+// description by state that has none recorded.
 func (r *serviceAccountResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan, state serviceAccountModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
@@ -193,16 +213,30 @@ func (r *serviceAccountResource) Update(ctx context.Context, req resource.Update
 	}
 	plan.ID = plan.Username
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
-	if !plan.Description.Equal(state.Description) {
-		resp.Diagnostics.AddAttributeWarning(
-			path.Root("description"),
-			"Service account description recorded without verification",
-			"MotherDuck has no API to read or change a service account description, so Terraform recorded the configured description for this imported account without checking it against MotherDuck.",
-		)
-		// The adopted description is now the recorded one, so later changes
-		// fail at plan time like any other description change.
-		resp.Diagnostics.Append(resp.Private.SetKey(ctx, serviceAccountDescriptionUnverified, nil)...)
+	if plan.Description.Equal(state.Description) {
+		return
 	}
+	if plan.Description.IsNull() {
+		// Removal clears only the state. The account keeps its description, so
+		// a description added later is adopted like one after import.
+		resp.Diagnostics.Append(resp.Private.SetKey(ctx, serviceAccountDescriptionUnverified, []byte(serviceAccountDescriptionRemoved))...)
+		return
+	}
+	marker, diags := req.Private.GetKey(ctx, serviceAccountDescriptionUnverified)
+	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.AddAttributeWarning(path.Root("description"), "Service account description recorded without verification", serviceAccountAdoptionDetail(marker))
+	// The adopted description is now the recorded one, so later changes fail
+	// at plan time like any other description change.
+	resp.Diagnostics.Append(resp.Private.SetKey(ctx, serviceAccountDescriptionUnverified, nil)...)
+}
+
+// serviceAccountAdoptionDetail explains a description recorded without an API
+// call. Only state written by import is called an imported account.
+func serviceAccountAdoptionDetail(marker []byte) string {
+	if string(marker) == serviceAccountDescriptionImported {
+		return "MotherDuck has no API to read or change a service account description, so Terraform recorded the configured description for this imported account without checking it against MotherDuck."
+	}
+	return "MotherDuck has no API to read or change a service account description, so Terraform recorded the configured description without checking it against MotherDuck. The account keeps the description it was created with."
 }
 
 func (r *serviceAccountResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -224,6 +258,14 @@ func (r *serviceAccountResource) Delete(ctx context.Context, req resource.Delete
 		return
 	}
 	if user == nil {
+		gone, err := confirmUserGone(ctx, client, state.Username.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to verify MotherDuck service account before deletion", err.Error())
+			return
+		}
+		if !gone {
+			resp.Diagnostics.Append(serviceAccountUnconfirmedDiagnostic(state.Username.ValueString()))
+		}
 		return
 	}
 	if !user.IsServiceAccount {
@@ -244,27 +286,65 @@ func (r *serviceAccountResource) ImportState(ctx context.Context, req resource.I
 	// The Read that follows import confirms the username is a service account.
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("username"), req.ID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), req.ID)...)
-	resp.Diagnostics.Append(resp.Private.SetKey(ctx, serviceAccountDescriptionUnverified, []byte("true"))...)
+	resp.Diagnostics.Append(resp.Private.SetKey(ctx, serviceAccountDescriptionUnverified, []byte(serviceAccountDescriptionImported))...)
 }
 
-// findUser returns the organization member named username, or nil when there
-// is none. MotherDuck compares usernames case-insensitively, so an exact match
-// wins and a match that differs only in letter case is accepted.
+// findUser returns the organization member named username, or nil when the
+// listing has none. GET /v1/users has no username filter, so it first walks
+// only the service accounts, which finds a managed account without listing
+// every human user. It then walks the human users, so a human user with the
+// name is still found and refused. Callers check IsServiceAccount on the
+// result, so a server that ignores the filter stays safe. MotherDuck compares
+// usernames case-insensitively, so an exact match wins and a match that
+// differs only in letter case is accepted.
 func findUser(ctx context.Context, client *mdrest.Client, username string) (*mdrest.User, error) {
-	users, err := client.ListUsers(ctx, mdrest.ListUsersFilter{})
-	if err != nil {
-		return nil, err
+	for _, serviceAccounts := range []bool{true, false} {
+		users, err := client.ListUsers(ctx, mdrest.ListUsersFilter{IsServiceAccount: &serviceAccounts})
+		if err != nil {
+			return nil, err
+		}
+		if user := matchUsername(users, username); user != nil {
+			return user, nil
+		}
 	}
+	return nil, nil
+}
+
+func matchUsername(users []mdrest.User, username string) *mdrest.User {
 	var folded *mdrest.User
 	for i := range users {
 		if users[i].Username == username {
-			return &users[i], nil
+			return &users[i]
 		}
 		if folded == nil && strings.EqualFold(users[i].Username, username) {
 			folded = &users[i]
 		}
 	}
-	return folded, nil
+	return folded
+}
+
+// confirmUserGone probes GET /v1/users/{username}/instances for a username the
+// listing did not return. GET /v1/users pages by offset, so a user created or
+// deleted during the walk can shift a live account past a page boundary.
+// Only a NOT_FOUND answer proves the user is gone.
+func confirmUserGone(ctx context.Context, client *mdrest.Client, username string) (bool, error) {
+	_, err := client.GetDucklingConfig(ctx, username)
+	if err == nil {
+		return false, nil
+	}
+	if isNotFound(err) {
+		return true, nil
+	}
+	return false, err
+}
+
+func serviceAccountUnconfirmedDiagnostic(username string) diag.Diagnostic {
+	return diag.NewAttributeErrorDiagnostic(
+		path.Root("username"),
+		"Unable to confirm MotherDuck service account",
+		"MotherDuck user "+username+" exists, but the organization user listing did not include it, so Terraform could not confirm that it is a service account. "+
+			"The listing can skip a user while other users are created or deleted. Terraform kept the resource in state and made no change. Retry the operation.",
+	)
 }
 
 func notServiceAccountDiagnostic(username string) diag.Diagnostic {

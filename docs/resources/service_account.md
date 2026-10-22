@@ -26,6 +26,13 @@ rename still replaces the account, and the new account gets the configured
 description. An imported account adopts the configured description once,
 without verification.
 
+Removing `description` from the configuration clears it from state with no API
+call, and the account keeps the description it was created with. A description
+added back later is adopted once, like after import. To record a different
+description without recreating the account, run `terraform state rm` and then
+`terraform import` for the account. MotherDuck still keeps the original
+description.
+
 Free, Lite, and not yet started trial organizations can have at most two
 service accounts. Business organizations and active free trials have no such
 limit.
@@ -39,9 +46,17 @@ SQL identity or move existing databases to the new account.
 `DELETE /v1/users/{username}` deletes any user, so the provider checks the
 organization user listing before it trusts a username. Refresh, import, and
 destroy fail with an error when the username belongs to a human user, and the
-resource stays in state. Remove such a resource with `terraform state rm`. The
-admin token needs the `member_management.view_all_members` privilege for this
-check, which the built-in `admin`, `builder`, and `explorer` roles include.
+resource stays in state. Remove such a resource with `terraform state rm`.
+
+Refresh, import, and destroy list the organization's users, so the admin token
+needs the `member_management.view_all_members` privilege. The built-in
+`admin`, `builder`, and `explorer` roles include it. The listing pages by
+offset and can skip a user while other users are created or deleted. When the
+username is missing from the listing, the provider checks
+`GET /v1/users/{username}/instances`. A not-found answer means the account is
+gone, so refresh removes it from state and destroy treats it as deleted. When
+the account still exists, the provider fails with an error, keeps the state,
+and sends no delete. Retry the operation.
 
 **Deleting the service account deletes the data it owns.** Destroy downstream
 warehouses with their original writer credential before removing their account.
@@ -77,7 +92,7 @@ resource "motherduck_access_token" "app" {
 
 ### Optional
 
-- `description` (String) Optional free-form notes on the account's purpose. Must be non-blank and 1-1000 characters. MotherDuck sets the description only when it creates the account and has no API to read or change it, so changing it after creation fails at plan time instead of replacing the account and deleting its data.
+- `description` (String) Optional free-form notes on the account's purpose. Must be non-blank and 1-1000 characters. MotherDuck sets the description only when it creates the account and has no API to read or change it, so changing it after creation fails at plan time instead of replacing the account and deleting its data. Removing it from the configuration only clears it from state.
 
 ### Read-Only
 

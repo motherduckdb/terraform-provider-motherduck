@@ -80,6 +80,9 @@ func (d *rowsDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 	}
 	for _, attr := range d.spec.attrs {
 		attrs[attr] = rowAttribute(attr, d.spec.attrRequired(attr))
+		if d.spec.uint32Paging && (attr == "limit" || attr == "offset") {
+			attrs[attr] = uint32PagingAttribute(attr, d.spec.attrRequired(attr))
+		}
 	}
 	if len(d.spec.typedRows) > 0 {
 		attrs["rows"] = d.spec.typedRowsAttribute()
@@ -438,6 +441,18 @@ func rowAttribute(name string, required bool) schema.Attribute {
 	default:
 		return rowStringAttribute(required, nil, "MotherDuck data source argument.")
 	}
+}
+
+// maxUInteger is the largest DuckDB UINTEGER value.
+const maxUInteger = 4294967295
+
+// uint32PagingAttribute is limit or offset for a function that takes them as
+// UINTEGER.
+func uint32PagingAttribute(name string, required bool) schema.Attribute {
+	if name == "limit" {
+		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Range("MotherDuck data source limit", 0, maxUInteger)}, "Maximum number of rows to return. Must be between 0 and 4294967295.")
+	}
+	return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Range("MotherDuck data source offset", 0, maxUInteger)}, "Number of rows to skip. Must be between 0 and 4294967295.")
 }
 
 func rowInt64Attribute(required bool, validators []validator.Int64, description string) schema.Attribute {

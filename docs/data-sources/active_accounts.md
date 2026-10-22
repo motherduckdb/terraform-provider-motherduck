@@ -24,7 +24,7 @@ data "motherduck_active_accounts" "current" {}
 
 ### Read-Only
 
-- `accounts` (Attributes List) Accounts that have an active or cooling-down Duckling, sorted by username. It holds the same inventory as `accounts_json`, without the sensitive marking, so it can be used in expressions and outputs. (see [below for nested schema](#nestedatt--accounts))
+- `accounts` (Attributes List, Sensitive) Accounts that have an active or cooling-down Duckling, sorted by username. It holds the same inventory as `accounts_json` as typed objects for expressions. Sensitive like `accounts_json` because it can reveal account and Duckling metadata, so an output that exposes it must set `sensitive = true` or wrap the value in `nonsensitive()`. (see [below for nested schema](#nestedatt--accounts))
 - `accounts_json` (String, Sensitive) Raw active-account inventory returned by the MotherDuck REST API. Sensitive because it can reveal account and Duckling metadata.
 
 <a id="nestedatt--accounts"></a>

@@ -15,7 +15,9 @@ Set exactly one lookup input:
   not resolve the name of a share received from another account.
 - `url` reads any share the caller can access, including a received share.
   The URL is sensitive, so pass it through a sensitive variable or another
-  sensitive value and keep it out of logs.
+  sensitive value and keep it out of logs. The data source keeps the
+  configured spelling of `url` instead of the canonical one MotherDuck
+  reports, and redacts share URLs from error messages.
 
 `motherduck_shared_with_me` does not report the source database of received
 shares. Use this data source with the share URL to read `source_database` and

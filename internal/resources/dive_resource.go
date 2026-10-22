@@ -86,7 +86,7 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"api_version": schema.Int64Attribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default. Refresh and import read the current version's API version from `MD_GET_DIVE`.",
+				MarkdownDescription: "Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default when content or mounts change. A write that changes only `version_description` sends the current API version. Refresh and import read the current version's API version from `MD_GET_DIVE`.",
 				PlanModifiers:       []planmodifier.Int64{diveAPIVersionPlanModifier{}},
 			},
 			"required_resources": schema.ListNestedAttribute{
@@ -184,6 +184,11 @@ func (r *diveResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if diveStatusConfigured(requestedStatus) && !r.sqlFunctionAvailable(ctx, client, &resp.Diagnostics, "md_update_dive_status", "motherduck_dive") {
 		return
 	}
+	// The version description needs a follow-up content write. Check for it
+	// before creating, so a missing function cannot leave a new Dive behind.
+	if diveVersionDescriptionConfigured(requestedVersionDescription) && !r.sqlFunctionAvailable(ctx, client, &resp.Diagnostics, "md_update_dive_content", "motherduck_dive") {
+		return
+	}
 	args := map[string]string{
 		"title":   sqlbuild.StringLiteral(plan.Title.ValueString()),
 		"content": sqlbuild.StringLiteral(plan.Content.ValueString()),
@@ -227,23 +232,8 @@ func (r *diveResource) Create(ctx context.Context, req resource.CreateRequest, r
 	// MD_CREATE_DIVE has no version description, so write it as a second
 	// version with the same content and mounts.
 	if diveVersionDescriptionConfigured(requestedVersionDescription) && !requestedVersionDescription.Equal(plan.VersionDescription) {
-		if !r.sqlFunctionAvailable(ctx, client, &resp.Diagnostics, "md_update_dive_content", "motherduck_dive") {
-			return
-		}
-		plan.VersionDescription = requestedVersionDescription
-		args, ok := diveContentWriteArgs(ctx, &plan, &resp.Diagnostics)
-		if !ok {
-			return
-		}
-		args["id"] = sqlbuild.StringLiteral(plan.ID.ValueString()) + "::UUID"
-		if _, err := client.QueryRowsJSON(ctx, "SELECT * FROM MD_UPDATE_DIVE_CONTENT"+sqlbuild.NamedArgs(args)); err != nil {
-			resp.Diagnostics.AddError("Unable to set MotherDuck Dive version description", sensitiveWriteDiagnostic("Dive", err, diveSensitiveValues(ctx, plan.RequiredResources)))
-			return
-		}
-		if !r.readDive(ctx, &plan, &resp.Diagnostics) {
-			if !resp.Diagnostics.HasError() {
-				resp.Diagnostics.AddError("Unable to read MotherDuck Dive", "Dive version description was written but the Dive could not be read through MD_GET_DIVE.")
-			}
+		r.setCreatedDiveVersionDescription(ctx, client, &plan, requestedVersionDescription, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
 			return
 		}
 		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
@@ -260,7 +250,56 @@ func (r *diveResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if !r.readDive(ctx, &plan, &resp.Diagnostics) {
 		return
 	}
+	if diveVersionDescriptionConfigured(requestedVersionDescription) {
+		// Keep the configured value when its write failed above. Refresh
+		// reports what MotherDuck stores.
+		plan.VersionDescription = requestedVersionDescription
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// setCreatedDiveVersionDescription writes the configured version description
+// of a Dive that Create just made and read back. The Dive is already in
+// state, and an error would taint it, so the next apply would recreate it with
+// a new ID and break its embeds. A failed write or read-back therefore keeps
+// the Dive as read back after creation and adds a warning. Terraform requires
+// a configured value to match the plan after apply, so the state records the
+// configured version description. The next refresh reads the description
+// MotherDuck actually stores, and the next plan retries the write in place.
+func (r *diveResource) setCreatedDiveVersionDescription(ctx context.Context, client interface {
+	QueryRowsJSON(context.Context, string, ...any) (string, error)
+}, plan *diveModel, requested types.String, diags *diag.Diagnostics) {
+	created := *plan
+	created.VersionDescription = requested
+	written := created
+	args, ok := diveContentWriteArgs(ctx, &written, diags)
+	if !ok {
+		return
+	}
+	args["id"] = sqlbuild.StringLiteral(written.ID.ValueString()) + "::UUID"
+	if _, err := client.QueryRowsJSON(ctx, "SELECT * FROM MD_UPDATE_DIVE_CONTENT"+sqlbuild.NamedArgs(args)); err != nil {
+		*plan = created
+		diags.AddWarning(
+			"MotherDuck Dive version description not set",
+			"MotherDuck created Dive "+created.ID.ValueString()+", but writing its version description failed. Terraform kept the Dive in state instead of recreating it. The next refresh reads the version description MotherDuck stores, and the next plan retries the write in place. Error: "+
+				sensitiveWriteDiagnostic("Dive", err, diveSensitiveValues(ctx, written.RequiredResources)),
+		)
+		return
+	}
+	var readDiags diag.Diagnostics
+	if !r.readDive(ctx, &written, &readDiags) {
+		*plan = created
+		detail := "The Dive could not be read through MD_GET_DIVE."
+		if readDiags.HasError() {
+			detail = readDiags.Errors()[0].Detail()
+		}
+		diags.AddWarning(
+			"Unable to read MotherDuck Dive",
+			"MotherDuck created Dive "+created.ID.ValueString()+" and Terraform wrote its version description, but could not read the Dive back. Terraform kept the Dive in state as read after creation, and the next refresh reconciles it. "+detail,
+		)
+		return
+	}
+	*plan = written
 }
 
 func (r *diveResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -500,8 +539,11 @@ func diveDescriptionEmpty(value types.String) bool {
 }
 
 // diveAPIVersionPlanModifier keeps an unconfigured api_version from state
-// unless the plan writes a new content version, which is the only update that
-// can change it. A content update leaves it unknown for MotherDuck to choose.
+// while the content and mounts are unchanged. A version_description change
+// alone still writes a new version, and the write then sends the prior API
+// version, because an omitted api_version makes MotherDuck apply its default
+// and silently migrate the Dive. A content or mount change leaves it unknown
+// for MotherDuck to choose.
 type diveAPIVersionPlanModifier struct{}
 
 func (diveAPIVersionPlanModifier) Description(context.Context) string {
@@ -514,15 +556,6 @@ func (m diveAPIVersionPlanModifier) MarkdownDescription(ctx context.Context) str
 
 func (diveAPIVersionPlanModifier) PlanModifyInt64(ctx context.Context, req planmodifier.Int64Request, resp *planmodifier.Int64Response) {
 	if req.State.Raw.IsNull() || req.StateValue.IsNull() || !req.ConfigValue.IsNull() || !req.PlanValue.IsUnknown() {
-		return
-	}
-	var configVersionDescription, stateVersionDescription types.String
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("version_description"), &configVersionDescription)...)
-	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("version_description"), &stateVersionDescription)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	if diveVersionDescriptionConfigured(configVersionDescription) && !configVersionDescription.Equal(stateVersionDescription) {
 		return
 	}
 	if diveContentWriteUnchanged(ctx, req.Plan.GetAttribute, req.State.GetAttribute, &resp.Diagnostics) {

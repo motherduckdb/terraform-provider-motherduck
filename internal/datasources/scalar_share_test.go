@@ -92,16 +92,23 @@ func TestCurrentUserDetailsToleratesOlderSessions(t *testing.T) {
 		t.Fatalf("SaaS mode values = %v, diagnostics = %v", values, diags)
 	}
 
-	// Other failures still fail the read.
-	diags = nil
-	details.read(context.Background(), &fakeDetailsClient{available: true, rowsErr: errors.New("connection reset")}, "current_user", &diags)
-	if !diags.HasError() {
-		t.Fatal("unexpected md_user_info errors must fail the read")
-	}
-	diags = nil
-	details.read(context.Background(), &fakeDetailsClient{probeErr: errors.New("probe failed")}, "current_user", &diags)
-	if !diags.HasError() {
-		t.Fatal("probe errors must fail the read")
+	// Other failures also leave the details null with a warning, so a
+	// configuration that reads only value keeps working.
+	for name, client := range map[string]*fakeDetailsClient{
+		"query error":  {available: true, rowsErr: errors.New("connection reset")},
+		"probe error":  {probeErr: errors.New("probe failed")},
+		"decode error": {available: true, rowsJSON: "not json"},
+	} {
+		diags = nil
+		values = details.read(context.Background(), client, "current_user", &diags)
+		if diags.HasError() || diags.WarningsCount() != 1 {
+			t.Fatalf("%s diagnostics = %v, want one warning and no error", name, diags)
+		}
+		for attr, value := range values {
+			if !value.IsNull() {
+				t.Fatalf("%s: %s = %v, want null", name, attr, value)
+			}
+		}
 	}
 }
 
@@ -263,6 +270,28 @@ func TestShareErrorsNeverEchoTheURL(t *testing.T) {
 	}
 	if got := redactShareURL("boom", types.StringNull()); got != "boom" {
 		t.Fatalf("message without url = %q", got)
+	}
+	shareID := strings.TrimPrefix(url.ValueString(), "md:_share/tenant/")
+	for name, tc := range map[string]struct {
+		message    string
+		configured types.String
+	}{
+		"different letter case":     {"IO Error: could not resolve MD:_SHARE/TENANT/0A9A026EC5A55946A9DE39851087ED81.", url},
+		"query encoded":             {"HTTP 404 for share=md%3A_share%2Ftenant%2F" + shareID, url},
+		"path encoded":              {"GET /shares/md:_share%2Ftenant%2F" + shareID + " failed", url},
+		"canonical name rewrite":    {"Catalog Error: Share 'md:_share/renamed/" + shareID + "' not found", url},
+		"share url in a name error": {"Catalog Error: Share 'tenant' resolves to md:_share/tenant/" + shareID, types.StringNull()},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := redactShareURL(tc.message, tc.configured)
+			if strings.Contains(strings.ToLower(got), shareID) || !strings.Contains(got, "<redacted share URL>") {
+				t.Fatalf("message = %q, want every share URL redacted", got)
+			}
+		})
+	}
+	// Punctuation after a URL stays in the message.
+	if got := redactShareURL("could not resolve md:_share/tenant/"+shareID+".", types.StringNull()); got != "could not resolve <redacted share URL>." {
+		t.Fatalf("message = %q", got)
 	}
 	if !shareNotFound(errors.New("Catalog Error: Share: 'tenant' not found.")) || shareNotFound(errors.New("permission denied")) || shareNotFound(nil) {
 		t.Fatal("shareNotFound misclassified an error")

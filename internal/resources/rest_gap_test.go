@@ -126,7 +126,8 @@ func TestServiceAccountDescriptionCannotChangeAfterCreate(t *testing.T) {
 		"both unset":        {prior: types.StringNull(), planned: types.StringNull()},
 		"changed":           {prior: types.StringValue("loader"), planned: types.StringValue("reader"), wantErr: true},
 		"changed with case": {prior: types.StringValue("loader"), planned: types.StringValue("reader"), username: "SVC", wantErr: true},
-		"removed":           {prior: types.StringValue("loader"), planned: types.StringNull(), wantErr: true},
+		// Removal only clears the state, so it is not an error.
+		"removed":           {prior: types.StringValue("loader"), planned: types.StringNull()},
 		"added after apply": {prior: types.StringNull(), planned: types.StringValue("loader"), wantErr: true},
 		"unknown":           {prior: types.StringValue("loader"), planned: types.StringUnknown()},
 		// A rename replaces the account, which then gets the new description.
@@ -149,7 +150,21 @@ func TestServiceAccountDescriptionCannotChangeAfterCreate(t *testing.T) {
 			if tc.wantErr && !diagnosticsContain(resp.Diagnostics, "cannot change") {
 				t.Fatalf("diagnostics = %v, want a create-only explanation", resp.Diagnostics)
 			}
+			if tc.wantErr && !diagnosticsContain(resp.Diagnostics, "`terraform state rm`") {
+				t.Fatalf("diagnostics = %v, want the state rm and import path", resp.Diagnostics)
+			}
 		})
+	}
+}
+
+func TestServiceAccountAdoptionDetailNamesOnlyImportedAccounts(t *testing.T) {
+	if got := serviceAccountAdoptionDetail([]byte(serviceAccountDescriptionImported)); !strings.Contains(got, "for this imported account") {
+		t.Fatalf("imported detail = %q, want it to name the imported account", got)
+	}
+	for _, marker := range [][]byte{nil, []byte(serviceAccountDescriptionRemoved)} {
+		if got := serviceAccountAdoptionDetail(marker); strings.Contains(got, "imported") {
+			t.Fatalf("detail for marker %q = %q, want no mention of import", marker, got)
+		}
 	}
 }
 

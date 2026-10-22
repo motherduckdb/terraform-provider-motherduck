@@ -23,6 +23,7 @@ var (
 	diveContractTitleArg       = regexp.MustCompile(`title := '((?:[^']|'')*)'`)
 	diveContractContentArg     = regexp.MustCompile(`content := '((?:[^']|'')*)'`)
 	diveContractDescriptionArg = regexp.MustCompile(`description := '((?:[^']|'')*)'`)
+	diveContractAPIVersionArg  = regexp.MustCompile(`api_version := (\d+)`)
 	diveContractMountArg       = regexp.MustCompile(`\{alias: '((?:[^']|'')*)', url: '((?:[^']|'')*)'\}`)
 )
 
@@ -36,7 +37,9 @@ type diveContractMount struct {
 
 // diveVersionContractSQL keeps one Dive with its current version. Like
 // MotherDuck, MD_CREATE_DIVE stores no version description, a content update
-// writes a new version, and an empty version description reads as null.
+// writes a new version, and an empty version description reads as null. A
+// write without api_version gets the server default, which is 1 at creation
+// and 2 for later content writes, as after MotherDuck raises its default.
 type diveVersionContractSQL struct {
 	*contractSQL
 
@@ -45,9 +48,15 @@ type diveVersionContractSQL struct {
 	title              string
 	content            string
 	version            int64
+	apiVersion         int64
 	versionDescription *string
 	mounts             []diveContractMount
 	contentWrites      []string
+	creates            int
+	// noContentUpdate hides md_update_dive_content from the session.
+	noContentUpdate bool
+	// failContentWrites fails that many MD_UPDATE_DIVE_CONTENT calls.
+	failContentWrites int
 }
 
 func (c *diveVersionContractSQL) Exists(_ context.Context, query string, args ...any) (bool, error) {
@@ -55,7 +64,9 @@ func (c *diveVersionContractSQL) Exists(_ context.Context, query string, args ..
 		return false, fmt.Errorf("unexpected function check %q", query)
 	}
 	switch fmt.Sprint(args[0]) {
-	case "md_create_dive", "md_get_dive", "md_delete_dive", "md_update_dive_content", "md_update_dive_metadata":
+	case "md_update_dive_content":
+		return !c.noContentUpdate, nil
+	case "md_create_dive", "md_get_dive", "md_delete_dive", "md_update_dive_metadata":
 		return true, nil
 	case "md_update_dive_status":
 		return false, nil
@@ -69,6 +80,18 @@ func diveContractString(pattern *regexp.Regexp, query string) (string, bool) {
 		return "", false
 	}
 	return strings.ReplaceAll(match[1], "''", "'"), true
+}
+
+// diveContractAPIVersion returns the api_version a write sends, or the server
+// default when it sends none.
+func diveContractAPIVersion(query string, serverDefault int64) int64 {
+	match := diveContractAPIVersionArg.FindStringSubmatch(query)
+	if match == nil {
+		return serverDefault
+	}
+	var version int64
+	_, _ = fmt.Sscan(match[1], &version)
+	return version
 }
 
 func diveContractMounts(query string) []diveContractMount {
@@ -93,9 +116,11 @@ func (c *diveVersionContractSQL) QueryRow(_ context.Context, query string, args 
 			return flightDependencyRow{err: errors.New("duplicate Dive create")}
 		}
 		c.exists = true
+		c.creates++
 		c.title, _ = diveContractString(diveContractTitleArg, query)
 		c.content, _ = diveContractString(diveContractContentArg, query)
 		c.version = 1
+		c.apiVersion = diveContractAPIVersion(query, 1)
 		c.versionDescription = nil
 		c.mounts = diveContractMounts(query)
 		return flightDependencyRow{values: []any{contractDiveID}}
@@ -114,7 +139,7 @@ func (c *diveVersionContractSQL) QueryRow(_ context.Context, query string, args 
 		return flightDependencyRow{values: []any{
 			c.title, nil, c.version, "2026-09-01T00:00:00Z", "2026-09-01T00:00:00Z",
 			"00000000-0000-4000-8000-0000000000aa", "owner", c.content, versionDescription,
-			fmt.Sprintf("2026-09-01T00:00:%02dZ", c.version), int64(1), string(mounts),
+			fmt.Sprintf("2026-09-01T00:00:%02dZ", c.version), c.apiVersion, string(mounts),
 		}}
 	}
 	return flightDependencyRow{err: fmt.Errorf("unexpected Dive query %q", query)}
@@ -125,9 +150,14 @@ func (c *diveVersionContractSQL) QueryRowsJSON(_ context.Context, query string, 
 	defer c.diveMu.Unlock()
 	switch {
 	case strings.Contains(query, "FROM MD_UPDATE_DIVE_CONTENT("):
+		if c.failContentWrites > 0 {
+			c.failContentWrites--
+			return "", errors.New("Invalid Error: MDExternalException: content service unavailable")
+		}
 		c.contentWrites = append(c.contentWrites, query)
 		c.content, _ = diveContractString(diveContractContentArg, query)
 		c.version++
+		c.apiVersion = diveContractAPIVersion(query, 2)
 		c.versionDescription = nil
 		if description, ok := diveContractString(diveContractDescriptionArg, query); ok && description != "" {
 			c.versionDescription = &description
@@ -190,6 +220,14 @@ resource "motherduck_dive" "test" {
 					return fmt.Errorf("content write %d = %q, want %q", i+1, got, want)
 				}
 			}
+			// Writes that keep the content and mounts send the prior API
+			// version, so the server default cannot migrate the Dive. The
+			// content change leaves the choice to MotherDuck.
+			for i, want := range []bool{true, true, false} {
+				if got := strings.Contains(client.contentWrites[i], "api_version := 1"); got != want {
+					return fmt.Errorf("content write %d sends api_version 1 = %t, want %t: %q", i+1, got, want, client.contentWrites[i])
+				}
+			}
 			return nil
 		},
 		Steps: []resource.TestStep{
@@ -215,7 +253,7 @@ resource "motherduck_dive" "test" {
 			{
 				Config:           config("Dive renamed", "v1", "second notes"),
 				ConfigPlanChecks: update,
-				Check:            resource.ComposeAggregateTestCheckFunc(attr("current_version", "3"), attr("version_description", "second notes"), attr("content", "v1")),
+				Check:            resource.ComposeAggregateTestCheckFunc(attr("current_version", "3"), attr("version_description", "second notes"), attr("content", "v1"), attr("api_version", "1")),
 			},
 			{
 				// Without a configured description, a content change writes a
@@ -224,10 +262,93 @@ resource "motherduck_dive" "test" {
 				ConfigPlanChecks: update,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					attr("current_version", "4"),
+					attr("api_version", "2"),
 					resource.TestCheckNoResourceAttr("motherduck_dive.test", "version_description"),
 					attr("required_resources.0.resource_type", "database"),
 				),
 			},
+		},
+	})
+}
+
+// TestContractDiveCreateKeepsDiveWhenVersionDescriptionWriteFails fails the
+// follow-up MD_UPDATE_DIVE_CONTENT that sets the version description after
+// creation. The Dive must stay in state untainted, so the next apply retries
+// the write in place instead of recreating the Dive with a new ID.
+func TestContractDiveCreateKeepsDiveWhenVersionDescriptionWriteFails(t *testing.T) {
+	client := &diveVersionContractSQL{contractSQL: newContractSQL(), failContentWrites: 1}
+	config := contractProviderConfig("http://127.0.0.1") + `
+resource "motherduck_dive" "test" {
+  title               = "Dive"
+  content             = "v1"
+  version_description = "first notes"
+}
+`
+	created := func(want int) resource.TestCheckFunc {
+		return func(*terraform.State) error {
+			client.diveMu.Lock()
+			defer client.diveMu.Unlock()
+			if client.creates != want {
+				return fmt.Errorf("Dive creates = %d, want %d", client.creates, want)
+			}
+			return nil
+		}
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(client),
+		Steps: []resource.TestStep{
+			{
+				// The refresh after apply finds no version description, so the
+				// plan is not empty.
+				Config:             config,
+				ExpectNonEmptyPlan: true,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("motherduck_dive.test", "id", contractDiveID),
+					resource.TestCheckResourceAttr("motherduck_dive.test", "current_version", "1"),
+					created(1),
+				),
+			},
+			{
+				Config: config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_dive.test", plancheck.ResourceActionUpdate)},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("motherduck_dive.test", "id", contractDiveID),
+					resource.TestCheckResourceAttr("motherduck_dive.test", "version_description", "first notes"),
+					resource.TestCheckResourceAttr("motherduck_dive.test", "current_version", "2"),
+					created(1),
+				),
+			},
+		},
+	})
+}
+
+// TestContractDiveCreateChecksContentUpdateBeforeCreating proves a missing
+// md_update_dive_content fails before MD_CREATE_DIVE when a version
+// description is configured, so no Dive is left behind.
+func TestContractDiveCreateChecksContentUpdateBeforeCreating(t *testing.T) {
+	client := &diveVersionContractSQL{contractSQL: newContractSQL(), noContentUpdate: true}
+	config := contractProviderConfig("http://127.0.0.1") + `
+resource "motherduck_dive" "test" {
+  title               = "Dive"
+  content             = "v1"
+  version_description = "first notes"
+}
+`
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(client),
+		CheckDestroy: func(*terraform.State) error {
+			client.diveMu.Lock()
+			defer client.diveMu.Unlock()
+			if client.creates != 0 {
+				return fmt.Errorf("Dive creates = %d, want none", client.creates)
+			}
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{Config: config, ExpectError: regexp.MustCompile("md_update_dive_content is not exposed")},
 		},
 	})
 }

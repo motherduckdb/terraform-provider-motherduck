@@ -2,12 +2,12 @@
 page_title: "motherduck_current_user Data Source - motherduck"
 subcategory: "Identity and compute"
 description: |-
-  Reads the MotherDuck user for the current SQL session. value is the session user from md_user(). The other attributes come from md_user_info() and are null when the session does not expose them.
+  Reads the MotherDuck user for the current SQL session. value is the session user from md_user(). The other attributes come from md_user_info() and are null when the session does not expose them. When md_user_info() fails, they are null and the read adds a warning instead of failing.
 ---
 
 # motherduck_current_user (Data Source)
 
-Reads the MotherDuck user for the current SQL session. `value` is the session user from `md_user()`. The other attributes come from `md_user_info()` and are null when the session does not expose them.
+Reads the MotherDuck user for the current SQL session. `value` is the session user from `md_user()`. The other attributes come from `md_user_info()` and are null when the session does not expose them. When `md_user_info()` fails, they are null and the read adds a warning instead of failing.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read

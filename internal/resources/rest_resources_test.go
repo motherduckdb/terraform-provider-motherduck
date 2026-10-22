@@ -2,9 +2,11 @@ package resources
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -98,17 +100,43 @@ func TestServiceAccountImportRejectsInvalidUsername(t *testing.T) {
 	}
 }
 
-// serviceAccountListing serves GET /v1/users with the given body and status
-// and records every request, so tests can assert that nothing else was called.
-func serviceAccountListing(t *testing.T, status int, body string) (*serviceAccountResource, *[]string) {
+// serviceAccountListingWithProbe serves GET /v1/users with the given body and
+// status and records every request, so tests can assert that nothing else was
+// called. probeStatus sets the GET /v1/users/{username}/instances answer. A
+// 404 means the user is gone, and a 200 simulates a live account that an
+// offset page shift hid from the listing. The listing honors the
+// is_service_account filter like MotherDuck.
+func serviceAccountListingWithProbe(t *testing.T, status int, body string, probeStatus int) (*serviceAccountResource, *[]string) {
 	t.Helper()
 	var calls []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls = append(calls, r.Method+" "+r.URL.Path)
 		switch r.Method + " " + r.URL.Path {
 		case "GET /v1/users":
-			w.WriteHeader(status)
-			_, _ = w.Write([]byte(body))
+			if status != http.StatusOK {
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(body))
+				return
+			}
+			var listing mdrest.ListUsersResponse
+			if err := json.Unmarshal([]byte(body), &listing); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if filter := r.URL.Query().Get("is_service_account"); filter != "" {
+				listing.Users = slices.DeleteFunc(listing.Users, func(u mdrest.User) bool {
+					return strconv.FormatBool(u.IsServiceAccount) != filter
+				})
+			}
+			_ = json.NewEncoder(w).Encode(listing)
+		case "GET /v1/users/svc_reader/instances", "GET /v1/users/SVC_Reader/instances":
+			if probeStatus == http.StatusNotFound {
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"code":"NOT_FOUND","message":"User not found"}`))
+				return
+			}
+			w.WriteHeader(probeStatus)
+			_, _ = w.Write([]byte(`{}`))
 		case "DELETE /v1/users/svc_reader", "DELETE /v1/users/SVC_Reader":
 			w.WriteHeader(http.StatusNoContent)
 		default:
@@ -149,27 +177,40 @@ const (
 // config probe succeeded for human users too, so a human could be imported
 // and later deleted with all of its data.
 func TestServiceAccountReadRequiresServiceAccount(t *testing.T) {
+	const (
+		serviceAccounts = "GET /v1/users"
+		bothListings    = "GET /v1/users,GET /v1/users"
+		withProbe       = "GET /v1/users,GET /v1/users,GET /v1/users/svc_reader/instances"
+	)
 	tests := map[string]struct {
 		username    string
 		status      int
 		body        string
+		probeStatus int
 		wantRemoved bool
 		wantErr     string
+		wantCalls   string
 	}{
-		"service account keeps state":         {username: "svc_reader", status: http.StatusOK, body: listedServiceAccount},
-		"case-insensitive match keeps state":  {username: "SVC_Reader", status: http.StatusOK, body: listedServiceAccount},
-		"human user errors and keeps state":   {username: "svc_reader", status: http.StatusOK, body: listedHuman, wantErr: "not a service account"},
-		"absent account drops state":          {username: "svc_reader", status: http.StatusOK, body: listedNobody, wantRemoved: true},
-		"listing failure errors, keeps state": {username: "svc_reader", status: http.StatusForbidden, body: `{"code":"FORBIDDEN","message":"denied"}`, wantErr: "denied"},
+		"service account keeps state":         {username: "svc_reader", status: http.StatusOK, body: listedServiceAccount, wantCalls: serviceAccounts},
+		"case-insensitive match keeps state":  {username: "SVC_Reader", status: http.StatusOK, body: listedServiceAccount, wantCalls: serviceAccounts},
+		"human user errors and keeps state":   {username: "svc_reader", status: http.StatusOK, body: listedHuman, wantErr: "not a service account", wantCalls: bothListings},
+		"absent account drops state":          {username: "svc_reader", status: http.StatusOK, body: listedNobody, wantRemoved: true, wantCalls: withProbe},
+		"page shift errors and keeps state":   {username: "svc_reader", status: http.StatusOK, body: listedNobody, probeStatus: http.StatusOK, wantErr: "could not confirm", wantCalls: withProbe},
+		"probe failure errors, keeps state":   {username: "svc_reader", status: http.StatusOK, body: listedNobody, probeStatus: http.StatusForbidden, wantErr: "403", wantCalls: withProbe},
+		"listing failure errors, keeps state": {username: "svc_reader", status: http.StatusForbidden, body: `{"code":"FORBIDDEN","message":"denied"}`, wantErr: "denied", wantCalls: serviceAccounts},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			res, calls := serviceAccountListing(t, tc.status, tc.body)
+			probeStatus := tc.probeStatus
+			if probeStatus == 0 {
+				probeStatus = http.StatusNotFound
+			}
+			res, calls := serviceAccountListingWithProbe(t, tc.status, tc.body, probeStatus)
 			prior := serviceAccountState(t, tc.username)
 			resp := resource.ReadResponse{State: prior}
 			res.Read(context.Background(), resource.ReadRequest{State: prior}, &resp)
-			if got := strings.Join(*calls, ","); got != "GET /v1/users" {
-				t.Fatalf("requests = %s, want only the user listing", got)
+			if got := strings.Join(*calls, ","); got != tc.wantCalls {
+				t.Fatalf("requests = %s, want %s", got, tc.wantCalls)
 			}
 			if tc.wantErr == "" && resp.Diagnostics.HasError() {
 				t.Fatalf("read diagnostics: %v", resp.Diagnostics)
@@ -186,21 +227,28 @@ func TestServiceAccountReadRequiresServiceAccount(t *testing.T) {
 
 func TestServiceAccountDeleteRefusesHumanUsers(t *testing.T) {
 	tests := map[string]struct {
-		username   string
-		status     int
-		body       string
-		wantDelete bool
-		wantErr    string
+		username    string
+		status      int
+		body        string
+		probeStatus int
+		wantDelete  bool
+		wantErr     string
 	}{
 		"service account is deleted":       {username: "svc_reader", status: http.StatusOK, body: listedServiceAccount, wantDelete: true},
 		"case-insensitive match deleted":   {username: "SVC_Reader", status: http.StatusOK, body: listedServiceAccount, wantDelete: true},
 		"human user is never deleted":      {username: "svc_reader", status: http.StatusOK, body: listedHuman, wantErr: "not a service account"},
 		"absent account needs no delete":   {username: "svc_reader", status: http.StatusOK, body: listedNobody},
+		"page shift is not deleted":        {username: "svc_reader", status: http.StatusOK, body: listedNobody, probeStatus: http.StatusOK, wantErr: "could not confirm"},
+		"failed probe is not deleted":      {username: "svc_reader", status: http.StatusOK, body: listedNobody, probeStatus: http.StatusForbidden, wantErr: "verify"},
 		"unverifiable account not deleted": {username: "svc_reader", status: http.StatusBadGateway, body: "bad gateway", wantErr: "verify"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			res, calls := serviceAccountListing(t, tc.status, tc.body)
+			probeStatus := tc.probeStatus
+			if probeStatus == 0 {
+				probeStatus = http.StatusNotFound
+			}
+			res, calls := serviceAccountListingWithProbe(t, tc.status, tc.body, probeStatus)
 			prior := serviceAccountState(t, tc.username)
 			resp := resource.DeleteResponse{State: prior}
 			res.Delete(context.Background(), resource.DeleteRequest{State: prior}, &resp)

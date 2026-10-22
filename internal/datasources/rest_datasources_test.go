@@ -186,18 +186,17 @@ func TestActiveAccountsDataSourceReadUsesRESTClient(t *testing.T) {
 	}
 }
 
-// TestActiveAccountsTypedListIsUsable keeps the typed inventory out of the
-// sensitive marking, so it can drive expressions and outputs. The users data
-// source already exposes the same usernames without it.
-func TestActiveAccountsTypedListIsUsable(t *testing.T) {
+// TestActiveAccountsTypedListIsSensitive marks the typed inventory sensitive
+// like accounts_json, because both reveal account and Duckling metadata.
+func TestActiveAccountsTypedListIsSensitive(t *testing.T) {
 	var resp datasource.SchemaResponse
 	NewActiveAccountsDataSource().Schema(context.Background(), datasource.SchemaRequest{}, &resp)
 	attr, ok := resp.Schema.Attributes["accounts"].(schema.ListNestedAttribute)
 	if !ok {
 		t.Fatalf("accounts attribute = %T, want schema.ListNestedAttribute", resp.Schema.Attributes["accounts"])
 	}
-	if !attr.Computed || attr.Sensitive {
-		t.Fatalf("accounts Computed=%t Sensitive=%t, want computed and not sensitive", attr.Computed, attr.Sensitive)
+	if !attr.Computed || !attr.Sensitive {
+		t.Fatalf("accounts Computed=%t Sensitive=%t, want computed and sensitive", attr.Computed, attr.Sensitive)
 	}
 }
 

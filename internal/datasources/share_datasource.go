@@ -5,6 +5,8 @@ import (
 	stdsql "database/sql"
 	"errors"
 	"fmt"
+	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -74,7 +76,7 @@ func (d *shareDataSource) Schema(ctx context.Context, req datasource.SchemaReque
 				Computed:            true,
 				Sensitive:           true,
 				Validators:          nonBlank,
-				MarkdownDescription: "Share URL. Exactly one of `name` or `url` must be set. Use the URL to describe a share received from another account. Sensitive because unrestricted share URLs can grant access.",
+				MarkdownDescription: "Share URL. Exactly one of `name` or `url` must be set. Use the URL to describe a share received from another account. A configured URL keeps its configured spelling. When `name` is set, this is the URL MotherDuck reports. Sensitive because unrestricted share URLs can grant access.",
 			},
 			"source_database": schema.StringAttribute{
 				Computed:            true,
@@ -149,7 +151,13 @@ func (d *shareDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		resp.Diagnostics.AddError("Unable to read MotherDuck share", redactShareURL(err.Error(), config.URL))
 		return
 	}
+	configuredURL := config.URL
 	setShareModel(&config, share)
+	if !configuredURL.IsNull() {
+		// MotherDuck reports a canonical spelling of the URL. Keep the
+		// configured value so references to it stay stable.
+		config.URL = configuredURL
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &config)...)
 }
 
@@ -184,13 +192,25 @@ func setShareModel(model *shareModel, share shareDescription) {
 	model.CreatedTS = dataSourceNullString(share.CreatedTS)
 }
 
-// redactShareURL keeps a configured share URL out of diagnostics, because
-// MotherDuck errors echo the lookup value and the URL can grant access.
-func redactShareURL(message string, url types.String) string {
-	if url.IsNull() || url.IsUnknown() || url.ValueString() == "" {
-		return message
+const redactedShareURL = "<redacted share URL>"
+
+// shareURLPattern matches any share URL token, plain or URL-encoded, so a
+// share URL in an error is redacted even when MotherDuck rewrites its case or
+// name segment. Trailing punctuation is left in the message.
+var shareURLPattern = regexp.MustCompile(`(?i)md(?::|%3a)_share(?:/|%2f)[^\s'"]*[^\s'".,;:)\]]`)
+
+// redactShareURL keeps share URLs out of diagnostics, because MotherDuck
+// errors echo the lookup value and the URL can grant access. It removes the
+// configured URL in any letter case and in its URL-encoded forms, and then any
+// remaining share URL token.
+func redactShareURL(message string, configured types.String) string {
+	if !configured.IsNull() && !configured.IsUnknown() && configured.ValueString() != "" {
+		value := configured.ValueString()
+		for _, form := range []string{value, url.QueryEscape(value), url.PathEscape(value)} {
+			message = regexp.MustCompile(`(?i)`+regexp.QuoteMeta(form)).ReplaceAllLiteralString(message, redactedShareURL)
+		}
 	}
-	return strings.ReplaceAll(message, url.ValueString(), "<redacted share URL>")
+	return shareURLPattern.ReplaceAllLiteralString(message, redactedShareURL)
 }
 
 // shareNotFound matches the catalog error MotherDuck returns for a share name

@@ -19,8 +19,12 @@ compute must be isolated.
 - `data_inlining_row_limit` sets how many rows an insert can keep inline in the
   DuckLake catalog before MotherDuck writes a data file. MotherDuck accepts it
   only at creation and does not report it back, so Terraform keeps the
-  configured value. Changing it replaces the database. Removing it from the
-  configuration keeps the database.
+  configured value. Changing a recorded value replaces the database. Removing
+  it from the configuration keeps the database.
+- Adding `data_inlining_row_limit` to a database whose state has no recorded
+  value, such as an imported database or one created by an earlier provider
+  release, does not replace it. Terraform records the value in place without
+  running SQL and warns that MotherDuck cannot verify it.
 - Select `database_type = "iceberg"` to register an existing Iceberg REST
   catalog as a MotherDuck database. See [Iceberg catalogs](#iceberg-catalogs).
 - Use `transient = true` for a transient database, not a database type named
@@ -34,8 +38,9 @@ compute must be isolated.
   Reference its name from downstream resources instead.
 
 Import uses the database name. Public catalogs do not reconstruct DuckLake
-`data_path`, `encrypted`, or `data_inlining_row_limit`. Omit those create-only
-fields after import unless replacement is intentional.
+`data_path`, `encrypted`, or `data_inlining_row_limit`. Omit `data_path` and
+`encrypted` after import unless replacement is intentional. A
+`data_inlining_row_limit` added after import is recorded without replacement.
 
 ## Iceberg catalogs
 
@@ -124,7 +129,7 @@ resource "motherduck_database" "lakehouse" {
 
 ### Optional
 
-- `data_inlining_row_limit` (Number) DuckLake-only. Maximum number of rows an insert can keep inline in the DuckLake catalog instead of writing a data file. Emits the `DATA_INLINING_ROW_LIMIT` database option at creation. MotherDuck accepts this option only when creating a DuckLake database and does not report it back, so Terraform keeps the configured value. Changing a configured value replaces the database. Removing it keeps the database.
+- `data_inlining_row_limit` (Number) DuckLake-only. Maximum number of rows an insert can keep inline in the DuckLake catalog instead of writing a data file. Emits the `DATA_INLINING_ROW_LIMIT` database option at creation. MotherDuck accepts this option only when creating a DuckLake database and does not report it back, so Terraform keeps the configured value. Changing a recorded value replaces the database. Adding it to a database whose state has no recorded value, such as an imported database or one created by an earlier provider release, records the value in place without SQL and does not verify it. Removing it keeps the database.
 - `data_path` (String) DuckLake-only non-empty data path used when creating the database.
 - `database_type` (String) `default`, `ducklake`, or `iceberg`. Use `transient = true` for transient databases. An `iceberg` database registers an existing Iceberg REST catalog and needs the `iceberg` block.
 - `encrypted` (Boolean) DuckLake-only. When true, emits the `ENCRYPTED` database option at creation. When false, omits the option.

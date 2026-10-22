@@ -40,9 +40,13 @@ Each `required_resources` URL must start with `md:`. Mount a database as
 
 `version_description` describes the Dive version that Terraform writes.
 MotherDuck stores it on the version, so changing it alone writes a new version
-with the same content and mounts. `MD_CREATE_DIVE` cannot set it, so setting it
-at creation writes version 2 right after the Dive is created. When it is
-omitted, a content change writes a version without a description.
+with the same content and mounts, and sends the current `api_version` unless
+`api_version` is configured, so MotherDuck does not move the Dive to its
+default API version. `MD_CREATE_DIVE` cannot set it, so setting it at creation
+writes version 2 right after the Dive is created. If that second write fails,
+the apply keeps the new Dive with a warning instead of tainting it, and the
+next plan retries the write in place. When it is omitted, a content change
+writes a version without a description.
 `version_created_at` and `owner_id` are read from `MD_GET_DIVE`.
 
 MotherDuck ignores an empty `description` in a metadata update, so an existing
@@ -100,7 +104,7 @@ resource "motherduck_dive" "revenue" {
 
 ### Optional
 
-- `api_version` (Number) Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default. Refresh and import read the current version's API version from `MD_GET_DIVE`.
+- `api_version` (Number) Dive API version passed to MotherDuck when creating or updating content. Omit this to use the MotherDuck default when content or mounts change. A write that changes only `version_description` sends the current API version. Refresh and import read the current version's API version from `MD_GET_DIVE`.
 - `description` (String) Optional Dive description. MotherDuck ignores an empty description in a metadata update, so an existing description cannot be cleared in place. Setting an existing description to an empty string or removing it is rejected. Replace the Dive to remove its description.
 - `required_resources` (Attributes List, Sensitive) Optional databases or shares to mount into the Dive. Refresh and import read the current version's mounted resources from `MD_GET_DIVE`, so a mount changed outside Terraform plans an update. MotherDuck stores a share URL under the share's name. A configured URL that names the same share token keeps its spelling in state. (see [below for nested schema](#nestedatt--required_resources))
 - `status` (String) Dive governance status. New Dives default to `draft`. Owners can set `draft`, `ready`, or `archived`, while `endorsed` requires organization-admin permission.

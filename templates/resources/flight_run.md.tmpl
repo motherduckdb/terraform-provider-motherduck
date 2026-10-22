@@ -28,9 +28,11 @@ MotherDuck then reports the Flight and its runs as not found to that principal.
 Refresh cannot tell that apart from a deleted Flight, so the provider keeps the
 run in state with a warning instead of removing it and starting a new run on
 the next apply. Its status and timing stay at the values seen at creation.
-`wait_for_status` times out because the run is never visible, and
-`cancel_on_destroy` cannot cancel the run. If the Flight was deleted, remove
-the run resource from the configuration or from state.
+`wait_for_status` stops waiting with a warning as soon as the Flight is not
+visible and keeps the run in state, so the apply succeeds without starting a
+second run. `cancel_on_destroy` cannot cancel the run, so destroy removes it
+from state with a warning. If the Flight was deleted, remove the run resource
+from the configuration or from state.
 
 ## Example Usage
 

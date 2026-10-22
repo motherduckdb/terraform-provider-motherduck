@@ -37,14 +37,20 @@ func (c *flightRunContractSQL) QueryRow(_ context.Context, query string, _ ...an
 	return flightRunContractRow{}
 }
 
-type flightRunContractRow struct{}
+// flightRunContractRow is the run MD_RUN_FLIGHT returns. An empty status
+// reads as SUCCEEDED.
+type flightRunContractRow struct{ status string }
 
-func (flightRunContractRow) Scan(dest ...any) error {
+func (r flightRunContractRow) Scan(dest ...any) error {
 	if len(dest) != 11 {
 		return fmt.Errorf("unexpected scan width %d", len(dest))
 	}
+	status := r.status
+	if status == "" {
+		status = "SUCCEEDED"
+	}
 	*dest[0].(*string) = "11111111-1111-4111-8111-111111111112"
-	*dest[1].(*string) = "SUCCEEDED"
+	*dest[1].(*string) = status
 	*dest[2].(*int64) = 1
 	*dest[3].(*int64) = 1
 	*dest[4].(*string) = "2026-09-06T00:00:00Z"

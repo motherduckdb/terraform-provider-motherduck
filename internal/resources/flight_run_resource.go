@@ -234,10 +234,31 @@ func (r *flightRunResource) waitForFlightRun(ctx context.Context, model *flightR
 			diags.AddError("Interrupted while waiting for MotherDuck Flight run", err.Error())
 			return
 		}
-		if found := r.readFlightRunStatus(ctx, model, lookup, diags); !found && !diags.HasError() {
+		found := r.readFlightRunStatus(ctx, model, lookup, diags)
+		if diags.HasError() {
+			return
+		}
+		if found {
 			continue
 		}
+		// A run that was just started may not be listed yet, so keep polling
+		// while its Flight is visible. A principal holding only a Flight run
+		// grant cannot see the Flight or its runs, so waiting would only time
+		// out, fail the apply after the run was saved, and taint it, which
+		// starts a second production run on the next apply.
+		client := r.sql(ctx, diags)
+		if client == nil {
+			return
+		}
+		exists, known := r.flightExists(ctx, client, model.FlightID.ValueString(), diags)
 		if diags.HasError() {
+			return
+		}
+		if known && !exists {
+			diags.AddWarning(
+				"MotherDuck Flight run status not visible",
+				fmt.Sprintf("Flight %s was not found for the current principal, so Terraform stopped waiting for Flight run %d to reach %q and kept the run in state with its last known status %q. A Flight run grant lets a principal start a Flight it cannot read. To wait for the run, give the principal access to the Flight or run Terraform as the Flight owner.", model.FlightID.ValueString(), model.RunNumber.ValueInt64(), wantStatus, model.Status.ValueString()),
+			)
 			return
 		}
 	}
@@ -626,7 +647,10 @@ func (r *flightRunResource) Delete(ctx context.Context, req resource.DeleteReque
 	err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) })
 	switch {
 	case err == nil || strings.Contains(strings.ToLower(err.Error()), "terminal"):
-	case isNotFound(err):
+	case isNotFound(err) || flightRunMissing(err):
+		// Job service reports a Flight the principal cannot see as
+		// `Flight "<id>" not found`, which the Duckling raises as a catalog
+		// error. flightRunMissing also accepts the text from other error types.
 		// A principal holding only a Flight run grant cannot see the Flight,
 		// so MotherDuck reports it as not found and does not cancel the run.
 		resp.Diagnostics.AddWarning(

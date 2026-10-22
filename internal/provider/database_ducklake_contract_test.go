@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	ducklakeContractCreate25 = `CREATE DATABASE "contract_database" (TYPE DUCKLAKE, DATA_INLINING_ROW_LIMIT 25)`
-	ducklakeContractCreate50 = `CREATE DATABASE "contract_database" (TYPE DUCKLAKE, DATA_INLINING_ROW_LIMIT 50)`
-	ducklakeContractDrop     = `DROP DATABASE IF EXISTS "contract_database"`
+	ducklakeContractCreateUnset = `CREATE DATABASE "contract_database" (TYPE DUCKLAKE)`
+	ducklakeContractCreate25    = `CREATE DATABASE "contract_database" (TYPE DUCKLAKE, DATA_INLINING_ROW_LIMIT 25)`
+	ducklakeContractCreate50    = `CREATE DATABASE "contract_database" (TYPE DUCKLAKE, DATA_INLINING_ROW_LIMIT 50)`
+	ducklakeContractDrop        = `DROP DATABASE IF EXISTS "contract_database"`
 )
 
 // databaseDuckLakeSQL records CREATE DATABASE statements. MotherDuck does not
@@ -34,7 +35,7 @@ func (c *databaseDuckLakeSQL) Exec(ctx context.Context, query string, args ...an
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	switch query {
-	case ducklakeContractCreate25, ducklakeContractCreate50:
+	case ducklakeContractCreateUnset, ducklakeContractCreate25, ducklakeContractCreate50:
 		if c.exists {
 			return fmt.Errorf("duplicate database create")
 		}
@@ -114,6 +115,87 @@ resource "motherduck_database" "test" {
 					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
 				Check: resource.TestCheckNoResourceAttr("motherduck_database.test", "data_inlining_row_limit"),
+			},
+		},
+	})
+}
+
+// TestContractDuckLakeDataInliningRowLimitAddedToExistingDatabase covers a
+// database whose state has no recorded limit, as after import or an upgrade
+// from a release without the attribute. Adding the limit must record it in
+// place without dropping the database and its data.
+func TestContractDuckLakeDataInliningRowLimitAddedToExistingDatabase(t *testing.T) {
+	client := &databaseDuckLakeSQL{contractSQL: newContractSQL()}
+	unset := contractProviderConfig("http://127.0.0.1") + `
+resource "motherduck_database" "test" {
+  name          = "contract_database"
+  database_type = "ducklake"
+}
+`
+	added := strings.Replace(unset, `database_type = "ducklake"`, "database_type = \"ducklake\"\n  data_inlining_row_limit = 25", 1)
+	changed := strings.Replace(added, "= 25", "= 50", 1)
+	drops := func(want int) resource.TestCheckFunc {
+		return func(*terraform.State) error {
+			if got := client.countCalls("exec " + ducklakeContractDrop); got != want {
+				return fmt.Errorf("database drops = %d, want %d", got, want)
+			}
+			return nil
+		}
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(client),
+		CheckDestroy: func(*terraform.State) error {
+			client.mu.Lock()
+			defer client.mu.Unlock()
+			want := []string{ducklakeContractCreateUnset, ducklakeContractCreate50}
+			if client.exists || strings.Join(client.creates, "\n") != strings.Join(want, "\n") {
+				return fmt.Errorf("unexpected lifecycle: exists=%t creates=%q, want %q", client.exists, client.creates, want)
+			}
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: unset,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("motherduck_database.test", "data_inlining_row_limit"),
+					drops(0),
+				),
+			},
+			{
+				// Null state to a configured value records it in place.
+				Config: added,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_database.test", plancheck.ResourceActionUpdate)},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("motherduck_database.test", "data_inlining_row_limit", "25"),
+					drops(0),
+				),
+			},
+			{
+				// A recorded value changed to a different value replaces.
+				Config: changed,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_database.test", plancheck.ResourceActionReplace)},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("motherduck_database.test", "data_inlining_row_limit", "50"),
+					drops(1),
+				),
+			},
+			{
+				// A recorded value removed from the configuration keeps the database.
+				Config: unset,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_database.test", plancheck.ResourceActionUpdate)},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("motherduck_database.test", "data_inlining_row_limit"),
+					drops(1),
+				),
 			},
 		},
 	})
