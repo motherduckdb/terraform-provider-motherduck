@@ -380,6 +380,37 @@ func TestUsersDataSourceReadSortsUsersAndRoles(t *testing.T) {
 	}
 }
 
+// TestUserTokensUsernameCountsUTF16Units applies the 255 UTF-16 code unit
+// limit the REST resources use. An emoji counts as one character but two
+// UTF-16 code units, so 128 of them pass a character count but not MotherDuck.
+func TestUserTokensUsernameCountsUTF16Units(t *testing.T) {
+	ctx := context.Background()
+	var resp datasource.SchemaResponse
+	NewUserTokensDataSource().Schema(ctx, datasource.SchemaRequest{}, &resp)
+	attr, ok := resp.Schema.Attributes["username"].(schema.StringAttribute)
+	if !ok {
+		t.Fatalf("username = %T, want schema.StringAttribute", resp.Schema.Attributes["username"])
+	}
+	for name, tc := range map[string]struct {
+		value   string
+		wantErr bool
+	}{
+		"255 ASCII characters":      {value: strings.Repeat("a", 255)},
+		"127 emoji, 254 code units": {value: strings.Repeat("🦆", 127)},
+		"128 emoji, 256 code units": {value: strings.Repeat("🦆", 128), wantErr: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var diags validator.StringResponse
+			for _, v := range attr.Validators {
+				v.ValidateString(ctx, validator.StringRequest{Path: path.Root("username"), ConfigValue: types.StringValue(tc.value)}, &diags)
+			}
+			if got := diags.Diagnostics.HasError(); got != tc.wantErr {
+				t.Fatalf("username validation error = %t, want %t: %v", got, tc.wantErr, diags.Diagnostics)
+			}
+		})
+	}
+}
+
 func TestDiveEmbedSessionDataSourceIsDeprecated(t *testing.T) {
 	var resp datasource.SchemaResponse
 	NewDiveEmbedSessionDataSource().Schema(context.Background(), datasource.SchemaRequest{}, &resp)

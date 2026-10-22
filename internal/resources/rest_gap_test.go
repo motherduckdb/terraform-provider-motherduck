@@ -238,6 +238,83 @@ func TestAccessTokenNameCountsUTF16Units(t *testing.T) {
 	}
 }
 
+// TestServiceAccountLegacyUsernameOnlyForExistingAccounts lets a legacy
+// username such as mdw-writer@motherduck-com be imported and managed, and
+// refuses it at plan time only when Terraform would create the account.
+func TestServiceAccountLegacyUsernameOnlyForExistingAccounts(t *testing.T) {
+	ctx := context.Background()
+	const legacy = "mdw-writer@motherduck-com"
+
+	var schemaResp resource.SchemaResponse
+	NewServiceAccountResource().Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+	nullState := tftypes.NewValue(schemaResp.Schema.Type().TerraformType(ctx), nil)
+	imported := resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: nullState}}
+	NewServiceAccountResource().(resource.ResourceWithImportState).ImportState(ctx, resource.ImportStateRequest{ID: legacy}, &imported)
+	// Outside the provider server the private state is not initialized, so
+	// only the import ID check is asserted here.
+	if diagnosticsContain(imported.Diagnostics, "Invalid import ID") {
+		t.Fatalf("import of a legacy username failed: %v", imported.Diagnostics)
+	}
+	var importedUsername types.String
+	imported.State.GetAttribute(ctx, path.Root("username"), &importedUsername)
+	if importedUsername.ValueString() != legacy {
+		t.Fatalf("imported username = %s, want %s", importedUsername, legacy)
+	}
+
+	account := func(username string) serviceAccountModel {
+		return serviceAccountModel{ID: types.StringValue(username), Username: types.StringValue(username), Description: types.StringNull()}
+	}
+	for name, tc := range map[string]struct {
+		prior   string
+		planned string
+		wantErr bool
+	}{
+		"create legacy":          {planned: legacy, wantErr: true},
+		"create valid":           {planned: "svc_writer"},
+		"existing legacy":        {prior: legacy, planned: legacy},
+		"legacy case change":     {prior: legacy, planned: strings.ToUpper(legacy)},
+		"rename to legacy":       {prior: "svc_writer", planned: legacy, wantErr: true},
+		"rename legacy to valid": {prior: legacy, planned: "svc_writer"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			state, plan := serviceAccountPlanPair(t, account(tc.prior), account(tc.planned))
+			if tc.prior == "" {
+				state.Raw = nullState
+			}
+			resp := resource.ModifyPlanResponse{Plan: plan}
+			(&serviceAccountResource{}).ModifyPlan(ctx, resource.ModifyPlanRequest{State: state, Plan: plan}, &resp)
+			if resp.Diagnostics.HasError() != tc.wantErr {
+				t.Fatalf("diagnostics = %v, want error %t", resp.Diagnostics, tc.wantErr)
+			}
+			if tc.wantErr && !diagnosticsContain(resp.Diagnostics, "terraform import") {
+				t.Fatalf("diagnostics = %v, want the import path for an existing account", resp.Diagnostics)
+			}
+		})
+	}
+}
+
+// TestAccessTokenImportLowercasesTokenID stores an upper-case UUID import ID
+// in the lower-case form MotherDuck reports, so Read finds the token.
+func TestAccessTokenImportLowercasesTokenID(t *testing.T) {
+	ctx := context.Background()
+	var schemaResp resource.SchemaResponse
+	NewAccessTokenResource().Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+	resp := resource.ImportStateResponse{State: tfsdk.State{
+		Schema: schemaResp.Schema,
+		Raw:    tftypes.NewValue(schemaResp.Schema.Type().TerraformType(ctx), nil),
+	}}
+	NewAccessTokenResource().(resource.ResourceWithImportState).ImportState(ctx, resource.ImportStateRequest{ID: "SVC_Reader/123E4567-E89B-42D3-A456-426614174000"}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+	var id, username types.String
+	resp.State.GetAttribute(ctx, path.Root("id"), &id)
+	resp.State.GetAttribute(ctx, path.Root("username"), &username)
+	if id.ValueString() != "123e4567-e89b-42d3-a456-426614174000" || username.ValueString() != "SVC_Reader" {
+		t.Fatalf("imported id=%s username=%s, want a lower-case ID and the username as written", id, username)
+	}
+}
+
 func TestDucklingConfigErrorDetailExplainsTierLimits(t *testing.T) {
 	tierError := func(tier string) error {
 		return &mdrest.APIError{StatusCode: 400, Code: "BAD_REQUEST", Message: "Invalid config for tier " + tier + ": [object Object]"}

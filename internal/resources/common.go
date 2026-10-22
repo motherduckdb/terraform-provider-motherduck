@@ -653,20 +653,38 @@ func (serviceAccountUsernameValidator) ValidateString(ctx context.Context, req v
 	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
+	// Configuration names existing accounts too, so it accepts legacy
+	// characters. ModifyPlan applies the creation rule to a new account.
 	value := req.ConfigValue.ValueString()
-	detail, ok := validateServiceAccountUsernameValue(value)
+	detail, ok := validateExistingServiceAccountUsernameValue(value)
 	if !ok {
 		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck service account username", detail)
 	}
 }
 
-const serviceAccountUsernameRule = "must be 3-255 UTF-16 code units, start with a letter, and contain only letters, ASCII digits, and underscores"
+const serviceAccountUsernameRule = "must be 3-255 UTF-16 code units, start with a letter, and contain only letters, ASCII digits, and underscores, or also hyphens, at signs, and periods for an existing account with a legacy username"
 
-// validateServiceAccountUsernameValue applies the MotherDuck username rule.
-// The service checks /^\p{L}/ and /^[\p{L}\d_]*$/ with JavaScript Unicode
-// regular expressions, where \d matches only ASCII digits, and measures the
-// 3-255 length in UTF-16 code units.
+// legacyUsernameCharacters appear in usernames MotherDuck created before it
+// restricted new usernames to letters, ASCII digits, and underscores, such as
+// the service account mdw-writer@motherduck-com.
+const legacyUsernameCharacters = "-@."
+
+// validateServiceAccountUsernameValue applies the MotherDuck rule for a new
+// username. The service checks /^\p{L}/ and /^[\p{L}\d_]*$/ with JavaScript
+// Unicode regular expressions, where \d matches only ASCII digits, and
+// measures the 3-255 length in UTF-16 code units.
 func validateServiceAccountUsernameValue(value string) (string, bool) {
+	return validateUsernameValue(value, false)
+}
+
+// validateExistingServiceAccountUsernameValue also accepts the legacy
+// characters an existing account can carry, so the account can be imported
+// and managed. MotherDuck rejects them when it creates an account.
+func validateExistingServiceAccountUsernameValue(value string) (string, bool) {
+	return validateUsernameValue(value, true)
+}
+
+func validateUsernameValue(value string, allowLegacy bool) (string, bool) {
 	if length := len(utf16.Encode([]rune(value))); value != strings.TrimSpace(value) || length < 3 || length > 255 {
 		return "Username must be between 3 and 255 UTF-16 code units, start with a letter, and contain only letters, ASCII digits, and underscores.", false
 	}
@@ -677,9 +695,13 @@ func validateServiceAccountUsernameValue(value string) (string, bool) {
 			}
 			continue
 		}
-		if !unicode.IsLetter(r) && !isASCIIDigit(r) && r != '_' {
-			return "Username must contain only letters, ASCII digits, and underscores.", false
+		if unicode.IsLetter(r) || isASCIIDigit(r) || r == '_' || (allowLegacy && strings.ContainsRune(legacyUsernameCharacters, r)) {
+			continue
 		}
+		if allowLegacy {
+			return "Username must contain only letters, ASCII digits, and underscores. An existing service account with a legacy username may also contain hyphens, at signs, and periods.", false
+		}
+		return "Username must contain only letters, ASCII digits, and underscores.", false
 	}
 	return "", true
 }

@@ -19,6 +19,11 @@ MotherDuck compares usernames case-insensitively, so changing only the letter
 case updates the resource in place without an API call. Any other rename
 replaces the account.
 
+Some older service accounts have legacy usernames that also contain hyphens,
+at signs, or periods, such as `mdw-writer@motherduck-com`. Import such an
+account by its username to manage it. MotherDuck no longer creates accounts
+with these characters, so a plan that would create or rename to one fails.
+
 `description` is sent only when MotherDuck creates the account. MotherDuck has
 no API to read or change it, so the provider fails the plan when the configured
 description changes instead of replacing the account and deleting its data. A
@@ -88,7 +93,7 @@ resource "motherduck_access_token" "app" {
 
 ### Required
 
-- `username` (String) Unique service account username. Must be 3-255 UTF-16 code units, start with a letter, and contain only letters, ASCII digits, and underscores. MotherDuck compares usernames case-insensitively, so a change in letter case updates the resource in place. Any other change replaces the account.
+- `username` (String) Unique service account username. Must be 3-255 UTF-16 code units, start with a letter, and contain only letters, ASCII digits, and underscores. An existing service account with a legacy username that also contains `-`, `@`, or `.`, such as `mdw-writer@motherduck-com`, can be imported and managed, but MotherDuck does not create new accounts with these characters, so a plan that would create one fails. MotherDuck compares usernames case-insensitively, so a change in letter case updates the resource in place. Any other change replaces the account.
 
 ### Optional
 

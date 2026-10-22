@@ -20,17 +20,27 @@ import (
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
 )
 
-// ducklingContractREST stores one user's Duckling configuration. Like the
-// live service it fills in a default cooldown for a non-Pulse instance whose
-// write omits one.
+// ducklingContractREST stores one user's Duckling configuration exactly as
+// written, like the live service (entity_service/src/lib/ducklings.ts). A user
+// with no stored configuration reads the organization default. Reads fill in
+// a default cooldown for a non-Pulse size that has none stored. A plan limit
+// lowers the reported sizes but keeps the stored cooldowns, as applyLimits
+// does, and a write that exceeds the limit or sets a Pulse cooldown fails.
 type ducklingContractREST struct {
-	mu     sync.Mutex
-	config *mdrest.DucklingConfig
-	puts   int
-	server *httptest.Server
+	mu         sync.Mutex
+	config     *mdrest.DucklingConfig
+	pulseLimit bool
+	puts       int
+	lastPut    *mdrest.DucklingConfig
+	server     *httptest.Server
 }
 
 const ducklingContractDefaultCooldown = int64(300)
+
+var ducklingContractOrgDefault = mdrest.DucklingConfig{
+	ReadWrite:   mdrest.DucklingReadWriteConfig{InstanceSize: "standard"},
+	ReadScaling: mdrest.DucklingReadScalingConfig{InstanceSize: "standard", FlockSize: 4},
+}
 
 func newDucklingContractREST(t *testing.T) *ducklingContractREST {
 	t.Helper()
@@ -53,11 +63,15 @@ func (f *ducklingContractREST) serveHTTP(w http.ResponseWriter, req *http.Reques
 	defer f.mu.Unlock()
 	switch req.Method {
 	case http.MethodGet:
-		if f.config == nil {
-			http.Error(w, `{"code":"NOT_FOUND","message":"User not found"}`, http.StatusNotFound)
-			return
+		cfg := ducklingContractOrgDefault
+		if f.config != nil {
+			cfg = *f.config
 		}
-		_ = json.NewEncoder(w).Encode(f.config)
+		if f.pulseLimit {
+			cfg.ReadWrite.InstanceSize = "pulse"
+			cfg.ReadScaling.InstanceSize = "pulse"
+		}
+		_ = json.NewEncoder(w).Encode(withDefaultCooldowns(cfg))
 	case http.MethodPut:
 		var body struct {
 			Config mdrest.DucklingConfig `json:"config"`
@@ -67,14 +81,27 @@ func (f *ducklingContractREST) serveHTTP(w http.ResponseWriter, req *http.Reques
 			return
 		}
 		cfg := body.Config
-		cfg.ReadWrite.CooldownSeconds = withDefaultCooldown(cfg.ReadWrite.InstanceSize, cfg.ReadWrite.CooldownSeconds)
-		cfg.ReadScaling.CooldownSeconds = withDefaultCooldown(cfg.ReadScaling.InstanceSize, cfg.ReadScaling.CooldownSeconds)
+		if f.pulseLimit && (cfg.ReadWrite.InstanceSize != "pulse" || cfg.ReadScaling.InstanceSize != "pulse") {
+			http.Error(w, `{"code":"INVALID_ARGUMENT","message":"Invalid config for tier free: [object Object]"}`, http.StatusBadRequest)
+			return
+		}
+		if (cfg.ReadWrite.InstanceSize == "pulse" && cfg.ReadWrite.CooldownSeconds != nil) || (cfg.ReadScaling.InstanceSize == "pulse" && cfg.ReadScaling.CooldownSeconds != nil) {
+			http.Error(w, `{"code":"INVALID_ARGUMENT","message":"cooldown_seconds cannot be set for Pulse instances"}`, http.StatusBadRequest)
+			return
+		}
 		f.config = &cfg
+		f.lastPut = &cfg
 		f.puts++
-		_ = json.NewEncoder(w).Encode(cfg)
+		_ = json.NewEncoder(w).Encode(withDefaultCooldowns(cfg))
 	default:
 		http.Error(w, "unexpected method "+req.Method, http.StatusMethodNotAllowed)
 	}
+}
+
+func withDefaultCooldowns(cfg mdrest.DucklingConfig) mdrest.DucklingConfig {
+	cfg.ReadWrite.CooldownSeconds = withDefaultCooldown(cfg.ReadWrite.InstanceSize, cfg.ReadWrite.CooldownSeconds)
+	cfg.ReadScaling.CooldownSeconds = withDefaultCooldown(cfg.ReadScaling.InstanceSize, cfg.ReadScaling.CooldownSeconds)
+	return cfg
 }
 
 func withDefaultCooldown(size string, cooldown *int64) *int64 {
@@ -85,6 +112,7 @@ func withDefaultCooldown(size string, cooldown *int64) *int64 {
 	return &value
 }
 
+// setReadScalingCooldown stores a cooldown override, as the MotherDuck UI does.
 func (f *ducklingContractREST) setReadScalingCooldown(value int64) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -203,5 +231,109 @@ func TestContractDucklingConfigLifecycle(t *testing.T) {
 				Check: resource.TestCheckNoResourceAttr("motherduck_duckling_config.test", "read_scaling_cooldown_seconds"),
 			},
 		},
+	})
+}
+
+func ducklingContractSizes(baseURL, size string, flock int) string {
+	return contractProviderConfig(baseURL) + fmt.Sprintf(`
+resource "motherduck_duckling_config" "test" {
+  username                   = "contract_svc"
+  read_write_instance_size   = %[1]q
+  read_scaling_instance_size = %[1]q
+  read_scaling_flock_size    = %[2]d
+}
+`, size, flock)
+}
+
+// checkLastPutCooldowns checks the cooldowns the last write sent.
+func (f *ducklingContractREST) checkLastPutCooldowns(readWrite, readScaling *int64) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if f.lastPut == nil {
+			return errors.New("no Duckling config write")
+		}
+		format := func(v *int64) string {
+			if v == nil {
+				return "none"
+			}
+			return fmt.Sprint(*v)
+		}
+		got := format(f.lastPut.ReadWrite.CooldownSeconds) + "/" + format(f.lastPut.ReadScaling.CooldownSeconds)
+		if want := format(readWrite) + "/" + format(readScaling); got != want {
+			return fmt.Errorf("last write sent cooldowns %s, want %s", got, want)
+		}
+		return nil
+	}
+}
+
+func int64Pointer(v int64) *int64 { return &v }
+
+// TestContractDucklingConfigAfterPlanLimitLowersSizeToPulse follows an
+// organization that drops to a plan whose limit is Pulse. MotherDuck lowers
+// the reported sizes to Pulse but keeps reporting the stored cooldowns, and it
+// rejects a write that sends a cooldown for Pulse. A configuration with Pulse
+// sizes and no cooldowns must apply without sending the stale cooldowns.
+func TestContractDucklingConfigAfterPlanLimitLowersSizeToPulse(t *testing.T) {
+	rest := newDucklingContractREST(t)
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(newContractSQL()),
+		Steps: []resource.TestStep{
+			{Config: ducklingContractSizes(rest.server.URL, "standard", 2)},
+			{
+				// A flock change keeps the live cooldowns and sends them.
+				Config: ducklingContractSizes(rest.server.URL, "standard", 4),
+				Check:  rest.checkLastPutCooldowns(int64Pointer(300), int64Pointer(300)),
+			},
+			{
+				PreConfig: func() {
+					rest.mu.Lock()
+					defer rest.mu.Unlock()
+					rest.pulseLimit = true
+				},
+				Config: ducklingContractSizes(rest.server.URL, "pulse", 3),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("motherduck_duckling_config.test", plancheck.ResourceActionUpdate),
+						plancheck.ExpectKnownValue("motherduck_duckling_config.test", tfjsonpath.New("read_write_cooldown_seconds"), knownvalue.Null()),
+						plancheck.ExpectKnownValue("motherduck_duckling_config.test", tfjsonpath.New("read_scaling_cooldown_seconds"), knownvalue.Null()),
+					},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("motherduck_duckling_config.test", "read_write_cooldown_seconds"),
+					resource.TestCheckNoResourceAttr("motherduck_duckling_config.test", "read_scaling_cooldown_seconds"),
+					rest.checkLastPutCooldowns(nil, nil),
+				),
+			},
+		},
+	})
+}
+
+// TestContractDucklingConfigCreateKeepsLiveCooldown keeps a cooldown override
+// set outside Terraform when the configuration leaves it unset. MotherDuck
+// stores the configuration exactly as written, so a first write that omitted
+// the cooldown would silently reset the override to the default.
+func TestContractDucklingConfigCreateKeepsLiveCooldown(t *testing.T) {
+	rest := newDucklingContractREST(t)
+	rest.config = &mdrest.DucklingConfig{
+		ReadWrite:   mdrest.DucklingReadWriteConfig{InstanceSize: "standard", CooldownSeconds: int64Pointer(900)},
+		ReadScaling: mdrest.DucklingReadScalingConfig{InstanceSize: "jumbo", FlockSize: 2, CooldownSeconds: int64Pointer(1200)},
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(newContractSQL()),
+		Steps: []resource.TestStep{{
+			// The read-write size is unchanged, so its override stays. The
+			// read-scaling size changes, so MotherDuck applies its default.
+			Config: ducklingContractSizes(rest.server.URL, "standard", 2),
+			ConfigPlanChecks: resource.ConfigPlanChecks{
+				PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+			},
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("motherduck_duckling_config.test", "read_write_cooldown_seconds", "900"),
+				resource.TestCheckResourceAttr("motherduck_duckling_config.test", "read_scaling_cooldown_seconds", "300"),
+				rest.checkLastPutCooldowns(int64Pointer(900), nil),
+			),
+		}},
 	})
 }
