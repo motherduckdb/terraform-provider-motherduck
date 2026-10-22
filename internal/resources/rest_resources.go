@@ -820,7 +820,7 @@ func (r *ducklingConfigResource) Delete(ctx context.Context, req resource.Delete
 	// The public REST API exposes replacement updates but no delete/reset endpoint.
 	resp.Diagnostics.AddWarning(
 		"MotherDuck Duckling config was not reset",
-		"The public REST API exposes replacement updates but no delete/reset endpoint. Terraform removed this resource from state, but the live Duckling configuration remains unchanged.",
+		"MotherDuck has no API to reset a Duckling configuration. Terraform removed this resource from state, and the Duckling configuration in MotherDuck keeps its current instance size, cooldown, and flock size. To change them, use the MotherDuck UI or manage them again with motherduck_duckling_config.",
 	)
 }
 

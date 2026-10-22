@@ -85,7 +85,7 @@ func (r *roleResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 	if err := client.Exec(ctx, "CREATE ROLE "+sqlbuild.QuoteIdentifier(plan.Name.ValueString())); err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck role", createErrorDetail(err, err.Error(), "role", plan.Name.ValueString()))
+		resp.Diagnostics.AddError("Unable to create MotherDuck role", createErrorDetail(err, rolePermissionErrorDetail(err, err.Error()), "role", plan.Name.ValueString()))
 		return
 	}
 	plan.ID = types.StringValue(plan.Name.ValueString())
@@ -137,7 +137,7 @@ func (r *roleResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	if err := retry.SQL(ctx, func() error {
 		return client.Exec(ctx, "DROP ROLE IF EXISTS "+sqlbuild.QuoteIdentifier(state.Name.ValueString()))
 	}); err != nil {
-		resp.Diagnostics.AddError("Unable to drop MotherDuck role", err.Error())
+		resp.Diagnostics.AddError("Unable to drop MotherDuck role", rolePermissionErrorDetail(err, err.Error()))
 	}
 }
 
@@ -300,7 +300,7 @@ func (r *roleGrantResource) Create(ctx context.Context, req resource.CreateReque
 	}
 	query := roleGrantStatement("GRANT", plan.RoleName.ValueString(), "TO", plan.GranteeType.ValueString(), plan.GranteeName.ValueString())
 	if err := client.Exec(ctx, query); err != nil {
-		resp.Diagnostics.AddError("Unable to grant MotherDuck role", roleAssignmentErrorDetail(err, false))
+		resp.Diagnostics.AddError("Unable to grant MotherDuck role", rolePermissionErrorDetail(err, roleAssignmentErrorDetail(err, false)))
 		return
 	}
 	plan.ID = roleGrantID(plan)
@@ -362,7 +362,7 @@ func (r *roleGrantResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 	query := roleGrantStatement("REVOKE", state.RoleName.ValueString(), "FROM", state.GranteeType.ValueString(), state.GranteeName.ValueString())
 	if err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) }); err != nil && !isNotFound(err) {
-		resp.Diagnostics.AddError("Unable to revoke MotherDuck role", roleAssignmentErrorDetail(err, true))
+		resp.Diagnostics.AddError("Unable to revoke MotherDuck role", rolePermissionErrorDetail(err, roleAssignmentErrorDetail(err, true)))
 	}
 }
 
@@ -434,6 +434,17 @@ func roleAssignmentErrorDetail(err error, revoke bool) string {
 		detail += " MotherDuck kept the grant, so Terraform keeps it in state. To stop managing the grant without revoking it, run `terraform state rm` on this resource."
 	}
 	return detail
+}
+
+// rolePermissionErrorDetail explains a role write that MotherDuck refused
+// because the SQL identity lacks the platform privilege for it. The raw error
+// names an internal request type, and users often expect admin_token to
+// authorize SQL role management.
+func rolePermissionErrorDetail(err error, detail string) string {
+	if !strings.Contains(strings.ToLower(err.Error()), "lacks platform authorization") {
+		return detail
+	}
+	return detail + "\n\nThe SQL identity in the provider `token` argument or MOTHERDUCK_TOKEN does not have permission to manage roles. Use a SQL token for a user or service account whose role allows managing custom roles and role assignments. The `admin_token` argument does not authorize SQL role management."
 }
 
 func showRolesToStatement(granteeType, granteeName string) string {

@@ -119,3 +119,14 @@ func TestSchemaCreateErrorDetail(t *testing.T) {
 		t.Fatalf("detail for another schema should be unchanged, got %q", got)
 	}
 }
+
+func TestRolePermissionErrorDetail(t *testing.T) {
+	denied := &duckdb.Error{Type: duckdb.ErrorTypePermission, Msg: "Permission Error: Client lacks platform authorization required for entity_service.CreateRoleRequest"}
+	if got := rolePermissionErrorDetail(denied, denied.Error()); !strings.Contains(got, "does not have permission to manage roles") {
+		t.Fatalf("detail should explain the missing role privilege, got %q", got)
+	}
+	other := &duckdb.Error{Type: duckdb.ErrorTypePermission, Msg: "Permission Error: denied"}
+	if got := rolePermissionErrorDetail(other, other.Error()); got != other.Error() {
+		t.Fatalf("detail for other errors should be unchanged, got %q", got)
+	}
+}
