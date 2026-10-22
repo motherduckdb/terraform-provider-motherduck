@@ -127,7 +127,7 @@ func (r *flightRunResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			"scheduled_at": schema.StringAttribute{
 				Computed:            true,
-				MarkdownDescription: "Timestamp the run was scheduled for, or null for an on-demand run.",
+				MarkdownDescription: "Timestamp MotherDuck scheduled the run for. On-demand runs also report one, set when the run was queued.",
 			},
 			"cancelled_at": schema.StringAttribute{
 				Computed:            true,

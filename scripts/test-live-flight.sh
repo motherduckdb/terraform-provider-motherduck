@@ -117,8 +117,8 @@ status = run["status"].lower().removeprefix("run_status_")
 problems = []
 if run["is_scheduled"] is not False:
     problems.append("is_scheduled should be false for an on-demand run")
-if run["scheduled_at"] is not None:
-    problems.append("scheduled_at should be null for an on-demand run")
+if not run["scheduled_at"]:
+    problems.append("scheduled_at should be set, MotherDuck reports it for on-demand runs too")
 if status == "succeeded":
     if run["exit_code"] != 0:
         problems.append("exit_code should be 0 after success")

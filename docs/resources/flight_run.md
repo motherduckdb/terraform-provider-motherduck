@@ -91,7 +91,7 @@ resource "motherduck_flight_run" "heartbeat" {
 - `id` (String) MotherDuck run ID for this Flight run.
 - `is_scheduled` (Boolean) Whether MotherDuck started the run from the Flight schedule. Runs started by this resource are on-demand, so this is `false`.
 - `run_number` (Number) MotherDuck run number assigned to this Flight run.
-- `scheduled_at` (String) Timestamp the run was scheduled for, or null for an on-demand run.
+- `scheduled_at` (String) Timestamp MotherDuck scheduled the run for. On-demand runs also report one, set when the run was queued.
 - `started_at` (String) Timestamp when the run started executing, or null while it is queued.
 - `status` (String) Latest Flight run status observed by the provider.
 
