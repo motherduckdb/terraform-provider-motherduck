@@ -51,9 +51,9 @@ func (r *secretResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Secret name.",
+				MarkdownDescription: "Secret name of at most 255 characters.",
 				PlanModifiers:       stringRequiresReplace(),
-				Validators:          sqlIdentifierValidators(),
+				Validators:          secretNameValidators(),
 			},
 			"type": schema.StringAttribute{
 				Required:            true,

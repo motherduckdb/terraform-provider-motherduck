@@ -450,7 +450,13 @@ func sqlIdentifierValidators() []validator.String {
 // slash or are 255 characters or longer, which would otherwise fail only at
 // apply time.
 func catalogNameValidators(kind string) []validator.String {
-	return []validator.String{sqlIdentifierValidator{}, catalogNameValidator{kind: kind}}
+	return []validator.String{sqlIdentifierValidator{}, objectNameValidator{kind: kind, maxLength: 254, rejectSlash: true}}
+}
+
+// secretNameValidators validate a secret name. MotherDuck fails with an
+// internal error for secret names longer than 255 characters.
+func secretNameValidators() []validator.String {
+	return []validator.String{sqlIdentifierValidator{}, objectNameValidator{kind: "secret", maxLength: 255}}
 }
 
 func databaseTypeValidators() []validator.String {
@@ -669,30 +675,35 @@ func (sqlIdentifierValidator) ValidateString(ctx context.Context, req validator.
 	}
 }
 
-// maxCatalogNameLength is the longest database or share name MotherDuck
-// accepts. MotherDuck requires names shorter than 255 characters.
-const maxCatalogNameLength = 254
-
-type catalogNameValidator struct{ kind string }
-
-func (v catalogNameValidator) Description(context.Context) string {
-	return fmt.Sprintf("must not contain a forward slash and must be at most %d characters", maxCatalogNameLength)
+// objectNameValidator enforces the MotherDuck name rules that the generic SQL
+// identifier validator does not cover for objects the provider creates.
+type objectNameValidator struct {
+	kind        string
+	maxLength   int
+	rejectSlash bool
 }
 
-func (v catalogNameValidator) MarkdownDescription(ctx context.Context) string {
+func (v objectNameValidator) Description(context.Context) string {
+	if v.rejectSlash {
+		return fmt.Sprintf("must not contain a forward slash and must be at most %d characters", v.maxLength)
+	}
+	return fmt.Sprintf("must be at most %d characters", v.maxLength)
+}
+
+func (v objectNameValidator) MarkdownDescription(ctx context.Context) string {
 	return v.Description(ctx)
 }
 
-func (v catalogNameValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+func (v objectNameValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
 	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
 	value := req.ConfigValue.ValueString()
-	if strings.Contains(value, "/") {
+	if v.rejectSlash && strings.Contains(value, "/") {
 		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck "+v.kind+" name", "MotherDuck "+v.kind+" names must not contain a forward slash.")
 	}
-	if n := utf8.RuneCountInString(value); n > maxCatalogNameLength {
-		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck "+v.kind+" name", fmt.Sprintf("MotherDuck %s names must be at most %d characters. This name has %d characters.", v.kind, maxCatalogNameLength, n))
+	if n := utf8.RuneCountInString(value); n > v.maxLength {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck "+v.kind+" name", fmt.Sprintf("MotherDuck %s names must be at most %d characters. This name has %d characters.", v.kind, v.maxLength, n))
 	}
 }
 

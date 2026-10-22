@@ -124,7 +124,7 @@ variable "partner_api_key" {
 
 ### Required
 
-- `name` (String) Secret name.
+- `name` (String) Secret name of at most 255 characters.
 - `type` (String) DuckDB secret type, such as `s3`, or `flights` for a secret that Flights read as environment variables.
 
 ### Optional

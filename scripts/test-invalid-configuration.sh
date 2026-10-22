@@ -53,6 +53,7 @@ validate_fixture invalid-configuration \
   'must not contain a forward slash' \
   'must be at most 254 characters' \
   'Invalid MotherDuck share name' \
+  'Invalid MotherDuck secret name' \
   'Invalid MotherDuck snapshot retention days' \
   'lowercase canonical' \
   'lowercase bare SQL option word' \

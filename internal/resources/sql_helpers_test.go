@@ -171,9 +171,9 @@ func TestSQLIdentifierValidator(t *testing.T) {
 	}
 }
 
-func TestCatalogNameValidator(t *testing.T) {
+func TestObjectNameValidator(t *testing.T) {
 	ctx := context.Background()
-	v := catalogNameValidator{kind: "database"}
+	v := objectNameValidator{kind: "database", maxLength: 254, rejectSlash: true}
 
 	tests := map[string]struct {
 		value   types.String

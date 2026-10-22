@@ -91,7 +91,12 @@ resource "motherduck_database" "slash" {
 }
 
 resource "motherduck_database" "too_long" {
-  name = "${join("", [for i in range(255) : "a"])}"
+  name = join("", [for i in range(255) : "a"])
+}
+
+resource "motherduck_secret" "too_long" {
+  name = join("", [for i in range(256) : "s"])
+  type = "s3"
 }
 
 resource "motherduck_share" "slash" {
