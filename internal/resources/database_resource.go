@@ -57,7 +57,7 @@ func (r *databaseResource) Schema(ctx context.Context, req resource.SchemaReques
 			"name": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "Database name. Must be a single MotherDuck SQL identifier. MotherDuck compares database names case-insensitively, so changing only the letter case updates state in place instead of replacing the database.",
-				PlanModifiers:       identifierRequiresReplace(),
+				PlanModifiers:       databaseIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"transient": schema.BoolAttribute{

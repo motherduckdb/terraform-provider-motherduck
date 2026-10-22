@@ -838,7 +838,11 @@ resource "motherduck_view" "test" {
 // collation, so `Bäck` and `BÄCK` name the same database. A change of the
 // parent database that differs only in letter case, including non-ASCII
 // letters, updates state in place instead of dropping the table.
-func TestContractRelationDatabaseNonASCIICaseChangeUpdatesInPlace(t *testing.T) {
+// MotherDuck treats `Bäck` and `BÄCK` as the same database, but cannot attach
+// it by the second spelling, so a later refresh would fail. Replacing would
+// drop the table, so the plan rejects the change and names the existing
+// spelling. A change in the case of ASCII letters still updates in place.
+func TestContractRelationDatabaseNonASCIICaseChangeIsRejected(t *testing.T) {
 	client := newCaseCatalogSQL("Bäck")
 	config := func(database string) string {
 		return contractProviderConfig("http://127.0.0.1") + fmt.Sprintf(`
@@ -864,12 +868,16 @@ resource "motherduck_table" "test" {
 		Steps: []resource.TestStep{
 			{Config: config("Bäck")},
 			{
-				Config: config("BÄCK"),
+				Config:      config("BÄCK"),
+				ExpectError: regexp.MustCompile(`Keep the existing spelling "Bäck"`),
+			},
+			{
+				Config: config("bäck"),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_table.test", plancheck.ResourceActionUpdate)},
 					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
 				},
-				Check: resource.TestCheckResourceAttr("motherduck_table.test", "id", "BÄCK.main.facts"),
+				Check: resource.TestCheckResourceAttr("motherduck_table.test", "id", "bäck.main.facts"),
 			},
 		},
 	})

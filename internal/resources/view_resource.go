@@ -51,7 +51,7 @@ func (r *viewResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"database": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "Database that contains the view. Changing only the letter case updates state in place.",
-				PlanModifiers:       identifierRequiresReplace(),
+				PlanModifiers:       databaseIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"schema": schema.StringAttribute{

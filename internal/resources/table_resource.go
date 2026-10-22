@@ -45,7 +45,7 @@ func (r *tableResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"database": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "Database that contains the table. Changing only the letter case updates state in place.",
-				PlanModifiers:       identifierRequiresReplace(),
+				PlanModifiers:       databaseIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"schema": schema.StringAttribute{

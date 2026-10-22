@@ -49,7 +49,7 @@ func (r *snapshotResource) Schema(ctx context.Context, req resource.SchemaReques
 			"database": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "Database to snapshot. Changing only the letter case updates state in place.",
-				PlanModifiers:       identifierRequiresReplace(),
+				PlanModifiers:       databaseIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"name": schema.StringAttribute{

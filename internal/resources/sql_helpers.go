@@ -80,6 +80,35 @@ func identifierRequiresReplace() []planmodifier.String {
 
 const identifierRequiresReplaceDescription = "Changing the name replaces the resource unless only its letter case changes."
 
+// databaseIdentifierRequiresReplace is identifierRequiresReplace for database
+// names. MotherDuck treats database names as equal across Unicode letter case,
+// but the client can only attach a database by a spelling that differs in the
+// case of ASCII letters. Attaching `md:äpfel` for the database `Äpfel` fails
+// with "Database aliases are not yet supported". A change in the case of
+// non-ASCII letters would leave every later refresh unable to attach, and
+// replacing would drop the database or its objects, so the plan rejects it and
+// names the existing spelling.
+func databaseIdentifierRequiresReplace() []planmodifier.String {
+	return []planmodifier.String{stringplanmodifier.RequiresReplaceIf(
+		func(ctx context.Context, req planmodifier.StringRequest, resp *stringplanmodifier.RequiresReplaceIfFuncResponse) {
+			current, planned := req.StateValue.ValueString(), req.PlanValue.ValueString()
+			if !strings.EqualFold(current, planned) {
+				resp.RequiresReplace = true
+				return
+			}
+			if !catalogNamesEqual(current, planned) {
+				resp.Diagnostics.AddAttributeError(
+					req.Path,
+					"Unsupported MotherDuck database name spelling",
+					fmt.Sprintf("%q and %q name the same MotherDuck database, but MotherDuck cannot attach a database by a spelling that differs in the case of non-ASCII letters. Keep the existing spelling %q.", planned, current, current),
+				)
+			}
+		},
+		identifierRequiresReplaceDescription,
+		identifierRequiresReplaceDescription,
+	)}
+}
+
 // catalogIdentifierRequiresReplace is identifierRequiresReplace for schema,
 // table, and view names. DuckDB stores these in the database catalog and folds
 // only ASCII letters when it compares them, so `Äpfel` and `äpfel` are two

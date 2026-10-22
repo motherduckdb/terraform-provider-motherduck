@@ -56,7 +56,7 @@ func (r *shareResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"source_database": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "Database to share. Terraform keeps the configured spelling when MotherDuck reports the same database name in a different letter case, and changing only the letter case updates state in place.",
-				PlanModifiers:       identifierRequiresReplace(),
+				PlanModifiers:       databaseIdentifierRequiresReplace(),
 				Validators:          sqlIdentifierValidators(),
 			},
 			"access": schema.StringAttribute{
