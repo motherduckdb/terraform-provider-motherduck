@@ -140,6 +140,7 @@ test-scripts:
 	python3 -c 'import ast, pathlib; [ast.parse(p.read_text(), filename=str(p)) for p in pathlib.Path("scripts").rglob("*.py")]'
 	./scripts/test-download-checksum-unit.sh
 	./scripts/test-version-matrix-unit.sh
+	./scripts/test-cli-cache-unit.sh
 	./scripts/test-terraform-test-unit.sh
 	./scripts/test-live-common-unit.sh
 	./scripts/test-live-rest-helper.sh

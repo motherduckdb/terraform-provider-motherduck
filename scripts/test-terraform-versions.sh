@@ -137,11 +137,11 @@ run_cli_smoke() {
 
 run_terraform_version() {
   local version="$1"
-  local terraform_bin="${ROOT_DIR}/tools/terraform/${version}/terraform"
+  local terraform_bin="${ROOT_DIR}/tools/terraform/${version}/${OS}_${ARCH}/terraform"
   local terraform_verified_marker="${terraform_bin}.release-verified"
   if [[ ! -x "${terraform_bin}" || ! -f "${terraform_verified_marker}" ]]; then
     local archive="terraform_${version}_${OS}_${ARCH}.zip"
-    local archive_path="${ROOT_DIR}/tools/terraform/${version}/${archive}"
+    local archive_path="${terraform_bin%/*}/${archive}"
     local release_url="https://releases.hashicorp.com/terraform/${version}"
     download_verified_archive \
       "${release_url}/${archive}" \
@@ -162,11 +162,11 @@ run_terraform_version() {
 
 run_opentofu_version() {
   local version="$1"
-  local tofu_bin="${ROOT_DIR}/tools/opentofu/${version}/tofu"
+  local tofu_bin="${ROOT_DIR}/tools/opentofu/${version}/${OS}_${ARCH}/tofu"
   local tofu_verified_marker="${tofu_bin}.release-verified"
   if [[ ! -x "${tofu_bin}" || ! -f "${tofu_verified_marker}" ]]; then
     local archive="tofu_${version}_${OS}_${ARCH}.zip"
-    local archive_path="${ROOT_DIR}/tools/opentofu/${version}/${archive}"
+    local archive_path="${tofu_bin%/*}/${archive}"
     local release_url="https://github.com/opentofu/opentofu/releases/download/v${version}"
     download_verified_archive \
       "${release_url}/${archive}" \
