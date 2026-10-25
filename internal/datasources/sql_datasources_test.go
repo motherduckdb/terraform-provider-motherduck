@@ -22,6 +22,7 @@ func TestRowSpecsCoverPlannedSQLDataSources(t *testing.T) {
 		"owned_shares":        true,
 		"shared_with_me":      true,
 		"share_grants":        true,
+		"share_secure_views":  true,
 		"secrets":             true,
 		"buckets_for_secret":  true,
 		"files":               true,
@@ -174,6 +175,7 @@ func TestRowsSpecsDeclareRequiredAttributes(t *testing.T) {
 		"files":              {"path"},
 		"role_members":       {"role_name"},
 		"share_grants":       {"share_name"},
+		"share_secure_views": {"share_name"},
 		"roles_for_user":     {"username"},
 		"roles_for_role":     {"role_name"},
 		"dive":               {"dive_id"},
@@ -482,6 +484,35 @@ func TestRowsSpecShareGrantsQueriesGranteesForOneShare(t *testing.T) {
 	}
 }
 
+func TestRowsSpecShareSecureViewsQuotesTheShareIdentifier(t *testing.T) {
+	spec := findSpec(t, "share_secure_views")
+	if spec.requiredFunction != "" {
+		t.Fatalf("SHOW SECURE VIEWS is a statement, not a function, so no function probe applies: %q", spec.requiredFunction)
+	}
+	if _, err := spec.build(rowsModel{}); err == nil {
+		t.Fatal("expected a missing share_name error")
+	}
+	query, err := spec.build(rowsModel{ShareName: types.StringValue(`tenant "a" share`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if query != `SHOW SECURE VIEWS ON SHARE "tenant ""a"" share"` {
+		t.Fatalf("share name was not quoted as an identifier: %s", query)
+	}
+	rows := spec.postProcess([]map[string]any{
+		{"schema_name": "main", "view_name": "b"},
+		{"schema_name": "app", "view_name": "z"},
+		{"schema_name": "main", "view_name": "a"},
+	})
+	got := []string{}
+	for _, row := range rows {
+		got = append(got, row["schema_name"].(string)+"."+row["view_name"].(string))
+	}
+	if strings.Join(got, ",") != "app.z,main.a,main.b" {
+		t.Fatalf("rows are not sorted by schema and view name: %v", got)
+	}
+}
+
 func TestRowsSpecSchemasExposeOnlyRelevantAttributes(t *testing.T) {
 	tests := map[string][]string{
 		"databases":           {"limit", "name", "offset", "rows", "rows_json"},
@@ -498,6 +529,7 @@ func TestRowsSpecSchemasExposeOnlyRelevantAttributes(t *testing.T) {
 		"roles":               {"rows", "rows_json"},
 		"role_members":        {"role_name", "rows", "rows_json"},
 		"share_grants":        {"share_name", "rows", "rows_json"},
+		"share_secure_views":  {"share_name", "rows", "rows_json"},
 		"guides":              {"limit", "offset", "reference_column", "reference_macro", "reference_schema", "reference_table", "reference_type", "reference_url", "reference_uuid", "reference_view", "rows", "rows_json", "topic"},
 		"guide":               {"guide_id", "rows", "rows_json", "version"},
 		"guide_grantees":      {"guide_id", "rows", "rows_json"},

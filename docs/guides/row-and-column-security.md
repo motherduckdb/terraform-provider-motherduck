@@ -28,7 +28,8 @@ for the complete SQL reference.
 | Platform permissions | Preset roles `admin`, `builder`, and `explorer`, inherited by custom roles | Per role | `motherduck_role`, `motherduck_role_grant` |
 | Who can read a share | Share grants and the share `access` mode | Per grantee | `motherduck_share`, `motherduck_share_grant` |
 | Which tables a share exposes | `include_pattern`, also called table-level security | Yes | `motherduck_share.include_pattern` |
-| Which rows and columns each consumer sees | Secure views | No, they can check the consumer's identity | No resource yet. Apply them with SQL as the share owner |
+| Which rows and columns each consumer sees | Secure views | No, they can check the consumer's identity | `motherduck_share_secure_view` |
+| Audit of the policies on a share | `SHOW SECURE VIEWS ON SHARE` | Not applicable | `motherduck_share_secure_views` data source |
 
 Every data control lives on the share. MotherDuck has no `GRANT SELECT ON
 TABLE` and no policy object attached to a table. Secure views also do not
@@ -48,7 +49,7 @@ Give each object one owner:
 | Reader service accounts, tokens, custom roles, and role membership for service accounts | Terraform admin root | Identities change rarely and need review |
 | Role membership for people | The identity provider, when it is the source of truth | MotherDuck refuses `motherduck_role_grant` for people in that case |
 | Share, `include_pattern`, and grants | Terraform root that runs as the share owner | This is the publication boundary, so plans should show changes to it |
-| Secure view SQL | The same repository and identity as the share, applied by a policy step after `terraform apply` | Only the share creator can change its secure views, and replacing the share drops them |
+| Secure views | `motherduck_share_secure_view` in the same Terraform root and identity as the share | Only the share creator can change its secure views, and replacing the share drops them |
 | Tables and schemas | Terraform or the data pipeline, as described in [resource scope](resource-scope.md) | Structure |
 | Entitlement rows, such as which reader belongs to which tenant | Onboarding automation or the pipeline | These rows change with customers |
 | Per-request authentication | The application backend | Terraform does not issue sessions |
@@ -105,50 +106,16 @@ Follow the same rule inside each policy:
 Every tenant's rows live in `app.daily_usage`. Each tenant has its own reader
 service account, as in the [customer-facing analytics guide](customer-facing-analytics.md).
 One share serves all of them, and a secure view returns each reader only its
-tenant's rows.
-
-Terraform creates the structure, one share, and one grant per reader:
+tenant's rows. It also returns `contact_email` only to readers in the
+`usage_pii_readers` role:
 
 ```hcl
-resource "motherduck_table" "daily_usage" {
-  database = motherduck_database.usage.name
-  schema   = motherduck_schema.app.name
-  name     = "daily_usage"
-  columns = {
-    tenant_id     = "VARCHAR"
-    usage_date    = "DATE"
-    event_count   = "BIGINT"
-    contact_email = "VARCHAR"
-  }
-}
-
-resource "motherduck_table" "tenant_readers" {
-  database = motherduck_database.usage.name
-  schema   = motherduck_schema.policy.name
-  name     = "tenant_readers"
-  columns = {
-    reader_name = "VARCHAR"
-    tenant_id   = "VARCHAR"
-  }
-}
-
-resource "motherduck_share_grant" "reader" {
-  for_each     = var.tenants
-  share        = motherduck_share.usage.name
-  username     = motherduck_service_account.reader[each.key].username
-  grantee_type = "user"
-}
-```
-
-This is an excerpt. The share is the fail-closed share above. Readers and
-schemas follow the customer-facing analytics example.
-
-The policy step replaces `app.daily_usage` for consumers. It filters by tenant
-and returns `contact_email` only to readers in the `usage_pii_readers` role:
-
-```sql
-ALTER SHARE usage_share
-  ADD OR REPLACE SECURE VIEW REPLACES app.daily_usage AS (
+resource "motherduck_share_secure_view" "daily_usage" {
+  share    = motherduck_share.usage.name
+  schema   = motherduck_table.daily_usage.schema
+  name     = motherduck_table.daily_usage.name
+  replaces = true
+  query    = <<-SQL
     SELECT
       u.tenant_id,
       u.usage_date,
@@ -159,8 +126,25 @@ ALTER SHARE usage_share
     FROM app.daily_usage AS u
     JOIN policy.tenant_readers AS r ON r.tenant_id = u.tenant_id
     WHERE r.reader_name = current_user
-  );
+  SQL
+
+  lifecycle {
+    replace_triggered_by = [motherduck_share.usage.created_ts]
+  }
+}
+
+resource "motherduck_share_grant" "reader" {
+  for_each     = var.tenants
+  share        = motherduck_share.usage.name
+  username     = motherduck_service_account.reader[each.key].username
+  grantee_type = "user"
+  depends_on   = [motherduck_share_secure_view.daily_usage]
+}
 ```
+
+This is an excerpt. The share is the fail-closed share above, and the
+[resource example](../resources/share_secure_view.md) defines the tables.
+Readers follow the customer-facing analytics example.
 
 Onboarding automation writes the entitlement as the writer:
 
@@ -179,33 +163,45 @@ queries through its own Duckling and read pool. Pooling the data does not pool
 reader compute. See [choose a tenancy model](customer-facing-analytics.md#choose-a-tenancy-model)
 before moving tenants out of dedicated databases.
 
-## Apply policies after Terraform
+## Keep policies and the share together
 
-Terraform does not manage secure views yet. Keep their SQL in the repository
-with the share and run a policy step in the same pipeline, right after
-`terraform apply`:
+Run the Terraform root that manages secure views with the share owner's
+read-write token. Read-scaling tokens cannot alter shares, and only the share's
+creator can change its secure views.
 
-1. Connect with the share owner's read-write token. Read-scaling tokens cannot
-   alter shares, and only the share's creator can change its secure views.
-   Managing secure views with SQL needs DuckDB 1.5.6 or later.
-2. Run one `ALTER SHARE` statement that uses `ADD OR REPLACE SECURE VIEW` for
-   every policy. Actions in one statement apply all or nothing, and the step can
-   run again without changing the result. Drop removed policies with `DROP
-   SECURE VIEW IF EXISTS` in the same statement.
-3. Run `SHOW SECURE VIEWS ON SHARE usage_share` and compare the `sql` column
-   with the repository. Fail the pipeline when they differ.
-
-Run the step after every apply, including applies that did not touch the policy
-files. Terraform state has no record of secure views, so a no-op plan does not
-show that they exist. Replacing a share drops its secure views and changes its
-URL. Changing `name`, `source_database`, `access`, `visibility`, or
-`update_mode` replaces a share, which is why the example sets `prevent_destroy`.
-Do not run `CREATE OR REPLACE SHARE` on a share with secure views. It drops every
-secure view the statement does not restate.
+- Changing a secure view's `query` updates it in place with `ADD OR REPLACE`.
+  Consumers move to the new policy without a gap.
+- Replacing a share drops its secure views and changes its URL. Changing
+  `name`, `source_database`, `access`, `visibility`, or `update_mode` replaces a
+  share. `replace_triggered_by` on `created_ts` recreates the secure views in the
+  same apply. Consider `prevent_destroy` on shares that carry policies.
+- Make each grant depend on the secure views of its share, so a reader is never
+  granted a share before its policies exist.
+- Do not run `CREATE OR REPLACE SHARE` on a managed share. It drops every
+  secure view the statement does not restate.
+- Read [motherduck_share_secure_views](../data-sources/share_secure_views.md) in
+  an audit root to find secure views that Terraform does not manage. A no-op
+  plan only covers the secure views in state.
 
 Secure view changes reach attached consumers within a minute or two, even on
 `manual` shares. Changes to entitlement rows and macros follow the share's
 publication cycle. On a `manual` share, run `UPDATE SHARE` after changing them.
+
+## Coming from Snowflake or Databricks
+
+The provider follows the same split as the Snowflake and Databricks providers:
+policies are their own resources, applied to the objects they protect, with a
+data source for audits. The difference is where MotherDuck attaches a policy.
+
+| Concept | Snowflake | Databricks | MotherDuck |
+| --- | --- | --- | --- |
+| Row filter or column mask | Row access and masking policies attached to tables and views | Row filters, column masks, and ABAC policies on tables | Secure view on a share |
+| Per-consumer filter on shared data | Secure view that compares `CURRENT_ACCOUNT()` with a mapping table | Dynamic view that compares `CURRENT_RECIPIENT()` with recipient properties | Secure view that compares `current_user` with an entitlement table |
+| Terraform resource | `snowflake_row_access_policy`, `snowflake_masking_policy` | `databricks_policy_info` | `motherduck_share_secure_view` |
+
+MotherDuck has no table-level policy. A secure view protects data only for
+consumers of its share, and the owner of the source database always sees every
+row.
 
 ## Verify as each consumer
 

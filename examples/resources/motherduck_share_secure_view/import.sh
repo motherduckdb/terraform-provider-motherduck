@@ -1,0 +1,1 @@
+terraform import motherduck_share_secure_view.daily_usage usage_share.app.daily_usage

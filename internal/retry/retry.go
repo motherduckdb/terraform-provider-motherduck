@@ -57,7 +57,8 @@ func isCatalogNotFound(err error) bool {
 	message := strings.ToLower(duckErr.Error())
 	return strings.Contains(message, "does not exist") ||
 		strings.Contains(message, "not found") ||
-		strings.Contains(message, "no database/share named")
+		strings.Contains(message, "no database/share named") ||
+		strings.Contains(message, "no share named")
 }
 
 func isTransientMotherDuckError(err error) bool {

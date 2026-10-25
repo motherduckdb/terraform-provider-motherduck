@@ -130,6 +130,18 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_LIST_SHARE_GRANTEES(" + sqlbuild.StringLiteral(m.ShareName.ValueString()) + ") ORDER BY grantee_type, grantee_name", nil
 		}},
+		{name: "share_secure_views", description: "Lists the secure views on one MotherDuck share, including views that Terraform does not manage. Only the share's owner can list them. Rows are sorted by schema and view name.", attrs: []string{"share_name"}, requiredAttrs: []string{"share_name"}, typedRows: []typedRowAttribute{
+			{name: "schema_name", description: "Schema of the secure view."},
+			{name: "view_name", description: "Name consumers query."},
+			{name: "sql", description: "SELECT body of the secure view."},
+			{name: "replaces_table", description: "`true` when the secure view stands in for the table or view of the same name, `false` for a derived relation."},
+			{name: "columns", description: "JSON array of the columns the secure view returns."},
+		}, postProcess: sortRowsByKeys(rowSortKey{field: "schema_name"}, rowSortKey{field: "view_name"}), build: func(m rowsModel) (string, error) {
+			if m.ShareName.IsNull() {
+				return "", fmt.Errorf("share_name is required")
+			}
+			return "SHOW SECURE VIEWS ON SHARE " + sqlbuild.QuoteIdentifier(m.ShareName.ValueString()), nil
+		}},
 		{name: "secrets", description: "Reads MotherDuck-managed secret metadata without exposing secret values.", attrs: []string{"name", "limit", "offset"}, typedRows: []typedRowAttribute{
 			{name: "name", description: "Secret name."},
 			{name: "type", description: "Secret type."},

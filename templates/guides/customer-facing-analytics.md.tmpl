@@ -47,7 +47,7 @@ its own rows.
 | Restore, retention, and export | Independent per tenant | Shared by all tenants |
 | Offboarding | Drop the tenant's database | Revoke the grant, then delete the tenant's entitlement and data rows |
 | Query cost for a small tenant | Reads only its own database | Filters a shared table. Load rows ordered by `tenant_id` so scans can skip other tenants' data |
-| Extra deployment step | None | Apply and verify secure views after each `terraform apply` |
+| Policy objects | None | A `motherduck_share_secure_view` per protected table, plus entitlement rows |
 
 Keep a database per tenant when a tenant needs independent restore, retention,
 or residency, contractual physical separation, or a different schema. Pool the

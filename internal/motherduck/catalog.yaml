@@ -43,6 +43,7 @@ sql:
     - motherduck_role_grant
     - motherduck_share
     - motherduck_share_grant
+    - motherduck_share_secure_view
     - motherduck_snapshot
     - motherduck_dive
     - motherduck_guide
@@ -57,6 +58,7 @@ sql:
     - motherduck_owned_share
     - motherduck_share
     - motherduck_share_grants
+    - motherduck_share_secure_views
     - motherduck_shared_with_me
     - motherduck_secret
     - motherduck_secrets

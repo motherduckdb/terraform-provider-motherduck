@@ -1,0 +1,64 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Access control"
+description: |-
+  Filters rows, hides columns, and masks values for the consumers of a MotherDuck share.
+---
+
+# {{.Name}} ({{.Type}})
+
+Manages one secure view on a MotherDuck share. Consumers of the share query the
+secure view instead of the source table, so it can filter rows, leave columns
+out, or replace values. The body can check the consumer with `current_user`,
+`current_email()`, `session_roles()`, and `is_role_in_session()`. MotherDuck
+enforces it on its servers. It does not restrict the owner of the source
+database.
+
+Secure views need a Business or Enterprise plan, or an active free trial. They
+work on native MotherDuck databases and MotherDuck-hosted DuckLake databases.
+Run this resource with the share owner's read-write token. Only the share's
+creator can change its secure views, and read-scaling tokens cannot alter
+shares. See [secure shared rows and columns](../guides/row-and-column-security.md)
+for policy design and [secure views](https://motherduck.com/docs/key-tasks/sharing-data/secure-views/)
+for what the body may contain.
+
+## Lifecycle
+
+- With `replaces = true`, the secure view stands in for the table or view of the
+  same name, which must already exist. Otherwise it adds a derived relation whose
+  name must not exist yet. Changing `replaces`, `share`, `schema`, or `name`
+  replaces the secure view.
+- Changing `query` updates the secure view in place with `ADD OR REPLACE`.
+  Consumers switch to the new policy within a minute or two and never see the
+  source table without a policy in between.
+- Create uses plain `ADD`. A secure view that already exists on the share fails
+  the apply with its import ID instead of being overwritten.
+- MotherDuck trims the body, so surrounding whitespace in `query`, such as the
+  trailing newline of a heredoc, never shows as drift. Any other change made
+  outside Terraform plans an update. A secure view dropped outside Terraform
+  plans a create.
+- Replacing or dropping the share drops its secure views. Add
+  `replace_triggered_by = [motherduck_share.<name>.created_ts]` so the same
+  apply recreates them, as in the example.
+- Destroying a replacing secure view makes its table visible to consumers again
+  when the share's `include_pattern` matches the table. With
+  `include_pattern = []`, the table disappears for consumers instead.
+- Terraform orders resources only by references. Add `depends_on` from
+  `motherduck_share_grant` to the secure views so a new consumer is never granted
+  a share whose policies do not exist yet.
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_share_secure_view/resource.tf"}}
+
+## Import
+
+Import with `<share>.<schema>.<name>`:
+
+{{codefile "shell" "examples/resources/motherduck_share_secure_view/import.sh"}}
+
+The imported `query` is the body MotherDuck stores, without surrounding
+whitespace. To list every secure view on a share, including ones Terraform does
+not manage, read [motherduck_share_secure_views](../data-sources/share_secure_views.md).
+
+{{ .SchemaMarkdown | trimspace }}

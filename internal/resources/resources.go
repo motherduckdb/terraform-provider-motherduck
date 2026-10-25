@@ -16,6 +16,7 @@ func All() []func() resource.Resource {
 		NewRoleGrantResource,
 		NewShareResource,
 		NewShareGrantResource,
+		NewShareSecureViewResource,
 		NewSnapshotResource,
 		NewDiveResource,
 		NewGuideResource,

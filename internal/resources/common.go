@@ -215,7 +215,8 @@ func isNotFound(err error) bool {
 		msg := strings.ToLower(duckErr.Error())
 		return strings.Contains(msg, "does not exist") ||
 			strings.Contains(msg, "not found") ||
-			strings.Contains(msg, "no database/share named")
+			strings.Contains(msg, "no database/share named") ||
+			strings.Contains(msg, "no share named")
 	}
 	return false
 }

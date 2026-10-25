@@ -216,8 +216,10 @@ managed grants but does not revoke grants Terraform does not own.
 - Secure views on a share filter rows, hide columns, and mask values per
   consumer. They can check `current_user`, `current_email()`, and
   `is_role_in_session()`, so the roles and memberships managed here can drive
-  column masking. This provider does not manage secure views yet. See
-  [secure shared rows and columns](row-and-column-security.md).
+  column masking. Manage them with
+  [motherduck_share_secure_view](../resources/share_secure_view.md) and audit
+  them with [motherduck_share_secure_views](../data-sources/share_secure_views.md).
+  See [secure shared rows and columns](row-and-column-security.md).
 - Secure views and include patterns restrict consumers of a share. They do not
   restrict the owner of the source database.
 - This provider does not manage SSO, provisioning through an identity provider,
