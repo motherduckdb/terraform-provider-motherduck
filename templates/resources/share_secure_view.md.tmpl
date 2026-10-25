@@ -27,16 +27,22 @@ for what the body may contain.
 - With `replaces = true`, the secure view stands in for the table or view of the
   same name, which must already exist. Otherwise it adds a derived relation whose
   name must not exist yet. Changing `replaces`, `share`, `schema`, or `name`
-  replaces the secure view.
+  replaces the secure view. Terraform drops the old one before adding the new
+  one, so for a moment consumers see the source table when the share's
+  `include_pattern` matches it. With `include_pattern = []` they see no table
+  instead.
 - Changing `query` updates the secure view in place with `ADD OR REPLACE`.
   Consumers switch to the new policy within a minute or two and never see the
   source table without a policy in between.
 - Create uses plain `ADD`. A secure view that already exists on the share fails
   the apply with its import ID instead of being overwritten.
 - MotherDuck trims the body, so surrounding whitespace in `query`, such as the
-  trailing newline of a heredoc, never shows as drift. Any other change made
-  outside Terraform plans an update. A secure view dropped outside Terraform
-  plans a create.
+  trailing newline of a heredoc, does not show as drift on refresh. Any other
+  change made outside Terraform plans an update. A secure view dropped outside
+  Terraform plans a create.
+- When the secure view could be written but not read back, the apply succeeds
+  with a warning and the next refresh reads it. The resource is not tainted, so
+  no later apply drops and re-adds it.
 - Replacing or dropping the share drops its secure views. Add
   `replace_triggered_by = [motherduck_share.<name>.created_ts]` so the same
   apply recreates them, as in the example.
@@ -58,7 +64,10 @@ Import with `<share>.<schema>.<name>`:
 {{codefile "shell" "examples/resources/motherduck_share_secure_view/import.sh"}}
 
 The imported `query` is the body MotherDuck stores, without surrounding
-whitespace. To list every secure view on a share, including ones Terraform does
+whitespace. When the configuration spells it with surrounding whitespace, such
+as a heredoc's trailing newline, the first plan after import shows an in-place
+update. Applying it rewrites the same body with `ADD OR REPLACE`, which does not
+change what consumers see. To list every secure view on a share, including ones Terraform does
 not manage, read [motherduck_share_secure_views](../data-sources/share_secure_views.md).
 
 {{ .SchemaMarkdown | trimspace }}

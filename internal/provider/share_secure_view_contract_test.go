@@ -28,6 +28,7 @@ type secureViewSQL struct {
 	mu         sync.Mutex
 	shareGone  bool
 	showErr    error
+	dropGone   bool
 	views      map[string]secureViewRow
 	statements []string
 }
@@ -64,6 +65,9 @@ func (c *secureViewSQL) Exec(_ context.Context, query string, args ...any) error
 		return noShareError()
 	}
 	if strings.HasPrefix(query, `ALTER SHARE "usage_share" DROP SECURE VIEW IF EXISTS `) {
+		if c.dropGone {
+			return noShareError()
+		}
 		target := strings.TrimPrefix(query, `ALTER SHARE "usage_share" DROP SECURE VIEW IF EXISTS `)
 		parts := strings.Split(strings.ReplaceAll(target, `"`, ""), ".")
 		if len(parts) != 2 {
@@ -223,6 +227,16 @@ func TestContractShareSecureViewLifecycle(t *testing.T) {
 				// MotherDuck stores the body without the heredoc's surrounding
 				// whitespace, so the imported value is the trimmed body.
 				ImportStateVerifyIgnore: []string{"query"},
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("imported %d states, want 1", len(states))
+					}
+					want := "SELECT tenant_id\nFROM app.daily_usage\nWHERE tenant_id = current_user AND false"
+					if got := states[0].Attributes["query"]; got != want {
+						return fmt.Errorf("imported query = %q, want the stored body %q", got, want)
+					}
+					return nil
+				},
 			},
 			{
 				// A secure view dropped outside Terraform is planned again.
@@ -345,14 +359,83 @@ resource "motherduck_share_secure_view" "summary" {
 					client.showErr = fmt.Errorf("IO Error: connection reset")
 					client.mu.Unlock()
 				},
-				ExpectError: regexp.MustCompile(`connection reset`),
+				// The secure view was written before the read failed. A warning
+				// keeps it in state without tainting it, so no later apply drops
+				// and re-adds it, and the refresh fills in the columns.
+				ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+				Check:            resource.TestCheckResourceAttr("motherduck_share_secure_view.summary", "id", "usage_share.main.acme_summary"),
 			},
 			{
-				// The secure view was written before the read failed. State
-				// tracks it, so the next apply replaces the tainted resource
-				// instead of failing with "already exists".
 				Config:           config,
-				ConfigPlanChecks: resource.ConfigPlanChecks{PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+				ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()}},
+				Check:            resource.TestCheckResourceAttr("motherduck_share_secure_view.summary", "columns.0", "tenant_id"),
+			},
+		},
+	})
+}
+
+func TestContractShareSecureViewCaseOnlyRenameSendsNoSQL(t *testing.T) {
+	client := newSecureViewSQL()
+	config := func(name string) string {
+		return contractProviderConfig("http://127.0.0.1") + fmt.Sprintf(`
+resource "motherduck_share_secure_view" "summary" {
+  share = "usage_share"
+  name  = %q
+  query = "SELECT 1"
+}
+`, name)
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(client),
+		Steps: []resource.TestStep{
+			{Config: config("acme_summary")},
+			{
+				Config: config("Acme_Summary"),
+				PreConfig: func() {
+					client.mu.Lock()
+					client.statements = nil
+					client.mu.Unlock()
+				},
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply:             []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_share_secure_view.summary", plancheck.ResourceActionUpdate)},
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("motherduck_share_secure_view.summary", "id", "usage_share.main.Acme_Summary"),
+					func(*terraform.State) error {
+						if got := client.countStatementsWithPrefix("ALTER SHARE"); got != 0 {
+							return fmt.Errorf("a letter case change sent %d ALTER SHARE statements", got)
+						}
+						return nil
+					},
+				),
+			},
+		},
+	})
+}
+
+func TestContractShareSecureViewDeleteIgnoresMissingShare(t *testing.T) {
+	client := newSecureViewSQL()
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(client),
+		Steps: []resource.TestStep{
+			{Config: secureViewContractConfig("true")},
+			{
+				// The share was dropped between refresh and destroy. The drop
+				// reports the share as missing, which counts as done.
+				Config: contractProviderConfig("http://127.0.0.1") + `
+resource "motherduck_share_secure_view" "usage" {
+  share    = "usage_share"
+  schema   = "app"
+  name     = "daily_usage"
+  replaces = true
+  query    = "SELECT tenant_id\nFROM app.daily_usage\nWHERE true"
+}
+`,
+				PreConfig: func() { client.mu.Lock(); client.dropGone = true; client.mu.Unlock() },
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_share_secure_view.summary", plancheck.ResourceActionDestroy)},
+				},
 			},
 		},
 	})

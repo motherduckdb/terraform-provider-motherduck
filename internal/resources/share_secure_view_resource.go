@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -86,7 +87,7 @@ func (r *shareSecureViewResource) Schema(ctx context.Context, req resource.Schem
 			},
 			"query": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Single SELECT body of the secure view, without surrounding parentheses. It reads only the share's source database and can call `current_user`, `current_email()`, `session_roles()`, and `is_role_in_session()`. Semicolons are rejected. Leading and trailing whitespace is ignored when comparing with MotherDuck. Changes update the secure view in place with `ADD OR REPLACE`, so consumers never see the unfiltered table during the update.",
+				MarkdownDescription: "Single SELECT body of the secure view, without surrounding parentheses. It reads only the share's source database and can call `current_user`, `current_email()`, `session_roles()`, and `is_role_in_session()`. Semicolons are rejected, including inside string literals. Use `chr(59)` for a literal semicolon. Leading and trailing whitespace is ignored when comparing with MotherDuck. Changes update the secure view in place with `ADD OR REPLACE`, so consumers never see the unfiltered table during the update.",
 				Validators:          nonBlankStringValidators("query"),
 			},
 			"columns": schema.ListAttribute{
@@ -199,7 +200,7 @@ func (r *shareSecureViewResource) Delete(ctx context.Context, req resource.Delet
 	}
 	query := "ALTER SHARE " + sqlbuild.QuoteIdentifier(state.Share.ValueString()) + " DROP SECURE VIEW IF EXISTS " + sqlbuild.QuoteQualifiedIdentifier(state.Schema.ValueString(), state.Name.ValueString())
 	err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) })
-	if err != nil && !isNotFoundFor(err, state.Share.ValueString()) {
+	if err != nil && !isShareMissingOrNotOwned(err, state.Share.ValueString()) {
 		resp.Diagnostics.AddError("Unable to drop MotherDuck secure view", secureViewErrorDetail(err))
 	}
 }
@@ -237,7 +238,16 @@ func (r *shareSecureViewResource) write(ctx context.Context, plan *shareSecureVi
 		return
 	}
 	query := shareSecureViewStatement(share, schemaName, name, plan.Replaces.ValueBool(), plan.Query.ValueString(), replace)
-	if err := client.Exec(ctx, query); err != nil {
+	exec := func() error { return client.Exec(ctx, query) }
+	var err error
+	if replace {
+		// ADD OR REPLACE is idempotent, so a transient failure can be retried.
+		// A plain ADD is not retried because a repeat would report a conflict.
+		err = retry.SQL(ctx, exec)
+	} else {
+		err = exec()
+	}
+	if err != nil {
 		summary := "Unable to create MotherDuck secure view"
 		if replace {
 			summary = "Unable to update MotherDuck secure view"
@@ -246,19 +256,20 @@ func (r *shareSecureViewResource) write(ctx context.Context, plan *shareSecureVi
 		return
 	}
 	plan.ID = types.StringValue(id)
-	// The secure view exists from here on. Callers save state even when the
-	// read below fails, so Terraform keeps tracking it and a retry does not
-	// fail with "already exists".
+	// The secure view exists from here on. A failed read is a warning, not an
+	// error. An error would taint the resource, and replacing it would drop
+	// the secure view and expose its table until the new one is added. The
+	// next refresh fills in the columns.
 	if plan.Columns.IsUnknown() {
 		plan.Columns = types.ListNull(types.StringType)
 	}
 	view, found, err := readShareSecureView(ctx, client, share, schemaName, name)
 	if err != nil {
-		diags.AddError("Unable to read MotherDuck secure view", secureViewErrorDetail(err))
+		diags.AddWarning("Unable to read MotherDuck secure view", "The secure view was written, but reading it back failed. The next refresh reads it again.\n\n"+secureViewErrorDetail(err))
 		return
 	}
 	if !found {
-		diags.AddError("Unable to read MotherDuck secure view", "The secure view was written but SHOW SECURE VIEWS ON SHARE did not list it.")
+		diags.AddWarning("Unable to read MotherDuck secure view", "The secure view was written, but SHOW SECURE VIEWS ON SHARE did not list it. The next refresh reads it again.")
 		return
 	}
 	diags.Append(applyShareSecureView(ctx, plan, view)...)
@@ -325,7 +336,7 @@ func applyShareSecureView(ctx context.Context, model *shareSecureViewModel, view
 func readShareSecureView(ctx context.Context, client providerctx.SQLClient, share, schemaName, name string) (shareSecureView, bool, error) {
 	views, err := listShareSecureViews(ctx, client, share)
 	if err != nil {
-		if isNotFoundFor(err, share) {
+		if isShareMissingOrNotOwned(err, share) {
 			return shareSecureView{}, false, nil
 		}
 		return shareSecureView{}, false, err
@@ -389,6 +400,21 @@ func parseShareSecureViewRow(row map[string]any) (shareSecureView, error) {
 		return view, fmt.Errorf("SHOW SECURE VIEWS returned secure view %s.%s with a columns value that is not a list", view.Schema, view.Name)
 	}
 	return view, nil
+}
+
+// isShareMissingOrNotOwned reports whether err says that the share does not
+// exist for the token's identity. MotherDuck reports a missing share and a
+// share owned by someone else with the same message. Secure views can treat
+// both as gone because only the owner can read or change them, and a secure
+// view left behind on a share still restricts its consumers. Do not reuse this
+// for grants, where the same reading would hide access that still exists.
+func isShareMissingOrNotOwned(err error, share string) bool {
+	var duckErr *duckdb.Error
+	if !errors.As(err, &duckErr) || duckErr.Type != duckdb.ErrorTypeCatalog {
+		return false
+	}
+	msg := strings.ToLower(duckErr.Error())
+	return strings.Contains(msg, "no share named") && containsIdentifierWord(msg, strings.ToLower(share))
 }
 
 // secureViewErrorDetail explains failures that the raw error does not, such

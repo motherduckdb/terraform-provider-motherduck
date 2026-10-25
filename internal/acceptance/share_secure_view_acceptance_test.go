@@ -117,6 +117,13 @@ data "motherduck_share_secure_views" "audit" {
 				ImportStateId:           shareName + ".app.daily_usage",
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"query"},
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					want := "SELECT tenant_id, event_count\nFROM app.daily_usage\nWHERE tenant_id = current_user AND event_count > 0 -- tenant filter"
+					if len(states) != 1 || states[0].Attributes["query"] != want {
+						return fmt.Errorf("imported query does not match the stored body %q", want)
+					}
+					return nil
+				},
 			},
 		},
 	})

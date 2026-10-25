@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -132,3 +133,28 @@ func TestSecureViewErrorDetail(t *testing.T) {
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+func TestIsShareMissingOrNotOwned(t *testing.T) {
+	catalog := func(msg string) error { return &duckdb.Error{Type: duckdb.ErrorTypeCatalog, Msg: msg} }
+	for name, tc := range map[string]struct {
+		err  error
+		want bool
+	}{
+		"missing share":      {catalog(`Catalog Error: No share named "usage_share" is owned by current user.`), true},
+		"other share":        {catalog(`Catalog Error: No share named "other_share" is owned by current user.`), false},
+		"duplicate view":     {catalog(`Catalog Error: A secure view named app.v already exists on this share`), false},
+		"not a duckdb error": {errString(`No share named "usage_share" is owned by current user.`), false},
+		"parser error":       {&duckdb.Error{Type: duckdb.ErrorTypeParser, Msg: `No share named "usage_share"`}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := isShareMissingOrNotOwned(tc.err, "usage_share"); got != tc.want {
+				t.Fatalf("isShareMissingOrNotOwned = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	// Share grants must keep treating this message as an error, because a
+	// share owned by someone else still grants access.
+	if isNotFound(catalog(`Catalog Error: No share named "usage_share" is owned by current user.`)) {
+		t.Fatal("isNotFound must not treat a share owned by someone else as deleted")
+	}
+}
