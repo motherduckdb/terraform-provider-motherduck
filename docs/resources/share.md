@@ -25,7 +25,9 @@ replication delay. See [updating shares](https://motherduck.com/docs/key-tasks/s
 
 Name, source database, access mode, visibility, and update mode are replacement-only. MotherDuck resolves share and database names case-insensitively, so a change in the letter case of `name` or `source_database` only updates state and keeps the share URL. `include_pattern` updates in place with `ALTER SHARE`.
 
-`include_pattern` creates a filtered share that exposes only the matching schemas and tables. Filtered shares are available on the Business plan and during an active free trial. Only standard MotherDuck databases can be filtered. DuckLake and Iceberg consumers read data files directly, so MotherDuck rejects include patterns on shares of those databases. MotherDuck trims each pattern and drops blank ones, so Terraform rejects blank entries and entries with leading or trailing whitespace.
+`include_pattern` creates a filtered share that exposes only the matching schemas and tables. Filtered shares are available on the Business plan and during an active free trial. Standard MotherDuck databases and MotherDuck-hosted DuckLake databases can be filtered. MotherDuck rejects include patterns on DuckLake databases with their own data path, and Iceberg databases cannot be shared. MotherDuck trims each pattern and drops blank ones, so Terraform rejects blank entries and entries with leading or trailing whitespace.
+
+Secure views filter rows, hide columns, and mask values for consumers of a share. Manage them with [motherduck_share_secure_view](share_secure_view.md). Replacing a share drops its secure views, so give each secure view `replace_triggered_by = [motherduck_share.<name>.created_ts]`. Combine them with `include_pattern = []` so a missing secure view hides its table. See [secure shared rows and columns](../guides/row-and-column-security.md).
 
 Access, visibility, and update mode are optional and computed. If omitted, Terraform discovers and records live values during refresh and import. Explicit values are enforced. Drift on them plans replacement. Removing an explicit value adopts the live value instead of resetting it, and
 omitted options never force replacement when another attribute changes.
@@ -100,7 +102,7 @@ terraform import motherduck_share.analytics 'analytics_share'
 ### Optional
 
 - `access` (String) Share access mode: `organization`, `restricted`, or `unrestricted`.
-- `include_pattern` (List of String) Optional catalog include patterns that limit the share to matching schemas and tables. Null shares the entire database. An empty list shares no objects. Changes are applied in place. Filtered shares require a Business plan or an active free trial, and only standard MotherDuck databases can be filtered. DuckLake databases reject include patterns, and Iceberg databases cannot be shared.
+- `include_pattern` (List of String) Optional catalog include patterns that limit the share to matching schemas and tables. Null shares the entire database. An empty list shares no objects. Changes are applied in place. Filtered shares require a Business plan or an active free trial. Standard MotherDuck databases and MotherDuck-hosted DuckLake databases can be filtered. DuckLake databases with their own data path reject include patterns, and Iceberg databases cannot be shared.
 - `update_mode` (String) Share update mode: `manual` or `automatic`.
 - `visibility` (String) Share visibility mode: `discoverable` or `hidden`.
 

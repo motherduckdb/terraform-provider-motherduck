@@ -83,7 +83,7 @@ func (r *shareResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"include_pattern": schema.ListAttribute{
 				Optional:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Optional catalog include patterns that limit the share to matching schemas and tables. Null shares the entire database. An empty list shares no objects. Changes are applied in place. Filtered shares require a Business plan or an active free trial, and only standard MotherDuck databases can be filtered. DuckLake databases reject include patterns, and Iceberg databases cannot be shared.",
+				MarkdownDescription: "Optional catalog include patterns that limit the share to matching schemas and tables. Null shares the entire database. An empty list shares no objects. Changes are applied in place. Filtered shares require a Business plan or an active free trial. Standard MotherDuck databases and MotherDuck-hosted DuckLake databases can be filtered. DuckLake databases with their own data path reject include patterns, and Iceberg databases cannot be shared.",
 			},
 			"url": schema.StringAttribute{
 				Computed:            true,

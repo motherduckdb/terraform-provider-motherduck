@@ -240,6 +240,7 @@ func TestTypedRowsMatchLiveColumns(t *testing.T) {
 		"guide":               "id,topic,title,description,owner_id,owner_name,access,current_version,created_at,updated_at,version,version_change_comment,version_external_id,version_created_at,references,content",
 		"guide_versions":      "version,change_comment,external_id,created_at",
 		"share_grants":        "share_owner,grantee_name,grantee_type,privilege,granted_at",
+		"share_secure_views":  "schema_name,view_name,sql,replaces_table,columns",
 		"files":               "name,type,size,last_modified",
 		"buckets_for_secret":  "name,creation_date,region,arn",
 	}

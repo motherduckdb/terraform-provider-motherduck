@@ -210,8 +210,18 @@ managed grants but does not revoke grants Terraform does not own.
   `access = "unrestricted"` grants access to anyone with the share URL.
 - A share's `include_pattern` selects the tables it exposes. Audiences that need
   different tables need different shares. Filtered shares need a Business plan
-  or an active free trial and work only on standard MotherDuck databases, not
-  DuckLake or Iceberg databases.
+  or an active free trial. They work on standard MotherDuck databases and
+  MotherDuck-hosted DuckLake databases, not on DuckLake databases with their own
+  data path or on Iceberg databases.
+- Secure views on a share filter rows, hide columns, and mask values per
+  consumer. They can check `current_user`, `current_email()`, and
+  `is_role_in_session()`, so the roles and memberships managed here can drive
+  column masking. Manage them with
+  [motherduck_share_secure_view](../resources/share_secure_view.md) and audit
+  them with [motherduck_share_secure_views](../data-sources/share_secure_views.md).
+  See [secure shared rows and columns](row-and-column-security.md).
+- Secure views and include patterns restrict consumers of a share. They do not
+  restrict the owner of the source database.
 - This provider does not manage SSO, provisioning through an identity provider,
   membership of people in an organization, billing, or PrivateLink.
 - When the identity provider is the organization's source of truth for user role

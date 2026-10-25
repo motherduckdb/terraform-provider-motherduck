@@ -20,6 +20,7 @@ infrastructure you can review, reproduce, and manage in Terraform.
 | Usage dashboards for SaaS customers | [Provision tenant databases and readers](docs/guides/customer-facing-analytics.md) |
 | Python pipelines and interactive dashboards | [Combine Terraform with Blueprints](docs/guides/blueprints-deployment.md) |
 | Roles, membership, and share access | [Manage roles and share access](docs/guides/access-control.md) |
+| Row filters and column masking on shares | [Secure shared rows and columns](docs/guides/row-and-column-security.md) |
 
 New to MotherDuck's ownership and compute model? Start with
 [choosing a deployment architecture](docs/guides/deployment-model.md).

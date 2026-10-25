@@ -1,0 +1,22 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Access control"
+description: |-
+  Lists the secure views on one MotherDuck share, including views that Terraform does not manage.
+---
+
+# {{.Name}} ({{.Type}})
+
+Lists every secure view on one share with `SHOW SECURE VIEWS ON SHARE`. Use it
+to audit row and column policies, for example to find secure views that were
+added outside Terraform or to check that every sensitive table has one.
+
+Read it with the share owner's credentials. Any other identity receives a
+share-not-found error. `replaces_table` is `true` or `false`, and `columns` is a
+JSON array of the column names the secure view returns.
+
+## Example Usage
+
+{{tffile "examples/data-sources/motherduck_share_secure_views/data-source.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}

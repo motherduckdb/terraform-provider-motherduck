@@ -172,6 +172,12 @@ test-live-iceberg:
 	@if [ -z "$${MOTHERDUCK_ICEBERG_SECRET:-}" ] || [ -z "$${MOTHERDUCK_ICEBERG_DEFAULT_SCHEMA:-}" ]; then echo "MOTHERDUCK_ICEBERG_SECRET and MOTHERDUCK_ICEBERG_DEFAULT_SCHEMA are required for the Iceberg acceptance test" >&2; exit 1; fi
 	TF_ACC=1 MD_TF_ACC=1 go test -timeout=20m -tags=acceptance,iceberg_acceptance -run '^TestPluginTestingIcebergDatabaseLifecycle$$' -count=1 ./internal/acceptance
 
+# Secure views need a Business or Enterprise plan, or an active free trial.
+.PHONY: test-live-secure-views
+test-live-secure-views:
+	@if [ -z "$${MOTHERDUCK_TOKEN:-}" ]; then echo "MOTHERDUCK_TOKEN is required for the secure view acceptance test" >&2; exit 1; fi
+	TF_ACC=1 MD_TF_ACC=1 go test -timeout=20m -tags=acceptance,secure_views_acceptance -run '^TestPluginTestingShareSecureViewLifecycle$$' -count=1 ./internal/acceptance
+
 test-live-cleanup-audit:
 	./scripts/audit-live-test-cleanup.sh
 

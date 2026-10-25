@@ -8,7 +8,8 @@ description: |-
 # Resource scope and migration
 
 > **Deployment recommendation:** Use Terraform for databases, service accounts,
-> access tokens, Duckling configuration, roles/grants, and shares. Keep Dives,
+> access tokens, Duckling configuration, roles/grants, shares, and the secure
+> views on them. Keep Dives,
 > Flight Python, and Guide Markdown in version control and deploy them through
 > the MotherDuck CLI or a code deployment pipeline. Terraform apply does not
 > compile application code, validate every data dependency, or run a data load.
@@ -19,7 +20,7 @@ membership through MotherDuck's supported organization administration workflow.
 
 | Surface | Deployment posture |
 | --- | --- |
-| Databases, schemas, tables/views, shares, roles/grants, secrets, service accounts, tokens, Duckling configuration, snapshots | Core infrastructure. Consult each resource's lifecycle constraints |
+| Databases, schemas, tables/views, shares, secure views, roles/grants, secrets, service accounts, tokens, Duckling configuration, snapshots | Core infrastructure. Consult each resource's lifecycle constraints |
 | Flight definitions and schedules | Prefer CLI/code deployment. Terraform remains available when it is the sole owner |
 | Dive and Guide resources | Experimental, outside the stable provider support commitment |
 | Flight-run resource | Deprecated. Use CLI/SQL or a deployment pipeline to execute runs |
