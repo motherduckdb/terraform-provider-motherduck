@@ -31,6 +31,31 @@ writes also need independent resources, provision a separate owner and deploy
 that tenant's data as that identity. See
 [MotherDuck's customer-facing architecture](https://motherduck.com/docs/key-tasks/customer-facing-analytics/3-tier-cfa-guide/).
 
+## Choose a tenancy model
+
+This guide gives each customer a database. On a Business or Enterprise plan,
+[secure views](row-and-column-security.md) also support a pooled model, where
+every customer's rows live in one table and one share returns each reader only
+its own rows.
+
+| | Database per tenant (this guide) | Pooled table with secure views |
+| --- | --- | --- |
+| Data boundary | Separate databases and shares. A grant mistake affects one tenant | One policy protects every tenant. A policy mistake can affect all of them |
+| Reader compute | A Duckling and read pool per reader | The same. Each reader account keeps its own Duckling |
+| Writes and schema changes | Fan out to every tenant database | One database and one migration |
+| Terraform objects per tenant | Database, schema, table, share, grant, reader, tokens | Reader, tokens, grant. The share is shared |
+| Restore, retention, and export | Independent per tenant | Shared by all tenants |
+| Offboarding | Drop the tenant's database | Revoke the grant, then delete the tenant's entitlement and data rows |
+| Query cost for a small tenant | Reads only its own database | Filters a shared table. Load rows ordered by `tenant_id` so scans can skip other tenants' data |
+| Extra deployment step | None | Apply and verify secure views after each `terraform apply` |
+
+Keep a database per tenant when a tenant needs independent restore, retention,
+or residency, contractual physical separation, or a different schema. Pool the
+long tail of small tenants that share one schema. Both models use the same
+reader accounts and backend routing, so you can mix them. To move a growing
+tenant into its own database, copy its rows, grant the new share to the same
+reader, attach it with a setup token, and then revoke the pooled grant.
+
 ## 1. Bootstrap the writer
 
 Apply the [writer-bootstrap example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.0/examples/blueprints/writer-bootstrap)

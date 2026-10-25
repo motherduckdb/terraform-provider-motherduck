@@ -47,6 +47,12 @@ Tradeoffs:
 - more Terraform state entries.
 - tenant migrations must loop over many databases.
 
+When many small tenants share one schema and do not need an independent
+lifecycle, a pooled table with [secure views](row-and-column-security.md) can
+replace the per-tenant databases and shares while keeping a reader account per
+tenant. Compare the two in
+[choose a tenancy model](customer-facing-analytics.md#choose-a-tenancy-model).
+
 ## State guidance
 
 Keep platform administration state separate from tenant data state if different teams own those workflows. Store generated reader tokens in a secret manager immediately and avoid broad access to Terraform state.

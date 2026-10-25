@@ -24,6 +24,7 @@ membership through MotherDuck's supported organization administration workflow.
 | Dive and Guide resources | Experimental, outside the stable provider support commitment |
 | Flight-run resource | Deprecated. Use CLI/SQL or a deployment pipeline to execute runs |
 | Catalog data sources | Read-only integration with objects managed by either workflow. Availability depends on the service |
+| Secure views on shares | No resource yet. Keep their SQL with the share and apply it as the share owner after each apply. See [secure shared rows and columns](row-and-column-security.md) |
 
 Experimental resources can change in a minor release. Breaking changes and
 removals are announced in release notes. The label does not change the

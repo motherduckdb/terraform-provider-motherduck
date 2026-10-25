@@ -27,6 +27,7 @@ Shares let other accounts query published data on their own compute.
 | [Serve customer-facing analytics](guides/customer-facing-analytics.md) | One database and restricted share per customer, queried through tenant-specific readers |
 | [Deploy pipelines and dashboards](guides/blueprints-deployment.md) | Terraform infrastructure with Blueprints previews, staging, and production releases |
 | [Manage roles and share access](guides/access-control.md) | Create roles, assign members, and grant access to shares |
+| [Secure shared rows and columns](guides/row-and-column-security.md) | One share that filters rows per tenant and masks columns by role |
 
 ## Example usage
 
