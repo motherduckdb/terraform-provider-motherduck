@@ -1,335 +1,290 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="600" viewBox="0 0 1440 600" role="img" aria-labelledby="title desc">
 <title id="title">Deployment model</title><desc id="desc">1. An admin root provisions service accounts, tokens, and Duckling settings and hands the writer token to a separate writer root. 2. The writer root creates writer-owned databases, restricted shares, and grants. 3. A pipeline loads data through the writer&#x27;s Duckling. 4. Each reader attaches the share once and queries on its own read pool.</desc>
 <rect width="1440" height="600" fill="#F8F8F7"/>
-<g transform="translate(32 26) scale(1.52)">
+<g transform="translate(32 30) scale(1.2)">
 <path d="M1.22059 15.1467C1.22059 15.1467 8.01485 19.8856 8.42868 20.1226C8.82772 20.3586 9.41175 20.4144 9.92426 20.2199C10.4373 20.0253 10.822 19.5805 10.9359 19.1357C11.0642 18.6909 12.617 10.6847 12.617 10.6847C12.6313 10.5736 12.6737 10.2542 12.5026 9.94812C12.2604 9.53144 11.7193 9.30927 11.2349 9.44753C10.9684 9.52492 10.7401 9.69835 10.5941 9.9343C10.5083 10.0869 10.3519 10.3376 10.0668 10.5598C9.85323 10.7267 9.63964 10.8239 9.54 10.8654C8.67087 11.2134 7.7021 10.9212 7.14668 10.2265C6.80484 9.79556 6.19221 9.62869 5.65061 9.83704C5.39458 9.93693 5.17744 10.1165 5.03124 10.3492C4.88505 10.5819 4.81755 10.8555 4.8387 11.1295C4.93882 11.9915 4.44013 12.853 3.5567 13.2006C3.10486 13.3735 2.60777 13.3883 2.14645 13.2425C2.04633 13.2144 1.69067 13.1314 1.33453 13.3259C0.893055 13.5481 0.665165 14.0764 0.77911 14.5488C0.864449 14.8683 1.12094 15.0771 1.22059 15.1467Z" fill="#FF9538"/>
 <path d="M12.5454 4.76395C12.5454 4.76395 14.9673 12.5751 15.138 12.9923C15.3092 13.4233 15.7363 13.8123 16.2632 13.9649C16.7905 14.1179 17.3745 13.993 17.7449 13.7151C18.1154 13.4371 24.369 8.03022 24.369 8.03022C24.563 7.86085 24.6937 7.63051 24.7394 7.37706C24.8109 6.90459 24.5115 6.404 24.0558 6.22331C23.7937 6.12714 23.5059 6.12714 23.2438 6.22331C23.087 6.29291 22.8019 6.39017 22.4458 6.404C22.1611 6.4183 21.9475 6.36252 21.8336 6.33439C20.9359 6.0841 20.3375 5.27838 20.3375 4.40257C20.3288 4.12912 20.2329 3.86562 20.0637 3.65058C19.8946 3.43554 19.6611 3.28023 19.3974 3.20734C18.8276 3.0543 18.2436 3.29077 17.9447 3.74942C17.4741 4.49983 16.5483 4.87504 15.6367 4.62474C15.1523 4.486 14.7533 4.19423 14.4973 3.81902C14.4257 3.73511 14.1979 3.45716 13.7993 3.38803C13.3149 3.3046 12.7876 3.58255 12.5883 4.01354C12.4315 4.34727 12.5168 4.65239 12.5454 4.76395Z" fill="#FF9538"/>
 </g>
-<text x="83" y="55" fill="#383838" font-family="Arial, sans-serif" font-size="27" font-weight="700">MotherDuck</text>
-<text x="285" y="55" fill="#383838" font-family="Arial, sans-serif" font-size="22" font-weight="400">Deployment model</text>
-<text x="34" y="98" fill="#666666" font-family="Arial, sans-serif" font-size="15" font-weight="400">Provision identities, then provision as the owner, then load and read</text>
-<polyline points="1126.0234375,49.0 1132.0234375,49.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1138.0234375,49.0 1144.0234375,49.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1150.0234375,49.0 1156.0234375,49.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<text x="1168.0234375" y="53" fill="#60428C" font-family="Arial, sans-serif" font-size="13" font-weight="400">Terraform provisions</text>
-<polyline points="1312.5,49 1346.5,49" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="1346.5,49 1338.5,44 1338.5,54" fill="#383838"/>
-<text x="1354.5" y="53" fill="#666666" font-family="Arial, sans-serif" font-size="13" font-weight="400">Data flow</text>
-<rect x="49" y="143" width="112" height="86" rx="4" fill="#E9E2F7" stroke="#6B46A3"/>
-<rect x="40" y="134" width="112" height="86" rx="4" fill="#FFFFFF" stroke="#6B46A3"/>
-<rect x="40" y="134" width="112" height="23" rx="4" fill="#E9E2F7" stroke="#6B46A3"/>
-<text x="50" y="150" fill="#60428C" font-family="Arial, sans-serif" font-size="12" font-weight="400">admin.tf</text>
-<text x="79.0" y="196" fill="#60428C" font-family="Arial, sans-serif" font-size="32" font-weight="700">{ }</text>
-<text x="52.0" y="258" fill="#383838" font-family="Arial, sans-serif" font-size="18" font-weight="700">Admin root</text>
-<text x="20.5" y="280" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">organization admin token</text>
-<rect x="49" y="325" width="112" height="86" rx="4" fill="#E9E2F7" stroke="#6B46A3"/>
-<rect x="40" y="316" width="112" height="86" rx="4" fill="#FFFFFF" stroke="#6B46A3"/>
-<rect x="40" y="316" width="112" height="23" rx="4" fill="#E9E2F7" stroke="#6B46A3"/>
-<text x="50" y="332" fill="#60428C" font-family="Arial, sans-serif" font-size="12" font-weight="400">writer.tf</text>
-<text x="79.0" y="378" fill="#60428C" font-family="Arial, sans-serif" font-size="32" font-weight="700">{ }</text>
-<text x="54.00390625" y="440" fill="#383838" font-family="Arial, sans-serif" font-size="18" font-weight="700">Writer root</text>
-<text x="63.5" y="462" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">writer token</text>
-<polyline points="100.0,290.0 100.0,296.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="100,300 100,314" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polygon points="100,314 95,306 105,306" fill="#6B46A3"/>
-<rect x="110.0" y="290" width="132.0" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
-<text x="115.0" y="305" fill="#60428C" font-family="Arial, sans-serif" font-size="13" font-weight="400">hands off writer token</text>
-<rect x="290" y="192" width="700" height="368" rx="5" fill="#F4EFEA" stroke="#C5BBB1"/>
-<ellipse cx="316.5" cy="217.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
-<polyline points="306,236 306,232 312,228 321,228 327,232 327,236" fill="none" stroke="#383838" stroke-width="2"/>
-<text x="338" y="232" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Writer account</text>
-<text x="488.9921875" y="230" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">owns every database and share</text>
-<rect x="1030" y="192" width="262" height="368" rx="5" fill="#F0F8FD" stroke="#AACADD"/>
-<ellipse cx="1056.5" cy="217.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
-<polyline points="1046,236 1046,232 1052,228 1061,228 1067,232 1067,236" fill="none" stroke="#383838" stroke-width="2"/>
-<text x="1078" y="232" fill="#383838" font-family="Arial, sans-serif" font-size="20" font-weight="700">Reader account</text>
-<polyline points="164.0,160.0 170.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="176.0,160.0 182.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="188.0,160.0 194.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="200.0,160.0 206.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="212.0,160.0 218.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="224.0,160.0 230.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="236.0,160.0 242.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="248.0,160.0 254.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="260.0,160.0 266.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="272.0,160.0 278.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="284.0,160.0 290.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="296.0,160.0 302.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="308.0,160.0 314.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="320.0,160.0 326.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="332.0,160.0 338.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="344.0,160.0 350.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="356.0,160.0 362.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="368.0,160.0 374.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="380.0,160.0 386.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="392.0,160.0 398.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="404.0,160.0 410.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="416.0,160.0 422.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="428.0,160.0 434.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="440.0,160.0 446.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="452.0,160.0 458.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="464.0,160.0 470.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="476.0,160.0 482.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="488.0,160.0 494.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="500.0,160.0 506.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="512.0,160.0 518.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="524.0,160.0 530.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="536.0,160.0 542.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="548.0,160.0 554.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="560.0,160.0 566.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="572.0,160.0 578.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="584.0,160.0 590.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="596.0,160.0 602.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="608.0,160.0 614.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="620.0,160.0 626.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="632.0,160.0 638.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="644.0,160.0 650.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="656.0,160.0 662.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="668.0,160.0 674.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="680.0,160.0 686.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="692.0,160.0 698.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="704.0,160.0 710.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="716.0,160.0 722.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="728.0,160.0 734.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="740.0,160.0 746.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="752.0,160.0 758.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="764.0,160.0 770.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="776.0,160.0 782.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="788.0,160.0 794.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="800.0,160.0 806.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="812.0,160.0 818.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="824.0,160.0 830.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="836.0,160.0 842.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="848.0,160.0 854.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="860.0,160.0 866.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="872.0,160.0 878.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="884.0,160.0 890.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="896.0,160.0 902.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="908.0,160.0 914.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="920.0,160.0 926.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="932.0,160.0 938.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="944.0,160.0 950.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="956.0,160.0 962.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="968.0,160.0 974.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="980.0,160.0 986.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="992.0,160.0 998.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1004.0,160.0 1010.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1016.0,160.0 1022.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1028.0,160.0 1034.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1040.0,160.0 1046.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1052.0,160.0 1058.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1064.0,160.0 1070.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1076.0,160.0 1082.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1088.0,160.0 1094.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1100.0,160.0 1106.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1112.0,160.0 1118.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1124.0,160.0 1130.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1136.0,160.0 1142.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1148.0,160.0 1154.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1160.0,160.0 1166.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1172.0,160.0 1178.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1184.0,160.0 1190.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1196.0,160.0 1202.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1208.0,160.0 1214.0,160.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="640.0,160.0 640.0,166.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="640.0,172.0 640.0,178.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="640,178 640,192" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polygon points="640,192 635,184 645,184" fill="#6B46A3"/>
-<polyline points="1220.0,160.0 1220.0,166.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1220.0,172.0 1220.0,178.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="1220,178 1220,192" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polygon points="1220,192 1215,184 1225,184" fill="#6B46A3"/>
-<ellipse cx="240.0" cy="160.0" rx="11.0" ry="11.0" fill="#6B46A3" stroke="#6B46A3"/>
-<text x="236.5" y="164" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="13" font-weight="700">1</text>
-<rect x="283.0" y="132" width="254.0" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
-<text x="288.0" y="147" fill="#60428C" font-family="Arial, sans-serif" font-size="13" font-weight="400">service accounts, tokens, Duckling settings</text>
-<polyline points="164.0,362.0 170.0,362.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="176.0,362.0 182.0,362.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="188.0,362.0 194.0,362.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="200.0,362.0 206.0,362.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="212.0,362.0 218.0,362.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="224.0,362.0 230.0,362.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="236.0,362.0 242.0,362.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="248.0,362.0 250.0,362.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="250.0,362.0 250.0,356.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="250.0,350.0 250.0,344.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="250.0,338.0 250.0,332.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="250.0,326.0 250.0,320.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="250.0,314.0 250.0,308.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="250.0,302.0 250.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="250.0,300.0 256.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="262.0,300.0 268.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="274.0,300.0 280.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="286.0,300.0 292.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="298.0,300.0 304.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="310.0,300.0 316.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="322.0,300.0 328.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="334.0,300.0 340.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="346.0,300.0 352.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="358.0,300.0 364.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="370.0,300.0 376.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="382.0,300.0 388.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="394.0,300.0 400.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="406.0,300.0 412.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="418.0,300.0 424.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="430.0,300.0 436.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="442.0,300.0 448.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="454.0,300.0 460.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="466.0,300.0 472.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="478.0,300.0 484.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="490.0,300.0 496.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="502.0,300.0 508.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="514.0,300.0 520.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="526.0,300.0 532.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="538.0,300.0 544.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="550.0,300.0 556.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="562.0,300.0 568.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="574.0,300.0 580.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="586.0,300.0 592.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="598.0,300.0 604.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="610.0,300.0 616.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="622.0,300.0 628.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="634.0,300.0 640.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="646.0,300.0 652.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="658.0,300.0 664.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="670.0,300.0 676.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="682.0,300.0 688.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="694.0,300.0 700.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="700.0,300.0 700.0,306.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="700.0,312.0 700.0,318.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="700,318 700,330" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polygon points="700,330 695,322 705,322" fill="#6B46A3"/>
-<polyline points="700.0,300.0 706.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="712.0,300.0 718.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="724.0,300.0 730.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="736.0,300.0 742.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="748.0,300.0 754.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="760.0,300.0 766.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="772.0,300.0 778.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="784.0,300.0 790.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="796.0,300.0 802.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="808.0,300.0 814.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="820.0,300.0 826.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="832.0,300.0 838.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="844.0,300.0 850.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="856.0,300.0 862.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="868.0,300.0 874.0,300.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="880.0,300.0 880.0,306.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="880.0,312.0 880.0,318.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="880.0,324.0 880.0,330.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polyline points="880,334 880,346" fill="none" stroke="#6B46A3" stroke-width="2"/>
-<polygon points="880,346 875,338 885,338" fill="#6B46A3"/>
-<ellipse cx="250.0" cy="330.0" rx="11.0" ry="11.0" fill="#6B46A3" stroke="#6B46A3"/>
-<text x="246.5" y="334" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="13" font-weight="700">2</text>
-<rect x="362.5" y="284" width="215.0" height="21" rx="3" fill="#F4EFEA" stroke="none"/>
-<text x="367.5" y="299" fill="#60428C" font-family="Arial, sans-serif" font-size="13" font-weight="400">databases, schemas, shares, grants</text>
-<rect x="40" y="474" width="132" height="60" rx="4" fill="#FFFFFF" stroke="#383838"/>
-<polyline points="61,504 152,504" fill="none" stroke="#068475" stroke-width="2"/>
-<rect x="57" y="494" width="20" height="20" rx="3" fill="#FFFFFF" stroke="#068475"/>
-<rect x="98" y="494" width="20" height="20" rx="3" fill="#D0EEE8" stroke="#068475"/>
-<rect x="139" y="494" width="20" height="20" rx="3" fill="#50C7B7" stroke="#068475"/>
-<text x="71.5" y="562" fill="#383838" font-family="Arial, sans-serif" font-size="18" font-weight="700">Pipeline</text>
-<rect x="338" y="358" width="98" height="76" rx="4" fill="#D0EEE8" stroke="#383838"/>
-<rect x="353" y="373" width="68" height="46" rx="2" fill="#A4D7C9" stroke="#383838"/>
-<rect x="377.0" y="386.0" width="20" height="20" rx="1" fill="#FFFFFF" stroke="#383838"/>
-<polyline points="358.0,351 358.0,358" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="358.0,434 358.0,441" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="377.3333333333333,351 377.3333333333333,358" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="377.3333333333333,434 377.3333333333333,441" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="396.6666666666667,351 396.6666666666667,358" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="396.6666666666667,434 396.6666666666667,441" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="416.0,351 416.0,358" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="416.0,434 416.0,441" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="331,376.0 338,376.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="436,376.0 443,376.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="331,396.0 338,396.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="436,396.0 443,396.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="331,416.0 338,416.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="436,416.0 443,416.0" fill="none" stroke="#383838" stroke-width="2"/>
-<text x="329.0" y="488" fill="#383838" font-family="Arial, sans-serif" font-size="18" font-weight="700">R/W Duckling</text>
-<ellipse cx="700.0" cy="433.0" rx="60.0" ry="13.0" fill="#FAF175" stroke="#383838"/>
-<rect x="640" y="359" width="120" height="74" rx="0" fill="#FAF175" stroke="#FAF175"/>
-<polyline points="640,359 640,433" fill="none" stroke="#383838" stroke-width="1"/>
-<polyline points="760,359 760,433" fill="none" stroke="#383838" stroke-width="1"/>
-<ellipse cx="700.0" cy="359.0" rx="60.0" ry="13.0" fill="#FFF9BF" stroke="#383838"/>
-<polyline points="659,391 741,391" fill="none" stroke="#B8A65C" stroke-width="1"/>
-<polyline points="659,410 741,410" fill="none" stroke="#B8A65C" stroke-width="1"/>
-<text x="660.0" y="488" fill="#383838" font-family="Arial, sans-serif" font-size="18" font-weight="700">Database</text>
-<rect x="850" y="367" width="108" height="58" rx="4" fill="#CEEBFF" stroke="#383838"/>
-<polyline points="878,396 932,384" fill="none" stroke="#383838" stroke-width="1"/>
-<polyline points="878,396 932,408" fill="none" stroke="#383838" stroke-width="1"/>
-<ellipse cx="875.0" cy="396.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
-<ellipse cx="933.0" cy="384.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
-<ellipse cx="933.0" cy="408.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
-<text x="833.5" y="488" fill="#383838" font-family="Arial, sans-serif" font-size="18" font-weight="700">Restricted share</text>
-<polyline points="172,504 268,504 268,396 330,396" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="330,396 322,391 322,401" fill="#383838"/>
-<ellipse cx="220.0" cy="504.0" rx="11.0" ry="11.0" fill="#6B46A3" stroke="#6B46A3"/>
-<text x="216.5" y="508" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="13" font-weight="700">3</text>
-<rect x="201.75" y="468" width="40.5" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
-<text x="206.75" y="483" fill="#666666" font-family="Arial, sans-serif" font-size="13" font-weight="400">loads</text>
-<polyline points="444,396 632,396" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="632,396 624,391 624,401" fill="#383838"/>
-<rect x="516.0" y="368" width="44.0" height="21" rx="3" fill="#F4EFEA" stroke="none"/>
-<text x="521.0" y="383" fill="#666666" font-family="Arial, sans-serif" font-size="13" font-weight="400">writes</text>
-<polyline points="766,396 842,396" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="842,396 834,391 834,401" fill="#383838"/>
-<rect x="772.0" y="368" width="64.0" height="21" rx="3" fill="#F4EFEA" stroke="none"/>
-<text x="777.0" y="383" fill="#666666" font-family="Arial, sans-serif" font-size="13" font-weight="400">publishes</text>
-<rect x="1117" y="348" width="96" height="66" rx="4" fill="#CEEBFF" stroke="#383838"/>
-<rect x="1132" y="363" width="66" height="36" rx="2" fill="#97D4FF" stroke="#383838"/>
-<rect x="1155.0" y="371.0" width="20" height="20" rx="1" fill="#FFFFFF" stroke="#383838"/>
-<polyline points="1137.0,341 1137.0,348" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1137.0,414 1137.0,421" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1155.6666666666667,341 1155.6666666666667,348" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1155.6666666666667,414 1155.6666666666667,421" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1174.3333333333333,341 1174.3333333333333,348" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1174.3333333333333,414 1174.3333333333333,421" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1193.0,341 1193.0,348" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1193.0,414 1193.0,421" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1110,366.0 1117,366.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1213,366.0 1220,366.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1110,381.0 1117,381.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1213,381.0 1220,381.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1110,396.0 1117,396.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1213,396.0 1220,396.0" fill="none" stroke="#383838" stroke-width="2"/>
-<rect x="1090" y="375" width="96" height="66" rx="4" fill="#CEEBFF" stroke="#383838"/>
-<rect x="1105" y="390" width="66" height="36" rx="2" fill="#97D4FF" stroke="#383838"/>
-<rect x="1128.0" y="398.0" width="20" height="20" rx="1" fill="#FFFFFF" stroke="#383838"/>
-<polyline points="1110.0,368 1110.0,375" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1110.0,441 1110.0,448" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1128.6666666666667,368 1128.6666666666667,375" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1128.6666666666667,441 1128.6666666666667,448" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1147.3333333333333,368 1147.3333333333333,375" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1147.3333333333333,441 1147.3333333333333,448" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1166.0,368 1166.0,375" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1166.0,441 1166.0,448" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1083,393.0 1090,393.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1186,393.0 1193,393.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1083,408.0 1090,408.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1186,408.0 1193,408.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1083,423.0 1090,423.0" fill="none" stroke="#383838" stroke-width="2"/>
-<polyline points="1186,423.0 1193,423.0" fill="none" stroke="#383838" stroke-width="2"/>
-<text x="1108.5" y="488" fill="#383838" font-family="Arial, sans-serif" font-size="18" font-weight="700">Read pool</text>
-<text x="1094.0" y="510" fill="#666666" font-family="Arial, sans-serif" font-size="14" font-weight="400">read-scaling token</text>
-<polyline points="966,396 1078,396" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="1078,396 1070,391 1070,401" fill="#383838"/>
-<ellipse cx="1010.0" cy="396.0" rx="11.0" ry="11.0" fill="#6B46A3" stroke="#6B46A3"/>
-<text x="1006.5" y="400" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="13" font-weight="700">4</text>
-<rect x="940.25" y="340" width="139.5" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
-<text x="945.25" y="355" fill="#666666" font-family="Arial, sans-serif" font-size="13" font-weight="400">grant, then attach once</text>
-<rect x="1318" y="355" width="108" height="82" rx="4" fill="#FFFFFF" stroke="#383838"/>
-<polyline points="1318,373 1426,373" fill="none" stroke="#383838" stroke-width="1"/>
-<ellipse cx="1329.5" cy="363.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
-<ellipse cx="1338.5" cy="363.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
-<ellipse cx="1347.5" cy="363.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
-<rect x="1336" y="407" width="11" height="19" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
-<rect x="1356" y="390" width="11" height="36" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
-<rect x="1376" y="399" width="11" height="27" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
-<rect x="1396" y="382" width="11" height="44" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
-<text x="1330.5" y="488" fill="#383838" font-family="Arial, sans-serif" font-size="18" font-weight="700">BI &amp; apps</text>
-<polyline points="1310,396 1222,396" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="1222,396 1230,391 1230,401" fill="#383838"/>
-<rect x="1232.0" y="368" width="52.0" height="21" rx="3" fill="#F0F8FD" stroke="none"/>
-<text x="1237.0" y="383" fill="#666666" font-family="Arial, sans-serif" font-size="13" font-weight="400">queries</text>
+<text x="72" y="54" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="600">Deployment model</text>
+<text x="34" y="89" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="400">Provision identities, then provision as the owner, then load and read</text>
+<polyline points="1112.3125,45.0 1118.3125,45.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1124.3125,45.0 1130.3125,45.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1136.3125,45.0 1142.3125,45.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<text x="1154.3125" y="49" fill="#60428C" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">Terraform provisions</text>
+<polyline points="1307.890625,45 1341.890625,45" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="1341.890625,45 1333.890625,40 1333.890625,50" fill="#383838"/>
+<text x="1349.890625" y="49" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">Data flow</text>
+<rect x="49" y="127" width="112" height="86" rx="4" fill="#E9E2F7" stroke="#6B46A3"/>
+<rect x="40" y="118" width="112" height="86" rx="4" fill="#FFFFFF" stroke="#6B46A3"/>
+<rect x="40" y="118" width="112" height="23" rx="4" fill="#E9E2F7" stroke="#6B46A3"/>
+<text x="50" y="134" fill="#60428C" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="400">admin.tf</text>
+<text x="77.421875" y="180" fill="#60428C" font-family="Inter, Arial, sans-serif" font-size="32" font-weight="600">{ }</text>
+<text x="52.22265625" y="234" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">Admin root</text>
+<text x="16.6640625" y="256" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="400">organization admin token</text>
+<rect x="49" y="315" width="112" height="86" rx="4" fill="#E9E2F7" stroke="#6B46A3"/>
+<rect x="40" y="306" width="112" height="86" rx="4" fill="#FFFFFF" stroke="#6B46A3"/>
+<rect x="40" y="306" width="112" height="23" rx="4" fill="#E9E2F7" stroke="#6B46A3"/>
+<text x="50" y="322" fill="#60428C" font-family="Inter, Arial, sans-serif" font-size="12" font-weight="400">writer.tf</text>
+<text x="77.421875" y="368" fill="#60428C" font-family="Inter, Arial, sans-serif" font-size="32" font-weight="600">{ }</text>
+<text x="53.33984375" y="422" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">Writer root</text>
+<text x="60.58984375" y="444" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="400">writer token</text>
+<polyline points="100.0,266.0 100.0,272.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="100.0,278.0 100.0,284.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="100,286 100,302" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polygon points="100,302 95,294 105,294" fill="#6B46A3"/>
+<rect x="120.421875" y="274" width="83.15625" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="125.421875" y="289" fill="#60428C" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">writer token</text>
+<rect x="330" y="196" width="610" height="364" rx="5" fill="#F4EFEA" stroke="#C5BBB1"/>
+<ellipse cx="356.5" cy="221.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
+<polyline points="346,240 346,236 352,232 361,232 367,236 367,240" fill="none" stroke="#383838" stroke-width="2"/>
+<text x="378" y="236" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="600">Writer account</text>
+<text x="533.2734375" y="234" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="400">owns every database and share</text>
+<rect x="1052" y="196" width="240" height="364" rx="5" fill="#F0F8FD" stroke="#AACADD"/>
+<ellipse cx="1078.5" cy="221.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
+<polyline points="1068,240 1068,236 1074,232 1083,232 1089,236 1089,240" fill="none" stroke="#383838" stroke-width="2"/>
+<text x="1100" y="236" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="600">Reader account</text>
+<polyline points="164.0,150.0 170.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="176.0,150.0 182.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="188.0,150.0 194.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="200.0,150.0 206.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="212.0,150.0 218.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="224.0,150.0 230.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="236.0,150.0 242.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="248.0,150.0 254.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="260.0,150.0 266.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="272.0,150.0 278.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="284.0,150.0 290.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="296.0,150.0 302.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="308.0,150.0 314.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="320.0,150.0 326.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="332.0,150.0 338.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="344.0,150.0 350.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="356.0,150.0 362.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="368.0,150.0 374.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="380.0,150.0 386.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="392.0,150.0 398.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="404.0,150.0 410.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="416.0,150.0 422.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="428.0,150.0 434.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="440.0,150.0 446.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="452.0,150.0 458.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="464.0,150.0 470.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="476.0,150.0 482.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="488.0,150.0 494.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="500.0,150.0 506.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="512.0,150.0 518.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="524.0,150.0 530.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="536.0,150.0 542.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="548.0,150.0 554.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="560.0,150.0 566.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="572.0,150.0 578.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="584.0,150.0 590.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="596.0,150.0 602.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="608.0,150.0 614.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="620.0,150.0 626.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="632.0,150.0 638.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="644.0,150.0 650.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="656.0,150.0 662.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="668.0,150.0 674.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="680.0,150.0 686.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="692.0,150.0 698.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="704.0,150.0 710.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="716.0,150.0 722.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="728.0,150.0 734.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="740.0,150.0 746.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="752.0,150.0 758.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="764.0,150.0 770.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="776.0,150.0 782.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="788.0,150.0 794.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="800.0,150.0 806.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="812.0,150.0 818.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="824.0,150.0 830.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="836.0,150.0 842.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="848.0,150.0 854.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="860.0,150.0 866.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="872.0,150.0 878.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="884.0,150.0 890.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="896.0,150.0 902.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="908.0,150.0 914.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="920.0,150.0 926.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="932.0,150.0 938.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="944.0,150.0 950.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="956.0,150.0 962.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="968.0,150.0 974.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="980.0,150.0 986.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="992.0,150.0 998.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1004.0,150.0 1010.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1016.0,150.0 1022.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1028.0,150.0 1034.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1040.0,150.0 1046.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1052.0,150.0 1058.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1064.0,150.0 1070.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1076.0,150.0 1082.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1088.0,150.0 1094.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1100.0,150.0 1106.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1112.0,150.0 1118.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1124.0,150.0 1130.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1136.0,150.0 1142.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1148.0,150.0 1154.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1160.0,150.0 1166.0,150.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="640.0,150.0 640.0,156.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="640.0,162.0 640.0,168.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="640.0,174.0 640.0,180.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="640,180 640,196" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polygon points="640,196 635,188 645,188" fill="#6B46A3"/>
+<polyline points="1172.0,150.0 1172.0,156.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1172.0,162.0 1172.0,168.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1172.0,174.0 1172.0,180.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="1172,180 1172,196" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polygon points="1172,196 1167,188 1177,188" fill="#6B46A3"/>
+<ellipse cx="220.0" cy="150.0" rx="11.0" ry="11.0" fill="#6B46A3" stroke="#6B46A3"/>
+<text x="217.25" y="154" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="600">1</text>
+<rect x="281.921875" y="122" width="276.15625" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="286.921875" y="137" fill="#60428C" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">service accounts, tokens, Duckling settings</text>
+<polyline points="164.0,346.0 170.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="176.0,346.0 182.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="188.0,346.0 194.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="200.0,346.0 206.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="212.0,346.0 218.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="224.0,346.0 230.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="236.0,346.0 242.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="248.0,346.0 254.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="260.0,346.0 266.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="272.0,346.0 278.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="284.0,346.0 290.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="296.0,346.0 302.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="308.0,346.0 314.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="320.0,346.0 326.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="332.0,346.0 338.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="344.0,346.0 350.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="356.0,346.0 362.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="368.0,346.0 374.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="380.0,346.0 386.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="392.0,346.0 398.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="404.0,346.0 410.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="416.0,346.0 422.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="428.0,346.0 434.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="440.0,346.0 446.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="452.0,346.0 458.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="464.0,346.0 470.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="476.0,346.0 482.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="488.0,346.0 494.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="500.0,346.0 506.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="512.0,346.0 518.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="524.0,346.0 530.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="536.0,346.0 542.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="548.0,346.0 554.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="560.0,346.0 566.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="572.0,346.0 578.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="584.0,346.0 590.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="596.0,346.0 602.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="608.0,346.0 614.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="620.0,346.0 626.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="632.0,346.0 638.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="644.0,346.0 650.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="656.0,346.0 662.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="668.0,346.0 674.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="680.0,346.0 686.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="692.0,346.0 698.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="704.0,346.0 710.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="716.0,346.0 722.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="728.0,346.0 734.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="740.0,346.0 746.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="752.0,346.0 758.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="764.0,346.0 770.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="776.0,346.0 782.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="788.0,346.0 794.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="800.0,346.0 806.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="812.0,346.0 818.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="824.0,346.0 830.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="836.0,346.0 842.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="848.0,346.0 854.0,346.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="650.0,346.0 650.0,352.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="650.0,358.0 650.0,362.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="650,362 650,376" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polygon points="650,376 645,368 655,368" fill="#6B46A3"/>
+<polyline points="854.0,346.0 854.0,352.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="854.0,358.0 854.0,362.0" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polyline points="854,362 854,376" fill="none" stroke="#6B46A3" stroke-width="2"/>
+<polygon points="854,376 849,368 859,368" fill="#6B46A3"/>
+<ellipse cx="220.0" cy="346.0" rx="11.0" ry="11.0" fill="#6B46A3" stroke="#6B46A3"/>
+<text x="215.94921875" y="350" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="600">2</text>
+<rect x="354.6875" y="318" width="230.625" height="21" rx="3" fill="#F4EFEA" stroke="none"/>
+<text x="359.6875" y="333" fill="#60428C" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">databases, schemas, shares, grants</text>
+<rect x="40" y="478" width="132" height="60" rx="4" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="61,508 152,508" fill="none" stroke="#068475" stroke-width="2"/>
+<rect x="57" y="498" width="20" height="20" rx="3" fill="#FFFFFF" stroke="#068475"/>
+<rect x="98" y="498" width="20" height="20" rx="3" fill="#D0EEE8" stroke="#068475"/>
+<rect x="139" y="498" width="20" height="20" rx="3" fill="#50C7B7" stroke="#068475"/>
+<text x="71.36328125" y="566" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">Pipeline</text>
+<polyline points="394.5,390 394.5,396" fill="none" stroke="#5E9C91" stroke-width="1"/>
+<polyline points="394.5,472 394.5,478" fill="none" stroke="#5E9C91" stroke-width="1"/>
+<polyline points="364,415.0 370,415.0" fill="none" stroke="#5E9C91" stroke-width="1"/>
+<polyline points="468,415.0 474,415.0" fill="none" stroke="#5E9C91" stroke-width="1"/>
+<polyline points="419.0,390 419.0,396" fill="none" stroke="#5E9C91" stroke-width="1"/>
+<polyline points="419.0,472 419.0,478" fill="none" stroke="#5E9C91" stroke-width="1"/>
+<polyline points="364,434.0 370,434.0" fill="none" stroke="#5E9C91" stroke-width="1"/>
+<polyline points="468,434.0 474,434.0" fill="none" stroke="#5E9C91" stroke-width="1"/>
+<polyline points="443.5,390 443.5,396" fill="none" stroke="#5E9C91" stroke-width="1"/>
+<polyline points="443.5,472 443.5,478" fill="none" stroke="#5E9C91" stroke-width="1"/>
+<polyline points="364,453.0 370,453.0" fill="none" stroke="#5E9C91" stroke-width="1"/>
+<polyline points="468,453.0 474,453.0" fill="none" stroke="#5E9C91" stroke-width="1"/>
+<rect x="370" y="396" width="98" height="76" rx="6" fill="#D0EEE8" stroke="#5E9C91"/>
+<rect x="397.44" y="415.76" width="43.12" height="36.48" rx="3" fill="#A4D7C9" stroke="#5E9C91"/>
+<text x="360.0" y="510" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">R/W Duckling</text>
+<ellipse cx="650.0" cy="467.0" rx="60.0" ry="13.0" fill="#FAF175" stroke="#383838"/>
+<rect x="590" y="397" width="120" height="70" rx="0" fill="#FAF175" stroke="#FAF175"/>
+<polyline points="590,397 590,467" fill="none" stroke="#383838" stroke-width="1"/>
+<polyline points="710,397 710,467" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="650.0" cy="397.0" rx="60.0" ry="13.0" fill="#FFF9BF" stroke="#383838"/>
+<polyline points="609,429 691,429" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<polyline points="609,448 691,448" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<text x="608.8046875" y="510" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">Database</text>
+<rect x="800" y="405" width="108" height="58" rx="4" fill="#CEEBFF" stroke="#383838"/>
+<polyline points="828,434 882,422" fill="none" stroke="#383838" stroke-width="1"/>
+<polyline points="828,434 882,446" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="825.0" cy="434.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
+<ellipse cx="883.0" cy="422.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
+<ellipse cx="883.0" cy="446.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
+<text x="782.921875" y="510" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">Restricted share</text>
+<polyline points="172,508 290,508 290,434 362,434" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="362,434 354,429 354,439" fill="#383838"/>
+<ellipse cx="290.0" cy="471.0" rx="11.0" ry="11.0" fill="#6B46A3" stroke="#6B46A3"/>
+<text x="285.86328125" y="475" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="600">3</text>
+<rect x="209.40625" y="480" width="43.1875" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="214.40625" y="495" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">loads</text>
+<polyline points="476,434 582,434" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="582,434 574,429 574,439" fill="#383838"/>
+<rect x="505.27734375" y="406" width="47.4453125" height="21" rx="3" fill="#F4EFEA" stroke="none"/>
+<text x="510.27734375" y="421" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">writes</text>
+<polyline points="716,434 792,434" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="792,434 784,429 784,439" fill="#383838"/>
+<rect x="719.5546875" y="406" width="68.890625" height="21" rx="3" fill="#F4EFEA" stroke="none"/>
+<text x="724.5546875" y="421" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">publishes</text>
+<rect x="1136" y="378" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
+<rect x="1124" y="390" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
+<rect x="1112" y="402" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
+<rect x="1138.88" y="419.16" width="42.24" height="31.68" rx="3" fill="#97D4FF" stroke="#6E9FBF"/>
+<text x="1128.84375" y="510" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">Read pool</text>
+<text x="1110.08203125" y="532" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="400">read-scaling token</text>
+<polyline points="916,434 1104,434" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="1104,434 1096,429 1096,439" fill="#383838"/>
+<ellipse cx="1022.0" cy="434.0" rx="11.0" ry="11.0" fill="#6B46A3" stroke="#6B46A3"/>
+<text x="1017.671875" y="438" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="600">4</text>
+<rect x="936.01953125" y="402" width="95.9609375" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="941.01953125" y="417" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">grant + attach</text>
+<rect x="1318" y="393" width="108" height="82" rx="4" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="1318,411 1426,411" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="1329.5" cy="401.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<ellipse cx="1338.5" cy="401.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<ellipse cx="1347.5" cy="401.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<rect x="1336" y="445" width="11" height="19" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1356" y="428" width="11" height="36" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1376" y="437" width="11" height="27" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1396" y="420" width="11" height="44" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<text x="1331.72265625" y="510" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">BI &amp; apps</text>
+<polyline points="1310,434 1240,434" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="1240,434 1248,429 1248,439" fill="#383838"/>
+<rect x="1247.046875" y="402" width="55.90625" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="1252.046875" y="417" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">queries</text>
 </svg>

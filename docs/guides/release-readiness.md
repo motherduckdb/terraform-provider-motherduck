@@ -2,51 +2,52 @@
 page_title: "Prepare a release"
 subcategory: "Contributing"
 description: |-
-  The checklist to complete before tagging a provider release.
+  The checklist to complete before and after tagging a provider release.
 ---
 
 # Prepare a release
 
-Releases go to GitHub Releases with signed checksums and are published through
-the Terraform Registry. Users normally install with `terraform init`. The
-[filesystem mirror guide](github-installation.md) covers direct installation.
+Releases are tag-driven. The [CI and release guide](ci-and-release.md) describes
+what the release workflow runs and which assets it publishes.
 
-## Validate the candidate
+## Before tagging
 
-1. Prepare version-specific release notes in `release-notes/<tag>.md` with public
-   change links. Describe what changed for users, and add an "Upgrading"
-   section when the release changes behavior or needs a new version constraint.
-   Release notes have no "Verification" section. Record test evidence in the
-   release pull request.
+1. Write `release-notes/<tag>.md` for users, with public change links. Add an
+   "Upgrading" section when the release changes behavior or needs a new version
+   constraint. Do not add a "Verification" section. Put test evidence in the
+   release pull request. The workflow fails without this file.
 2. Run `make pre-push-check`, `make release-check`, and `make release-sign-check`.
-3. Merge a reviewed PR after all required checks pass.
-4. Verify CI and live SQL tests on the exact merged commit.
-5. Confirm the protected `motherduck-live` environment supplies the SQL test token.
-6. Tag that commit with a semantic version and push the tag.
+3. Merge the release PR after all required checks pass.
+4. Confirm CI and `Live exact-main` passed on the merged commit.
+5. Tag that `main` commit and push the tag. The workflow rejects tags on commits
+   that are not in `main`.
 
-The tag workflow runs preflight, live tests, and native installation tests, then
-publishes four ZIPs, checksums, a detached GPG signature over the checksums, a
-protocol manifest, and GitHub build-provenance attestations. Signing reads the
-publisher key from the protected `motherduck-release` environment.
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
 
-## Verify publication
+## After tagging
 
-Check that the tag matches the tested commit, the release workflow succeeds, and
-all four platform ZIPs plus `SHA256SUMS`, `SHA256SUMS.sig`, and `manifest.json`
-are present. Download a ZIP and checksums into a fresh directory, verify its
-digest and provenance, then install it with the documented filesystem mirror and
-run Terraform schema discovery and validation.
+1. Confirm the release workflow succeeded and the release has four platform
+   ZIPs, `SHA256SUMS`, `SHA256SUMS.sig`, and `manifest.json`.
+2. Download one ZIP into a fresh directory, verify its checksum and provenance,
+   and install it as described in [Install from GitHub Releases](github-installation.md).
+3. After the Terraform Registry lists the new version, open a follow-up PR that:
+   - Replaces the previous tag in pinned links and module sources under
+     `templates/` and `examples/`. Find them with
+     `grep -rnE '(tree|blob)/v[0-9]+\.[0-9]+\.[0-9]+|\?ref=v[0-9]|--branch v[0-9]' templates examples`.
+     They use the forms `tree/vX.Y.Z`, `blob/vX.Y.Z`, `?ref=vX.Y.Z`, and
+     `--branch vX.Y.Z`.
+   - Updates the provider version in `examples/pulumi/python/Pulumi.yaml` and
+     `examples/pulumi/python/README.md`. The Pulumi bridge installs that version
+     from the Registry.
+   - Runs `make docs` and `make test-pulumi`.
 
-After the Terraform Registry lists the new version, update the provider version
-in `examples/pulumi/python/Pulumi.yaml` and run `make test-pulumi`. The Pulumi
-bridge installs that pinned version from the Registry.
+Never overwrite published assets or reuse a version. Dependency lock files pin
+package digests, so fix a bad release by publishing a new version.
 
-Do not overwrite published artifacts or reuse a version. Correct a release by
-publishing a new version because dependency lock files depend on immutable digests.
-
-## Registry publication
-
-Release artifacts satisfy the Terraform Registry's
-[publishing requirements](https://developer.hashicorp.com/terraform/registry/providers/publishing),
-including the detached GPG signature that GitHub provenance does not substitute
-for. A release built without the signing secrets cannot be ingested.
+Registry ingestion needs the detached GPG signature. GitHub provenance does not
+replace it, and a release built without the signing secrets cannot be ingested.
+See the Registry's
+[publishing requirements](https://developer.hashicorp.com/terraform/registry/providers/publishing).

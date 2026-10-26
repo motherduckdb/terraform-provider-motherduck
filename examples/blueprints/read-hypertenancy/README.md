@@ -4,9 +4,9 @@ Creates one tenant database, restricted share, reader service account, and reade
 
 ## Why The Writer Must Run This Module
 
-MotherDuck databases are writable only by the identity that owns them, and only the owner of a share can run `GRANT READ ON SHARE`. So the writer service account cannot be a bystander that Terraform merely creates: the provider's `MOTHERDUCK_TOKEN` for this module must **be** the writer's token. Everything the module creates (tenant databases, schemas, shares, grants) is then owned by the writer, which is exactly what lets the ingestion pipeline write and the reader accounts read.
+MotherDuck databases are writable only by the identity that owns them, and only the owner of a share can run `GRANT READ ON SHARE`. The provider's `MOTHERDUCK_TOKEN` for this module must therefore be the writer's token. The writer then owns every tenant database, schema, share, and grant the module creates, so the ingestion pipeline can write and the readers can read.
 
-Deployment is therefore two stages, each with its own state:
+Deploy in two stages, each with its own state:
 
 1. **Bootstrap** (admin credentials): the [writer-bootstrap blueprint](../writer-bootstrap) creates the writer service account and read-write token. Store the token in a secret manager.
 2. **Data plane** (this module): run with `MOTHERDUCK_TOKEN` set to the writer token from stage one, plus `MOTHERDUCK_ADMIN_TOKEN` for the REST-backed reader service accounts and tokens.
@@ -26,8 +26,8 @@ terraform -chdir=bootstrap apply       # creates svc_writer_prod and its token
 # store the writer_token output in your secret manager
 ```
 
-Stage two uses a separate root and state. The module source is pinned to
-v0.3.0, which includes reader setup and overlapping token rotation.
+Stage two uses a separate root and state. Pin the module source to a release
+tag and keep that ref independent from the provider version constraint.
 
 ```hcl
 terraform {
@@ -36,7 +36,7 @@ terraform {
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = ">= 0.1.0, < 1.0.0"
+      version = "~> 0.3.0"
     }
   }
 }
@@ -44,7 +44,7 @@ terraform {
 provider "motherduck" {}
 
 module "read_hypertenancy" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.3.0"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.3.8"
 
   expected_writer_username = "svc_writer_prod"
 
@@ -104,7 +104,7 @@ Keep `database_prefix`, `share_prefix`, and `reader_prefix` simple: they must st
 
 ## Reader Setup And Tokens
 
-The writer token has read-write scope over all tenant databases. Distribute it only to the ingestion or modeling runtime, never to tenant-facing services. Generated reader tokens are sensitive Terraform state: move them into the appropriate runtime secret managers immediately, restrict access to the backend that stores this module's state, and do not print them in CI logs.
+The writer token can write every tenant database. Give it only to the ingestion or modeling runtime, never to tenant-facing services.
 
 The `share_urls` and `reader_setup_tokens` outputs are needed once per tenant to
 attach the restricted share. Connect as each reader with its setup token and
@@ -119,35 +119,35 @@ WHERE table_catalog = 'reporting' AND table_schema = 'app';
 
 Setup tokens last one hour and remain managed by this privileged Terraform root.
 A later apply can recreate one after expiration. Never give a setup token to
-the serving application. Retiring a legacy reader token does not remove this
-independent initialization credential.
+the serving application. Retiring the original reader token does not remove
+the setup token.
 
 The module creates the `app` schema but no tables, so the listing is empty until
 your writer pipeline creates them. Query those concrete relations with the
 reader token after publication and replica synchronization.
 
 The attachment is stored for that reader account. Move the setup tokens, share
-URLs, and reader tokens into protected secret automation immediately. Do not
-print them in CI logs.
+URLs, and reader tokens into a secret manager immediately, restrict access to
+this module's state backend, and do not print them in CI logs.
 
 This module also manages each reader's read-scaling pool at one Standard replica
 with a 60-second cooldown. Review the plan before adopting an existing reader
 whose compute settings differ from those defaults.
 
-The legacy reader tokens expire after `reader_token_ttl_seconds` (30 days by
+The original reader tokens expire after `reader_token_ttl_seconds` (30 days by
 default). Terraform does not rotate them automatically. Use overlapping
 generations before the TTL elapses:
 
 ```hcl
-reader_token_generations       = ["2026_10"]
-retire_legacy_reader_token     = false
+reader_token_generations   = ["2026_10"]
+retire_legacy_reader_token = false
 ```
 
 Apply once, transfer `reader_rotation_tokens["acme/2026_10"]` to the backend,
 and verify new connections. Then apply again with the same generation and
-`retire_legacy_reader_token = true` to revoke the legacy `reader_tokens`
-generation. Keep the generation until every consumer has moved. Retirement
-fails the plan unless MotherDuck already lists a named replacement generation.
+`retire_legacy_reader_token = true` to revoke the original `reader_tokens`.
+Keep the generation until every consumer has moved. Retirement fails the plan
+unless MotherDuck already lists a named replacement generation.
 
 ## Removing A Tenant
 

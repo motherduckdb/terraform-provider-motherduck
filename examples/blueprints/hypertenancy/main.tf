@@ -1,3 +1,6 @@
+# Legacy module. New deployments should use ../read-hypertenancy, which manages
+# the same resources at the same addresses and adds a writer identity guard.
+
 locals {
   tenant_slugs = {
     for tenant_id, tenant in var.tenants :

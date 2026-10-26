@@ -8,7 +8,7 @@ isolate_live_test_environment
 : "${MOTHERDUCK_ADMIN_TOKEN:?Admin token required}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d%H%M%S)_$$}"
 [[ "${RUN_ID}" =~ ^[a-zA-Z0-9_]+$ ]] || exit 1
-PROVIDER_VERSION=0.2.10
+PROVIDER_VERSION=0.3.0
 prepare_provider_mirror
 umask 077
 result_dir="${ROOT_DIR}/test-results/role-audit-${RUN_ID}"
@@ -19,7 +19,7 @@ prefix="tf_e06_${RUN_ID}"
 cat > "${result_dir}/fixture/main.tf" <<HCL
 terraform {
   required_providers {
-    motherduck = { source = "motherduckdb/motherduck", version = "= 0.2.10" }
+    motherduck = { source = "motherduckdb/motherduck", version = "= 0.3.0" }
   }
 }
 provider "motherduck" {}

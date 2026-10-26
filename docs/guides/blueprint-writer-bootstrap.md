@@ -7,11 +7,11 @@ description: |-
 
 # Writer bootstrap blueprint
 
-This blueprint creates the writer service account and read-write token that own tenant data infrastructure. It is stage one for the hypertenancy and read-hypertenancy blueprints: MotherDuck databases are writable only by the identity that owns them, and only the owner of a share can `GRANT READ ON SHARE`, so tenant data planes should be applied as a dedicated writer identity instead of a personal token.
+This blueprint creates the writer service account and read-write token that own tenant data. It is stage one of the [read hypertenancy](blueprint-read-hypertenancy.md) blueprint. Only the owner of a database can write to it, and only the owner of a share can `GRANT READ ON SHARE`, so tenant data planes are applied with a dedicated writer token instead of a personal token.
 
 ## Terraform shape
 
-One `motherduck_service_account`, one legacy `motherduck_access_token` with `token_type = "read_write"`, and one additional read-write token per entry in `writer_token_generations`. The example implementation is in `examples/blueprints/writer-bootstrap`.
+One `motherduck_service_account`, one original `motherduck_access_token` with `token_type = "read_write"`, and one additional read-write token per entry in `writer_token_generations`. The example implementation is in `examples/blueprints/writer-bootstrap`.
 
 This blueprint is REST-only and requires an organization-admin `MOTHERDUCK_ADMIN_TOKEN`. No SQL token is needed.
 
@@ -19,7 +19,7 @@ This blueprint is REST-only and requires an organization-admin `MOTHERDUCK_ADMIN
 
 Apply this module from an admin-owned root module with its own state, separate from tenant data state. The workflow holds organization-admin credentials and produces a read-write token, so it deserves tighter access than routine tenant changes.
 
-Store the generated writer token in a secret manager immediately. Downstream data-plane Terraform (for example the read-hypertenancy blueprint) reads it from there and uses it as `MOTHERDUCK_TOKEN`, which makes the writer the owner of every tenant database and share it creates.
+Store the generated writer token in a secret manager immediately. The data-plane Terraform reads it from there and uses it as `MOTHERDUCK_TOKEN`, which makes the writer the owner of every tenant database and share it creates.
 
 ## Token lifecycle
 
@@ -62,7 +62,7 @@ Outputs:
 
 ```hcl
 module "writer_bootstrap" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.3.0"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.3.8"
 
   writer_username = "svc_writer_prod"
 }
@@ -80,5 +80,6 @@ output "writer_rotation_tokens" {
 
 Pin the module source to a release tag and keep that ref independent from the provider version constraint.
 
-Continue with [customer-facing analytics](customer-facing-analytics.md) to use
-the writer with a complete reader provisioning and attachment workflow.
+Continue with [read hypertenancy](blueprint-read-hypertenancy.md) for the
+reusable tenant module, or [customer-facing analytics](customer-facing-analytics.md)
+for a complete application with a backend.

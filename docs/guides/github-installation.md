@@ -9,56 +9,59 @@ description: |-
 
 Most users do not need this guide. The provider is published as
 [motherduckdb/motherduck](https://registry.terraform.io/providers/motherduckdb/motherduck/latest),
-so `terraform init` installs it and verifies the publisher signature with no
-extra configuration.
+so `terraform init` installs it and verifies the publisher signature.
 
-Use this guide to install a release directly from
+Install directly from
 [GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases)
-instead: in an air-gapped environment, to pin a locally verified artifact, or
-for a version predating Registry publication (v0.2.1 and earlier are not on the
-Registry). The source address identifies the provider. A filesystem mirror tells
-Terraform where to obtain it.
+when you work in an air-gapped environment, want to pin a locally verified
+artifact, or need v0.2.1 or earlier, which are not on the Registry.
 
 ## Download and verify
 
-Use Terraform 1.5 or later and select your platform: `linux_amd64`,
+You need Terraform 1.5 or later. Pick your platform: `linux_amd64`,
 `linux_arm64`, `darwin_amd64` (Intel Mac), or `darwin_arm64` (Apple Silicon).
-The example uses the GitHub CLI, `shasum` (use `sha256sum` on Linux), and `awk`. Alternatively download
-the same files from the release page.
+Each release has one ZIP per platform plus these files:
+
+- `terraform-provider-motherduck_<version>_SHA256SUMS`
+- `terraform-provider-motherduck_<version>_SHA256SUMS.sig`
+- `terraform-provider-motherduck_<version>_manifest.json`
+
+The example uses the GitHub CLI, `shasum` (use `sha256sum` on Linux), and `awk`.
+You can also download the files from the release page.
 
 ```shell
-version=0.3.0
+version=0.3.8
 platform=darwin_arm64
 archive="terraform-provider-motherduck_${version}_${platform}.zip"
 sums="terraform-provider-motherduck_${version}_SHA256SUMS"
 download_dir="$(mktemp -d)"
 gh release download "v${version}" \
   --repo motherduckdb/terraform-provider-motherduck \
-  --pattern "${archive}" --pattern "${sums}" --dir "${download_dir}"
+  --pattern "${archive}" --pattern "${sums}" --pattern "${sums}.sig" \
+  --dir "${download_dir}"
 expected="$(awk -v name="${archive}" '$2 == name { print $1 }' "${download_dir}/${sums}")"
 actual="$(shasum -a 256 "${download_dir}/${archive}" | awk '{print $1}')"
 test -n "${expected}" && test "${actual}" = "${expected}"
 ```
 
-Continue only if the verification command succeeds. Checksums alone detect file
-corruption, not substitution. Releases also carry a detached publisher GPG
-signature over the checksum file, plus GitHub build-provenance attestations,
-verifiable with
-`gh attestation verify PATH_TO_ZIP --repo motherduckdb/terraform-provider-motherduck`.
-
-To check the publisher signature, import the public key registered on the
-Terraform Registry, then verify the detached signature over the checksum file:
+Continue only if the last command succeeds. A checksum detects corruption, not
+substitution. To check the publisher, import the public key registered on the
+Terraform Registry and verify the signature over the checksum file:
 
 ```shell
-gh release download "v${version}" \
-  --repo motherduckdb/terraform-provider-motherduck \
-  --pattern "${sums}.sig" --dir "${download_dir}"
 gpg --verify "${download_dir}/${sums}.sig" "${download_dir}/${sums}"
+```
+
+Releases also carry GitHub build-provenance attestations:
+
+```shell
+gh attestation verify "${download_dir}/${archive}" \
+  --repo motherduckdb/terraform-provider-motherduck
 ```
 
 ## Configure a mirror
 
-Choose a persistent local mirror directory. For example, from your working directory:
+Copy the ZIP into a persistent mirror directory:
 
 ```shell
 mirror="${PWD}/provider-mirror"
@@ -66,8 +69,8 @@ mkdir -p "${mirror}/registry.terraform.io/motherduckdb/motherduck"
 cp "${download_dir}/${archive}" "${mirror}/registry.terraform.io/motherduckdb/motherduck/"
 ```
 
-Create a Terraform CLI configuration file called `provider-installation.tfrc`.
-Replace the example path with the absolute value of `mirror` above:
+Create a Terraform CLI configuration file, for example `provider-installation.tfrc`,
+with the absolute path of `mirror`:
 
 ```hcl
 provider_installation {
@@ -82,30 +85,29 @@ provider_installation {
 ```
 
 Set `TF_CLI_CONFIG_FILE` to that file's absolute path in the shell or CI job that
-runs Terraform. This overrides your usual CLI configuration. Include any other
-installation settings your environment requires. Do not commit downloaded
-binaries or machine-specific paths.
+runs Terraform. This replaces your usual CLI configuration, so add any other
+installation settings you need. Do not commit downloaded binaries or
+machine-specific paths.
 
-In your Terraform root module, declare:
+In your root module, pin the same version:
 
 ```hcl
 terraform {
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = "= 0.3.0"
+      version = "= 0.3.8"
     }
   }
 }
+
 provider "motherduck" {}
 ```
 
 Run `terraform init`, `terraform providers schema -json`, and `terraform validate`.
-Terraform may label the mirror package unauthenticated because it lacks a
-Registry signing chain. The package should still install and expose its schema.
-Commit the resulting dependency lock file. Supply MotherDuck credentials only
-when performing authenticated plans or applies.
+Terraform may report the mirror package as unauthenticated because it has no
+Registry signing chain. It still installs. Commit the resulting dependency lock
+file. Credentials are needed only for plan and apply.
 
-For CI and remote runners, make the mirror and CLI configuration available on
-each runner before `terraform init`. Install the ZIP matching that runner's
-platform. A laptop-only mirror is not available remotely.
+In CI, make the mirror and CLI configuration available on each runner before
+`terraform init`, with the ZIP for that runner's platform.

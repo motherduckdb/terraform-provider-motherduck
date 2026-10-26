@@ -7,170 +7,144 @@ description: |-
 
 # CI and release
 
-This repository uses separate workflows for pull-request checks, live MotherDuck smoke tests, and tag-driven releases.
+Three workflows gate the provider:
 
-## Pull request and push CI
+| Workflow | Runs on | Credentials |
+| --- | --- | --- |
+| `.github/workflows/ci.yml` | Pull requests, pushes to `main`, manual dispatch | None |
+| `.github/workflows/live-smoke.yml` | Pushes to `main`, weekly schedule, manual dispatch | Protected `motherduck-live` environment |
+| `.github/workflows/release.yml` | Semantic version tags | `motherduck-live` and `motherduck-release` environments |
 
-`.github/workflows/ci.yml` runs on pull requests, pushes to `main`, and manual dispatch.
+Pull-request code never receives live or signing credentials.
 
-The required offline jobs run independently:
+## Pull request CI
 
-```bash
-make ci-static-check
-make release-check
-make test-unit test-contract
+`ci.yml` runs these jobs independently:
+
+| Job | Command | Covers |
+| --- | --- | --- |
+| `Static checks` | `make ci-static-check` | Formatting, lint, vulnerability scan, workflow and shell checks, script unit tests, docs drift, repository hygiene, build |
+| `Behavior contracts` | `make test-unit test-contract` | Race-enabled unit tests and Terraform protocol lifecycles against hermetic SQL and REST clients |
+| `Pulumi bridge` | `make test-pulumi` | Pulumi schema generation and the Python example preview |
+| `Terraform <version>`, `OpenTofu <version>` | `make test-cli-versions` | Example validation, import, invalid-configuration, and missing-credential diagnostics |
+| `Package <runner>` | `make release-check` | Release ZIP build, filesystem mirror install, schema discovery, validation |
+
+`make ci-static-check` is `make static-check` without `test-cli`, because the CLI
+matrix already runs that suite. The local `make pre-push-check` runs both.
+
+The CLI matrix covers these versions. Each CLI download is checked against the
+HashiCorp or OpenTofu release signing key.
+
+- Terraform `1.5.7`, `1.8.5`, `1.12.2`, `1.15.8`, `1.15.9`, `1.16.1`, `1.16.4`
+- OpenTofu `1.12.6`
+
+Package jobs run on `ubuntu-22.04`, `ubuntu-22.04-arm`, `macos-15-intel`, and
+`macos-15`, the same runners the release workflow builds on.
+
+The `Pulumi bridge` job installs the Pulumi CLI pinned in
+`scripts/lib/pulumi-cli.sh` and generates the schema through the pinned Any
+Terraform Provider bridge. It fails when a resource or data source does not map,
+or when the [Pulumi guide](pulumi.md) does not name an ephemeral resource the
+bridge cannot run. Bump the CLI, bridge, and example pins together.
+
+## Live checks
+
+The `motherduck-live` environment supplies:
+
+- `MOTHERDUCK_TOKEN`: read-write token for SQL-backed resources and data sources.
+- `MOTHERDUCK_ADMIN_TOKEN`: optional organization-admin token. Admin jobs fall back to `MOTHERDUCK_TOKEN` when it is not set.
+
+Use a dedicated test organization. Keep the environment's deployment rules
+restricted to `main` and release tags. After rotating a token, run the live
+workflow on `main` to verify it. A missing `MOTHERDUCK_TOKEN` fails the job.
+
+On every push to `main`, `live-smoke.yml` runs:
+
+- `Live exact-main`: `make test-live-required` on Terraform `1.16.4`.
+- `Live admin lifecycle`: `make test-live-admin`. It creates disposable service accounts, rotates tokens, repairs revoked role grants, and checks writer/reader isolation.
+- `Live Pulumi lifecycle`: `make test-live-pulumi`, after the other two finish. It drives `test-fixtures/pulumi-live` through create, refresh, update, replacement, import, and destroy, then audits cleanup.
+
+The weekly schedule and manual runs use `Live MotherDuck smoke`, which runs
+`make test-terraform-versions` once per CLI version, followed by
+`Audit live cleanup`. The schedule runs read-only checks on every version, SQL
+lifecycle checks on Terraform `1.5.7`, Terraform `1.16.4`, and OpenTofu `1.12.6`,
+and the blueprint lifecycle on Terraform `1.16.4`. Manual inputs:
+
+| Input | Effect |
+| --- | --- |
+| `terraform_versions`, `opentofu_versions` | Override the version lists |
+| `run_sql_lifecycle`, `run_blueprint_lifecycle` | Run those lifecycles on every selected version |
+| `run_admin_lifecycle` | Run the admin and Pulumi jobs on `main` |
+
+Preview-surface smokes (Guide, Dive, Flight, Dive-and-Flight blueprint) exit
+successfully with a skip when the account lacks the required `MD_*` functions.
+A green matrix is therefore not proof of coverage. Set the matching
+`MD_TF_ACC_REQUIRE_*` variable to fail instead.
+
+Live Smoke and the release `Live release contracts` job share the
+`motherduck-live-account` concurrency group, so one run uses the account at a
+time. GitHub keeps one pending run per group. A pending release job can be
+superseded by Live Smoke and must then be re-run.
+
+## Release workflow
+
+`release.yml` runs on tags matching `vX.Y.Z` or `vX.Y.Z-*`. Tags with a suffix
+are published as prereleases. Follow the [release checklist](release-readiness.md).
+
+1. `Preflight` requires `release-notes/<tag>.md` and a tag on a commit already
+   in `main`. It runs `make release-preflight-check release-check`. The
+   preflight gate is the pull-request gate without `vulncheck`, which runs as an
+   advisory step so a new advisory in an indirect dependency cannot block an
+   unrelated release.
+2. `Live release contracts` runs `make test-live-required` on the tagged commit.
+3. `Build <os>_<arch>` packages the provider on each native runner with
+   `scripts/package-release.sh`, installs and starts it with
+   `scripts/test-release-package.sh`, records a digest, and attests provenance.
+4. `Publish GitHub release` verifies the digests, adds the Registry manifest,
+   writes `SHA256SUMS`, signs it with `scripts/sign-release.sh`, attests all
+   assets, and creates the release.
+
+Signing uses `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` secrets and the
+`GPG_FINGERPRINT` variable on the protected `motherduck-release` environment.
+
+Release assets for version `X.Y.Z`:
+
+```text
+terraform-provider-motherduck_X.Y.Z_linux_amd64.zip
+terraform-provider-motherduck_X.Y.Z_linux_arm64.zip
+terraform-provider-motherduck_X.Y.Z_darwin_amd64.zip
+terraform-provider-motherduck_X.Y.Z_darwin_arm64.zip
+terraform-provider-motherduck_X.Y.Z_manifest.json
+terraform-provider-motherduck_X.Y.Z_SHA256SUMS
+terraform-provider-motherduck_X.Y.Z_SHA256SUMS.sig
 ```
 
-`Static checks` owns formatting, linting, vulnerability, workflow, shell, docs,
-repository hygiene, and provider builds. The CLI matrix owns example validation
-and diagnostic checks, so the static job does not run that suite a second time.
-Native package jobs own packaging and installation checks. `Behavior contracts`
-owns race-enabled unit tests and Terraform protocol lifecycles against hermetic
-SQL and REST clients. A global coverage percentage is not required. Each contract
-must assert externally visible state and exact backend side effects.
+## Native builds
 
-Go's module and build caches are managed by `setup-go`. Static and release
-preflight jobs additionally cache lint and documentation tools by operating
-system, architecture, Go version, Makefile, and dependency lockfile. Tools are
-still checked against their pinned versions. Provider binaries, Terraform state,
-and test results are not reused from this tool cache. The local
-`make pre-push-check` continues to run the full static and CLI suites.
+The provider embeds DuckDB through CGO, so each package is built on a native
+runner instead of cross-compiled. Linux packages are built on Ubuntu 22.04 with
+a static C++ runtime and require at most glibc 2.34. macOS packages target
+macOS 13. `scripts/test-release-package.sh` fails when a package raises either
+floor.
 
-The Terraform compatibility job repeats the offline Terraform checks against supported Terraform versions:
-
-- `1.5.7`
-- `1.8.5`
-- `1.12.2`
-- `1.15.8`
-- `1.15.9`
-- `1.16.1`
-- `1.16.4`
-
-Every matrix job runs `make test-cli-versions` with a CLI whose checksum file is
-verified against the HashiCorp or OpenTofu release signing key. OpenTofu `1.12.6` is included alongside Terraform. Each job checks examples, invalid imports, invalid-configuration diagnostics, and missing-credential diagnostics against one freshly built local provider, without making live MotherDuck calls.
-
-The live-smoke workflow also runs the provider against OpenTofu. The default OpenTofu version is `1.12.6`. Override it with the `opentofu_versions` manual workflow input or `TOFU_VERSIONS` locally.
-
-## Pulumi bridge checks
-
-The `Pulumi bridge` job runs `make test-pulumi` with no MotherDuck
-credentials. It installs the Pulumi CLI version pinned in
-`scripts/lib/pulumi-cli.sh`, verified against the release checksum file and a
-pinned digest, and builds the provider from the checkout. It then generates
-the Pulumi schema through the pinned Any Terraform Provider bridge and fails
-when a resource or data source does not map, or when the
-[Pulumi guide](pulumi.md) does not name an ephemeral resource the bridge cannot
-run. It also previews the Python example. Bump the CLI, the bridge, and the
-example pins together.
-
-## Native package checks
-
-Four native package jobs run on Linux amd64/arm64 and macOS Intel/ARM runners.
-Each builds the release ZIP, installs it through a filesystem mirror, starts the
-plugin through Terraform schema discovery, and validates its configuration.
-Static and CLI jobs have bounded runtimes. Behavior tests run with race detection.
-
-## Trusted live checks
-
-`.github/workflows/live-smoke.yml` runs a trusted live contract on every push to `main`, runs the compatibility matrix weekly, and can be started manually. Pull-request code never receives live credentials.
-
-The protected `motherduck-live` GitHub environment supplies:
-
-- `MOTHERDUCK_TOKEN`: read-write MotherDuck token for SQL-backed resources and data sources. The admin lifecycle job also uses it when no separate admin token is configured.
-- `MOTHERDUCK_ADMIN_TOKEN`: optional separate organization-admin token for the isolated admin lifecycle job.
-
-Use credentials from a dedicated test organization. The token selected for the
-admin job must have organization-admin permission. Store credentials as secrets
-in the protected `motherduck-live` environment, never in repository files.
-Rotate them from the approved secret-manager entry and run the live workflow on
-`main` to verify the replacement. Environment deployment rules must remain
-restricted to `main` and release tags.
-
-Missing `MOTHERDUCK_TOKEN` fails the job instead of producing a successful skip. The exact-`main` job uses Terraform `1.16.4` and runs `make test-live-required` for SQL, import, no-op-plan, destroy, and cleanup behavior. REST administration behavior is gated hermetically in pull requests. The separate admin job receives an admin token only on `main` pushes or an
-explicit manual `run_admin_lifecycle` request on `main`. It creates disposable
-accounts, rotates tokens, repairs revoked role grants, verifies writer/reader
-isolation, and checks cleanup. Pull-request code never receives either token.
-
-The `Live Pulumi lifecycle` job runs `make test-live-pulumi` after the other
-`main` jobs finish. It drives the Pulumi YAML programs in
-`test-fixtures/pulumi-live` through create, refresh, an empty preview,
-in-place updates, a `deleteBeforeReplace` replacement, import, and destroy,
-then audits cleanup. The admin program runs when an admin token is available.
-
-The weekly matrix runs read-only checks on every supported Terraform version and OpenTofu `1.12.6`. SQL lifecycle checks run on Terraform `1.5.7`, Terraform `1.16.4`, and OpenTofu `1.12.6`. The blueprint lifecycle runs on Terraform `1.16.4`.
-
-Live Smoke and the release live contracts share the `motherduck-live-account`
-concurrency group, so only one workflow uses the live account at a time.
-GitHub keeps one pending run per group. A release job waiting behind Live Smoke
-can be superseded and must be re-run. Manual inputs can request lifecycle coverage for every selected version.
-
-The SQL lifecycle matrix runs the database drop-with-objects smoke plus the Guide, Dive, Flight, Dive-and-Flight blueprint, and share-grant drift smokes. Each preview-surface smoke exits successfully with a skip when the account does not expose the required `MD_*` functions, so a green matrix is not proof of coverage. Set the matching `MD_TF_ACC_REQUIRE_*` variable to turn a skip into a failure.
-
-## Releases
-
-Releases are published to GitHub Releases with signed checksums. Follow the
-[release checklist](release-readiness.md) and the
-[installation guide](github-installation.md).
-
-`.github/workflows/release.yml` runs when a semantic version tag is pushed:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-The release workflow:
-
-1. Runs the release preflight gate (`make release-preflight-check`) and release packaging check. The preflight is the pull-request gate without `vulncheck`. Vulnerability scanning still runs in the release job as an advisory step so a new advisory in an indirect dependency cannot block an unrelated release. Pull-request CI keeps `vulncheck` blocking.
-2. Runs the required SQL lifecycle on the exact tagged commit using the protected live environment.
-3. Builds native provider packages.
-4. Creates a SHA256 digest in each platform build job.
-5. Downloads all platform packages and per-build digests into one release job.
-6. Verifies the per-build digests.
-7. Creates registry SHA256 checksums.
-8. Adds the Terraform Registry manifest.
-9. Signs the checksum file with the publisher GPG key from the protected
-   `motherduck-release` environment, producing the detached binary
-   `SHA256SUMS.sig` the Registry requires.
-10. Publishes GitHub build-provenance attestations for package and release artifacts.
-11. Verifies the checksum, signature, and manifest are present, then creates the
-    GitHub release for the tag.
-
-Signing is the only release step that needs credentials beyond the live test
-token. The publisher key and its passphrase are held as secrets on the protected
-`motherduck-release` environment. `GPG_FINGERPRINT` pins the expected key.
-
-Release targets:
-
-- `linux_amd64`
-- `linux_arm64`
-- `darwin_amd64`
-- `darwin_arm64`
-
-The provider embeds DuckDB through CGO, so release packages are built on native operating system runners instead of cross-compiled with a generic release tool. Linux packages are built on Ubuntu 22.04 with a static C++ runtime and must not need newer than glibc 2.34. macOS packages target macOS 13. `test-release-package.sh` fails when a package raises either floor. `scripts/package-release.sh` is a deliberate small packaging path for those native builds: it builds the provider binary with CGO enabled, names the binary according to Terraform Registry conventions, and zips one platform package per runner.
-
-Add a target only after proving its native runner can build `scripts/package-release.sh` and Terraform can initialize the produced provider binary. Windows packages are intentionally not published until there is a tested native Windows CGO build path.
+Add a target only after its native runner can build `scripts/package-release.sh`
+and Terraform can initialize the result. Windows is not published until there is
+a tested native Windows CGO build.
 
 ## Local release checks
 
-Run the release package and signing checks before pushing release workflow changes:
+Run these before pushing changes to release scripts or workflows:
 
 ```bash
 make release-check
 make release-sign-check
 ```
 
-`make release-sign-check` needs `gpg` and uses a throwaway key, so it never
-touches the publisher key. It also runs inside `make static-check`.
+`make release-sign-check` needs `gpg` and signs with a throwaway key. It also
+runs inside `make test-scripts`.
 
-Create a local package under `dist/`:
+Build a package for the current platform under `dist/`:
 
 ```bash
 VERSION=0.1.0 make release-package-local
-```
-
-Local packages use this naming convention:
-
-```text
-terraform-provider-motherduck_<version>_<os>_<arch>.zip
 ```

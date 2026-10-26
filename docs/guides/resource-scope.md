@@ -87,6 +87,5 @@ request cancellation when `cancel_on_destroy` is true. To forget the run without
 that side effect, remove state ownership as above and delete its configuration.
 Future runs should be triggered by the execution workflow.
 
-Wait-policy changes on an existing run no longer cause replacement. They update
-stored settings only. They do not execute a new run or restart waiting. A changed
-Flight ID or run configuration still means a new execution.
+Changing a run's wait policy updates stored settings only. It does not start a
+new run. Changing the Flight ID or run configuration does start a new run.

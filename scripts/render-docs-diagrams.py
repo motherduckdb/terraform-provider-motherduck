@@ -33,12 +33,20 @@ READER_STROKE = "#AACADD"
 SAND_STROKE = "#C5BBB1"
 
 
+FONT_FAMILY = "Inter, Arial, sans-serif"
+
+
 def font(size, bold=False):
+    # Inter matches the MotherDuck site. Arial and DejaVu are fallbacks.
     names = (
-        ["/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        ["/usr/share/fonts/opentype/inter/Inter-SemiBold.otf",
+         str(Path.home() / "Library/Fonts/Inter-SemiBold.otf"),
+         "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
          "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
         if bold else
-        ["/System/Library/Fonts/Supplemental/Arial.ttf",
+        ["/usr/share/fonts/opentype/inter/Inter-Regular.otf",
+         str(Path.home() / "Library/Fonts/Inter-Regular.otf"),
+         "/System/Library/Fonts/Supplemental/Arial.ttf",
          "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]
     )
     for name in names:
@@ -65,9 +73,9 @@ class Diagram:
         if bounds[2] > (self.width - 20) * 2:
             raise ValueError(f"Text exceeds diagram width: {value}")
         self.draw.text((x * 2, y * 2), value, font=face, fill=color)
-        weight = "700" if bold else "400"
+        weight = "600" if bold else "400"
         self.svg.append(
-            f'<text x="{x}" y="{y + size}" fill="{color}" font-family="Arial, sans-serif" '
+            f'<text x="{x}" y="{y + size}" fill="{color}" font-family="{FONT_FAMILY}" '
             f'font-size="{size}" font-weight="{weight}">{escape(value)}</text>'
         )
 
@@ -141,19 +149,20 @@ class Diagram:
         self.draw.ellipse((x*2, y*2, (x+w)*2, (y+h)*2), fill=fill, outline=stroke, width=2)
         self.svg.append(f'<ellipse cx="{x+w/2}" cy="{y+h/2}" rx="{w/2}" ry="{h/2}" fill="{fill}" stroke="{stroke}"/>')
 
-    def chip(self, x, y, w=112, h=80, fill=GOLD):
-        self.rect(x, y, w, h, fill, radius=4)
-        core_color = "#A4D7C9" if fill == TEAL else "#97D4FF"
-        self.rect(x+15, y+15, w-30, h-30, core_color, radius=2)
-        self.rect(x+w/2-10, y+h/2-10, 20, 20, WHITE, radius=1)
-        for pin in range(4):
-            px = x+20+pin*(w-40)/3
-            self.line([(px, y-7), (px, y)])
-            self.line([(px, y+h), (px, y+h+7)])
-        for pin in range(3):
-            py = y+18+pin*(h-36)/2
-            self.line([(x-7, py), (x, py)])
-            self.line([(x+w, py), (x+w+7, py)])
+    def chip(self, x, y, w=112, h=80, fill=GOLD, pins=True):
+        """Compute icon: a rounded package with a core and short pins."""
+        stroke = "#5E9C91" if fill == TEAL else "#6E9FBF"
+        core = "#A4D7C9" if fill == TEAL else "#97D4FF"
+        if pins:
+            for pin in range(3):
+                px = x+w*(pin+1)/4
+                self.line([(px, y-6), (px, y)], stroke, 1)
+                self.line([(px, y+h), (px, y+h+6)], stroke, 1)
+                py = y+h*(pin+1)/4
+                self.line([(x-6, py), (x, py)], stroke, 1)
+                self.line([(x+w, py), (x+w+6, py)], stroke, 1)
+        self.rect(x, y, w, h, fill, stroke=stroke, radius=6)
+        self.rect(x+w*0.28, y+h*0.26, w*0.44, h*0.48, core, stroke=stroke, radius=3)
 
     def database(self, x, y, w=132, h=100):
         self.ellipse(x, y+h-26, w, 26, GOLD)
@@ -176,10 +185,9 @@ class Diagram:
 
 
 def brand(d, title, detail):
-    d.motherduck_mark(32, 26)
-    d.text(83, 28, "MotherDuck", 27, bold=True)
-    d.text(285, 33, title, 22)
-    d.text(34, 83, detail, 15, color=MUTED)
+    d.motherduck_mark(32, 30, 30)
+    d.text(72, 30, title, 24, bold=True)
+    d.text(34, 74, detail, 15, color=MUTED)
 
 
 def legend(d, x, y, access=False, data_label="Data flow", terraform=True):
@@ -244,8 +252,10 @@ def share(d, x, y):
 
 
 def pool(d, x, y):
-    d.chip(x+27, y, 96, 66, BLUE)
-    d.chip(x, y+27, 96, 66, BLUE)
+    """Read-scaling pool: two stacked Ducklings, only the front one detailed."""
+    d.rect(x+24, y, 96, 66, BLUE, stroke="#6E9FBF", radius=6)
+    d.rect(x+12, y+12, 96, 66, BLUE, stroke="#6E9FBF", radius=6)
+    d.chip(x, y+24, 96, 66, BLUE, pins=False)
 
 
 def code(d, x, y, tab, tint="#E9E2F7", w=112):
@@ -341,61 +351,60 @@ def deployment():
                 "restricted shares, and grants. 3. A pipeline loads data through the writer's Duckling. "
                 "4. Each reader attaches the share once and queries on its own read pool.")
     brand(d, "Deployment model", "Provision identities, then provision as the owner, then load and read")
-    legend(d, 1408-legend_width(d), 40)
+    legend(d, 1408-legend_width(d), 36)
 
-    code(d, 40, 134, "admin.tf")
-    caption(d, 100, 240, "Admin root", "organization admin token")
-    code(d, 40, 316, "writer.tf")
-    caption(d, 100, 422, "Writer root", "writer token")
-    d.dashed([(100, 290), (100, 300)])
-    d.arrow([(100, 300), (100, 314)], PURPLE)
-    label(d, 176, 292, "hands off writer token", PAPER, PURPLE_TEXT)
+    code(d, 40, 118, "admin.tf")
+    caption(d, 100, 216, "Admin root", "organization admin token")
+    code(d, 40, 306, "writer.tf")
+    caption(d, 100, 404, "Writer root", "writer token")
+    d.dashed([(100, 266), (100, 286)])
+    d.arrow([(100, 286), (100, 302)], PURPLE)
+    label(d, 162, 276, "writer token", PAPER, PURPLE_TEXT)
 
-    account(d, 290, 192, 700, 368, "Writer account", note="owns every database and share")
-    account(d, 1030, 192, 262, 368, "Reader account", True)
+    account(d, 330, 196, 610, 364, "Writer account", note="owns every database and share")
+    account(d, 1052, 196, 240, 364, "Reader account", True)
 
-    # 1. Admin root provisions both accounts.
-    d.dashed([(164, 160), (1220, 160)])
-    for x in [640, 1220]:
-        d.dashed([(x, 160), (x, 178)])
-        d.arrow([(x, 178), (x, 192)], PURPLE)
-    step(d, 240, 160, 1)
-    label(d, 410, 134, "service accounts, tokens, Duckling settings", PAPER, PURPLE_TEXT)
+    # 1. The admin root provisions both accounts.
+    d.dashed([(164, 150), (1172, 150)])
+    for x in [640, 1172]:
+        d.dashed([(x, 150), (x, 180)])
+        d.arrow([(x, 180), (x, 196)], PURPLE)
+    step(d, 220, 150, 1)
+    label(d, 420, 124, "service accounts, tokens, Duckling settings", PAPER, PURPLE_TEXT)
 
-    # 2. Writer root provisions data objects inside the writer account.
-    d.dashed([(164, 362), (250, 362), (250, 300), (700, 300)])
-    d.dashed([(700, 300), (700, 318)])
-    d.arrow([(700, 318), (700, 330)], PURPLE)
-    d.dashed([(700, 300), (880, 300), (880, 334)])
-    d.arrow([(880, 334), (880, 346)], PURPLE)
-    step(d, 250, 330, 2)
-    label(d, 470, 286, "databases, schemas, shares, grants", SAND, PURPLE_TEXT)
+    # 2. The writer root provisions data objects inside the writer account.
+    d.dashed([(164, 346), (854, 346)])
+    for x in [650, 854]:
+        d.dashed([(x, 346), (x, 362)])
+        d.arrow([(x, 362), (x, 376)], PURPLE)
+    step(d, 220, 346, 2)
+    label(d, 470, 320, "databases, schemas, shares, grants", SAND, PURPLE_TEXT)
 
-    # 3. Pipeline loads data.
-    pipeline(d, 40, 474)
-    caption(d, 106, 544, "Pipeline")
-    d.chip(338, 358, 98, 76, TEAL)
-    caption(d, 387, 470, "R/W Duckling")
-    d.database(640, 346, 120, 100)
-    caption(d, 700, 470, "Database")
-    share(d, 850, 367)
-    caption(d, 904, 470, "Restricted share")
-    d.arrow([(172, 504), (268, 504), (268, 396), (330, 396)])
-    step(d, 220, 504, 3)
-    label(d, 222, 470, "loads")
-    flow(d, 444, 632, 396, "writes", SAND)
-    flow(d, 766, 842, 396, "publishes", SAND)
+    # 3. The pipeline loads data through the writer's Duckling.
+    pipeline(d, 40, 478)
+    caption(d, 106, 548, "Pipeline")
+    d.chip(370, 396, 98, 76, TEAL)
+    caption(d, 419, 492, "R/W Duckling")
+    d.database(590, 384, 120, 96)
+    caption(d, 650, 492, "Database")
+    share(d, 800, 405)
+    caption(d, 854, 492, "Restricted share")
+    d.arrow([(172, 508), (290, 508), (290, 434), (362, 434)])
+    step(d, 290, 471, 3)
+    label(d, 231, 482, "loads")
+    flow(d, 476, 582, 434, "writes", SAND)
+    flow(d, 716, 792, 434, "publishes", SAND)
 
-    # 4. Readers attach and query.
-    pool(d, 1090, 348)
-    caption(d, 1152, 470, "Read pool", "read-scaling token")
-    d.arrow([(966, 396), (1078, 396)])
-    step(d, 1010, 396, 4)
-    label(d, 1010, 342, "grant, then attach once", PAPER)
-    app(d, 1318, 355)
-    caption(d, 1372, 470, "BI & apps")
-    d.arrow([(1310, 396), (1222, 396)])
-    label(d, 1258, 370, "queries", READER_FILL)
+    # 4. The reader attaches the share once and queries its read pool.
+    pool(d, 1112, 378)
+    caption(d, 1172, 492, "Read pool", "read-scaling token")
+    d.arrow([(916, 434), (1104, 434)])
+    step(d, 1022, 434, 4)
+    label(d, 984, 404, "grant + attach")
+    app(d, 1318, 393)
+    caption(d, 1372, 492, "BI & apps")
+    d.arrow([(1310, 434), (1240, 434)])
+    label(d, 1275, 404, "queries")
     d.save("deployment-model")
 
 
@@ -406,35 +415,34 @@ def warehouse():
                 "then refreshes the daily_revenue table. BI connects with the writer's read-scaling "
                 "token, which can read every layer through the writer's read pool.")
     brand(d, "Layered warehouse", "Terraform defines the layers. The pipeline loads and refreshes them.")
-    legend(d, 1288-legend_width(d, access=True, terraform=False), 40, access=True, terraform=False)
+    legend(d, 1288-legend_width(d, access=True, terraform=False), 36, access=True, terraform=False)
 
-    pipeline(d, 36, 240)
-    caption(d, 102, 312, "Pipeline", "loads and refreshes")
+    pipeline(d, 36, 234)
+    caption(d, 102, 306, "Pipeline", "loads and refreshes")
 
-    account(d, 216, 124, 900, 424, "Writer account", note="one identity across all layers")
-    for x, name, obj in [(270, "Raw", "orders table"),
-                          (560, "Transform", "orders_latest view"),
-                          (850, "Marts", "daily_revenue table")]:
-        d.database(x, 214, 132, 100)
-        d.centered_text(x+66, 330, name, 21, True)
-        d.centered_text(x+66, 360, obj, 15, color=MUTED)
-    flow(d, 174, 262, 270, "loads")
-    flow(d, 410, 552, 264, "view reads raw", SAND)
-    flow(d, 700, 842, 264, "pipeline refresh", SAND)
+    account(d, 216, 124, 924, 424, "Writer account", note="one identity for every layer")
+    for x, name, obj in [(268, "Raw", "orders table"),
+                          (548, "Transform", "orders_latest view"),
+                          (828, "Marts", "daily_revenue table")]:
+        d.database(x, 214, 124, 96)
+        d.centered_text(x+62, 324, name, 20, True)
+        d.centered_text(x+62, 352, obj, 14, color=MUTED)
+    flow(d, 174, 260, 264, "loads")
+    flow(d, 400, 540, 264, "view reads", SAND)
+    flow(d, 680, 820, 264, "refreshes", SAND)
 
-    # A common read path makes access to all layers explicit.
-    d.line([(336, 392), (336, 446), (916, 446)], ACCESS)
-    for x in [626, 916]:
-        d.line([(x, 392), (x, 446)], ACCESS)
-    d.arrow([(916, 446), (948, 446)], ACCESS)
-    label(d, 480, 452, "read-scaling token reads every layer", SAND, ACCESS)
-    pool(d, 962, 404)
-    d.centered_text(1024, 512, "Read pool", 18, True)
+    # A bracket under all three layers shows the read-scaling token's reach.
+    d.line([(268, 384), (268, 394), (952, 394), (952, 384)], ACCESS)
+    d.line([(610, 394), (610, 452), (972, 452)], ACCESS)
+    d.arrow([(960, 452), (982, 452)], ACCESS)
+    label(d, 790, 404, "read-scaling token reads every layer", SAND, ACCESS)
+    pool(d, 990, 410)
+    caption(d, 1050, 506, "Read pool")
 
-    app(d, 1174, 405)
-    caption(d, 1228, 512, "BI")
-    d.arrow([(1098, 446), (1166, 446)])
-    label(d, 1132, 416, "queries")
+    app(d, 1206, 411)
+    caption(d, 1260, 506, "BI")
+    d.arrow([(1118, 452), (1198, 452)])
+    label(d, 1162, 422, "queries")
     d.save("layered-warehouse")
 
 
@@ -445,73 +453,75 @@ def customers():
                 "to its tenant's reader account, which attaches it once and queries on its own read "
                 "pool. The backend authenticates the user and routes queries to the matching reader.")
     brand(d, "Customer-facing analytics", "One writer owns tenant data. Each tenant reads on its own account.")
-    legend(d, 1288-legend_width(d, terraform=False), 40, terraform=False)
+    legend(d, 1288-legend_width(d, terraform=False), 36, terraform=False)
 
     pipeline(d, 36, 346)
     caption(d, 102, 418, "Pipeline", "writes each tenant")
 
-    account(d, 206, 126, 540, 446, "Central writer account")
+    account(d, 206, 126, 470, 446, "Central writer account")
     for y, tenant in [(200, "Acme"), (408, "Globex")]:
-        d.database(250, y, 128, 100)
-        d.centered_text(314, y+118, tenant+" database", 18, True)
-        share(d, 560, y+24)
-        d.centered_text(614, y+118, "Restricted share", 18, True)
-        flow(d, 386, 552, y+54, "publishes", SAND)
-        account(d, 790, y-44, 300, 190, tenant+" reader", True)
-        pool(d, 890, y+22)
-        flow(d, 676, 878, y+54, "grant + attach")
-    d.line([(230, 376), (722, 376)], "#D8CFC5", 1)
-    d.arrow([(170, 376), (200, 376), (200, 254), (242, 254)])
-    d.arrow([(200, 376), (200, 462), (242, 462)])
+        d.database(250, y, 124, 96)
+        d.centered_text(312, y+112, tenant+" database", 17, True)
+        share(d, 516, y+20)
+        d.centered_text(570, y+112, "Restricted share", 17, True)
+        flow(d, 382, 508, y+49, "publishes", SAND)
+        account(d, 806, y-44, 260, 190, tenant+" reader", True)
+        pool(d, 890, y+14)
+        d.arrow([(632, y+49), (882, y+49)])
+        label(d, 736, y+23, "grant + attach")
+    d.line([(230, 376), (652, 376)], "#D8CFC5", 1)
+    d.arrow([(170, 376), (200, 376), (200, 249), (242, 249)])
+    d.arrow([(200, 376), (200, 457), (242, 457)])
 
     app(d, 1170, 316)
     caption(d, 1224, 420, "Backend", "auth + tenant routing")
     # Query arrows point from the backend to the selected tenant's pool.
-    d.arrow([(1162, 341), (1130, 341), (1130, 254), (1030, 254)])
-    d.arrow([(1162, 378), (1130, 378), (1130, 462), (1030, 462)])
-    for y in [228, 436]:
-        label(d, 1066, y, "queries", READER_FILL)
+    d.arrow([(1162, 341), (1136, 341), (1136, 249), (1018, 249)])
+    d.arrow([(1162, 378), (1136, 378), (1136, 457), (1018, 457)])
+    for y in [223, 431]:
+        label(d, 1101, y, "queries")
     d.save("customer-facing-analytics")
 
 
 def promotion():
-    d = Diagram(1320, 520, "Blueprints code promotion",
+    d = Diagram(1320, 540, "Blueprints code promotion",
                 "Terraform first provisions the staging and production accounts. With staging enabled, "
                 "each pull request deploys a preview and a merge to main deploys staging, both under the "
                 "staging account. An approved release deploys its exact tag under the separate "
                 "production account. Arrows promote code, not database contents.")
     brand(d, "Blueprints promotion", "Terraform provisions identities. Blueprints deploys code.")
-    legend(d, 1288-legend_width(d, data_label="Code promotion"), 40, data_label="Code promotion")
+    legend(d, 1288-legend_width(d, data_label="Code promotion"), 36, data_label="Code promotion")
 
-    for x, tab, title in [(220, "pull request", "PR preview"),
-                           (560, "main", "Staging"),
-                           (1040, "release tag", "Production")]:
-        code(d, x, 132, tab, tint="#E6F4F1")
-        d.centered_text(x+56, 242, title, 20, True)
-    flow(d, 348, 552, 176, "merge")
-    flow(d, 688, 1032, 176, "publish release + approval")
+    for x, tab, title in [(250, "pull request", "PR preview"),
+                           (580, "main", "Staging"),
+                           (1060, "release tag", "Production")]:
+        code(d, x, 120, tab, tint="#E6F4F1")
+        d.centered_text(x+56, 228, title, 19, True)
+    flow(d, 378, 572, 164, "merge")
+    flow(d, 708, 1052, 164, "release + approval")
 
-    account(d, 164, 330, 620, 160, "Staging account")
-    account(d, 824, 330, 468, 160, "Production account", True)
-    for x in [276, 616, 1096]:
-        d.arrow([(x, 272), (x, 322)])
-        d.text(x+10, 288, "deploys", 13, color=MUTED)
+    account(d, 200, 330, 600, 160, "Staging account")
+    account(d, 840, 330, 452, 160, "Production account", True)
+    for x in [306, 636, 1116]:
+        d.arrow([(x, 262), (x, 322)])
+        d.text(x+10, 280, "deploys", 13, color=MUTED)
 
-    d.rect(196, 400, 232, 58, TEAL, stroke="#8CBEB3", radius=4)
-    d.centered_text(312, 408, "Preview resources", 17, True)
-    d.centered_text(312, 432, "removed when the PR closes", 13, color=MUTED)
-    d.rect(516, 400, 232, 58, TEAL, stroke="#8CBEB3", radius=4)
-    d.centered_text(632, 418, "Staging resources", 17, True)
-    d.rect(906, 400, 300, 58, BLUE, stroke=READER_STROKE, radius=4)
-    d.centered_text(1056, 418, "Production resources", 17, True)
+    d.rect(226, 400, 240, 58, TEAL, stroke="#8CBEB3", radius=4)
+    d.centered_text(346, 408, "Preview resources", 16, True)
+    d.centered_text(346, 432, "removed when the PR closes", 13, color=MUTED)
+    d.rect(526, 400, 240, 58, TEAL, stroke="#8CBEB3", radius=4)
+    d.centered_text(646, 418, "Staging resources", 16, True)
+    d.rect(916, 400, 300, 58, BLUE, stroke=READER_STROKE, radius=4)
+    d.centered_text(1066, 418, "Production resources", 16, True)
 
-    code(d, 24, 132, "identities.tf")
-    caption(d, 84, 242, "Terraform", "runs first")
-    d.dashed([(84, 290), (84, 506), (1000, 506), (1000, 496)])
-    d.arrow([(1000, 500), (1000, 490)], PURPLE)
-    d.dashed([(84, 410), (150, 410)])
-    d.arrow([(150, 410), (164, 410)], PURPLE)
-    label(d, 540, 496, "accounts, tokens, compute", PAPER, PURPLE_TEXT)
+    # Terraform sits beside the accounts it creates, outside the promotion row.
+    code(d, 24, 330, "identities.tf")
+    caption(d, 84, 438, "Terraform", "runs first")
+    d.dashed([(145, 372), (186, 372)])
+    d.arrow([(186, 372), (200, 372)], PURPLE)
+    d.dashed([(84, 486), (84, 514), (1066, 514), (1066, 504)])
+    d.arrow([(1066, 506), (1066, 490)], PURPLE)
+    label(d, 560, 504, "accounts, tokens, compute", PAPER, PURPLE_TEXT)
     d.save("blueprints-promotion")
 
 

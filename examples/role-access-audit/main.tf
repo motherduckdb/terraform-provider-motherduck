@@ -1,14 +1,17 @@
 locals {
   role_names = sort(keys(var.expected_roles))
 }
+
 data "motherduck_role_members" "audit" {
   count     = length(local.role_names)
   role_name = local.role_names[count.index]
 }
+
 data "motherduck_roles_for_role" "audit" {
   count     = length(local.role_names)
   role_name = local.role_names[count.index]
 }
+
 locals {
   members = {
     for index, result in data.motherduck_role_members.audit : local.role_names[index] => toset([
@@ -44,6 +47,7 @@ locals {
     length(result.missing_members) + length(result.unexpected_members) + length(result.missing_roles) + length(result.unexpected_roles) == 0
   ])
 }
+
 output "audit" {
   value = local.audit
   precondition {
@@ -51,6 +55,7 @@ output "audit" {
     error_message = "Cannot audit role inheritance because the catalog did not report directness."
   }
 }
+
 output "compliant" {
   value = local.compliant
   precondition {

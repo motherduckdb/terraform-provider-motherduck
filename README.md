@@ -20,6 +20,7 @@ infrastructure you can review, reproduce, and manage in Terraform.
 | Usage dashboards for SaaS customers | [Provision tenant databases and readers](docs/guides/customer-facing-analytics.md) |
 | Python pipelines and interactive dashboards | [Combine Terraform with Blueprints](docs/guides/blueprints-deployment.md) |
 | Roles, membership, and share access | [Manage roles and share access](docs/guides/access-control.md) |
+| Per-consumer row filters and column masks | [Secure shared rows and columns](docs/guides/row-and-column-security.md) |
 | Row filters and column masking on shares | [Secure shared rows and columns](docs/guides/row-and-column-security.md) |
 
 New to MotherDuck's ownership and compute model? Start with
@@ -75,7 +76,7 @@ are [separate deployment stages](docs/guides/authentication.md).
 | --- | --- |
 | Warehouse structure | Databases, schemas, tables, views |
 | Identity and compute | Service accounts, access tokens, Duckling configuration |
-| Data access | Shares, share grants, roles, role grants |
+| Data access | Shares, share grants, share secure views, roles, role grants |
 | Storage and recovery | Persistent secrets, named snapshots |
 | Optional application definitions | Flights, experimental Dives and Guides |
 
