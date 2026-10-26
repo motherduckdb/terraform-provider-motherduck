@@ -187,6 +187,11 @@ Secure view changes reach attached consumers within a minute or two, even on
 `manual` shares. Changes to entitlement rows and macros follow the share's
 publication cycle. On a `manual` share, run `UPDATE SHARE` after changing them.
 
+Role changes take up to about a minute to reach `is_role_in_session()` and
+`session_roles()`, in open sessions as well as new ones. Revoking a role that
+unmasks a column does not hide that column instantly. Remove the entitlement row
+as well when access must end at once.
+
 ## Coming from Snowflake or Databricks
 
 The provider follows the same split as the Snowflake and Databricks providers:
