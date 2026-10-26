@@ -40,18 +40,18 @@
 <polygon points="508,249 500,244 500,254" fill="#383838"/>
 <rect x="410.5546875" y="221" width="68.890625" height="21" rx="3" fill="#F4EFEA" stroke="none"/>
 <text x="415.5546875" y="236" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">publishes</text>
-<rect x="806" y="156" width="280" height="190" rx="5" fill="#F0F8FD" stroke="#AACADD"/>
+<rect x="806" y="156" width="260" height="190" rx="5" fill="#F0F8FD" stroke="#AACADD"/>
 <ellipse cx="832.5" cy="181.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
 <polyline points="822,200 822,196 828,192 837,192 843,196 843,200" fill="none" stroke="#383838" stroke-width="2"/>
 <text x="854" y="196" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="600">Acme reader</text>
-<rect x="924" y="214" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
-<rect x="912" y="226" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
-<rect x="900" y="238" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
-<rect x="926.88" y="255.16" width="42.24" height="31.68" rx="3" fill="#97D4FF" stroke="#6E9FBF"/>
-<polyline points="632,249 892,249" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="892,249 884,244 884,254" fill="#383838"/>
-<rect x="714.01953125" y="221" width="95.9609375" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
-<text x="719.01953125" y="236" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">grant + attach</text>
+<rect x="914" y="214" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
+<rect x="902" y="226" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
+<rect x="890" y="238" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
+<rect x="916.88" y="255.16" width="42.24" height="31.68" rx="3" fill="#97D4FF" stroke="#6E9FBF"/>
+<polyline points="632,249 882,249" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="882,249 874,244 874,254" fill="#383838"/>
+<rect x="688.01953125" y="221" width="95.9609375" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="693.01953125" y="236" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">grant + attach</text>
 <ellipse cx="312.0" cy="491.0" rx="62.0" ry="13.0" fill="#FAF175" stroke="#383838"/>
 <rect x="250" y="421" width="124" height="70" rx="0" fill="#FAF175" stroke="#FAF175"/>
 <polyline points="250,421 250,491" fill="none" stroke="#383838" stroke-width="1"/>
@@ -71,18 +71,18 @@
 <polygon points="508,457 500,452 500,462" fill="#383838"/>
 <rect x="410.5546875" y="429" width="68.890625" height="21" rx="3" fill="#F4EFEA" stroke="none"/>
 <text x="415.5546875" y="444" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">publishes</text>
-<rect x="806" y="364" width="280" height="190" rx="5" fill="#F0F8FD" stroke="#AACADD"/>
+<rect x="806" y="364" width="260" height="190" rx="5" fill="#F0F8FD" stroke="#AACADD"/>
 <ellipse cx="832.5" cy="389.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
 <polyline points="822,408 822,404 828,400 837,400 843,404 843,408" fill="none" stroke="#383838" stroke-width="2"/>
 <text x="854" y="404" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="600">Globex reader</text>
-<rect x="924" y="422" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
-<rect x="912" y="434" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
-<rect x="900" y="446" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
-<rect x="926.88" y="463.16" width="42.24" height="31.68" rx="3" fill="#97D4FF" stroke="#6E9FBF"/>
-<polyline points="632,457 892,457" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="892,457 884,452 884,462" fill="#383838"/>
-<rect x="714.01953125" y="429" width="95.9609375" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
-<text x="719.01953125" y="444" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">grant + attach</text>
+<rect x="914" y="422" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
+<rect x="902" y="434" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
+<rect x="890" y="446" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
+<rect x="916.88" y="463.16" width="42.24" height="31.68" rx="3" fill="#97D4FF" stroke="#6E9FBF"/>
+<polyline points="632,457 882,457" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="882,457 874,452 874,462" fill="#383838"/>
+<rect x="688.01953125" y="429" width="95.9609375" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="693.01953125" y="444" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">grant + attach</text>
 <polyline points="230,376 652,376" fill="none" stroke="#D8CFC5" stroke-width="1"/>
 <polyline points="170,376 200,376 200,249 242,249" fill="none" stroke="#383838" stroke-width="2"/>
 <polygon points="242,249 234,244 234,254" fill="#383838"/>
@@ -99,12 +99,12 @@
 <rect x="1248" y="343" width="11" height="44" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
 <text x="1186.2890625" y="438" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">Backend</text>
 <text x="1154.890625" y="460" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="400">auth + tenant routing</text>
-<polyline points="1162,341 1136,341 1136,249 1036,249" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="1036,249 1044,244 1044,254" fill="#383838"/>
-<polyline points="1162,378 1136,378 1136,457 1036,457" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="1036,457 1044,452 1044,462" fill="#383838"/>
-<rect x="1058.046875" y="217" width="55.90625" height="21" rx="3" fill="#F0F8FD" stroke="none"/>
-<text x="1063.046875" y="232" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">queries</text>
-<rect x="1058.046875" y="425" width="55.90625" height="21" rx="3" fill="#F0F8FD" stroke="none"/>
-<text x="1063.046875" y="440" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">queries</text>
+<polyline points="1162,341 1136,341 1136,249 1018,249" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="1018,249 1026,244 1026,254" fill="#383838"/>
+<polyline points="1162,378 1136,378 1136,457 1018,457" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="1018,457 1026,452 1026,462" fill="#383838"/>
+<rect x="1073.046875" y="221" width="55.90625" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="1078.046875" y="236" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">queries</text>
+<rect x="1073.046875" y="429" width="55.90625" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="1078.046875" y="444" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">queries</text>
 </svg>

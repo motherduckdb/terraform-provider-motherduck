@@ -36,9 +36,9 @@ memberships first. Reference managed role and service-account attributes from
 grant resources so Terraform can revoke grants before deleting their targets.
 
 Revoke custom-role grants before deleting a service account outside Terraform.
-Live lifecycle testing found that external account deletion followed by
-recreation can leave a service-side assignment that blocks `DROP ROLE`, even
-when the deleted account is no longer listed as a member. If this occurs, keep
+Deleting an account outside Terraform and then recreating it can leave a
+service-side assignment that blocks `DROP ROLE`, even when the deleted account
+is not listed as a member. If this occurs, keep
 the failed role in state and resolve the stale assignment with MotherDuck
 support. Recreating the same username does not restore the old account identity.
 

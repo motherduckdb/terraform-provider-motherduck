@@ -1,3 +1,6 @@
+# Deprecated. Each create or replacement runs the Flight again. Prefer
+# schedule_cron on motherduck_flight, or trigger runs from a deployment
+# pipeline.
 resource "motherduck_flight" "heartbeat" {
   name = "heartbeat"
 
@@ -21,7 +24,5 @@ resource "motherduck_flight_run" "heartbeat" {
     mode = "manual"
   }
 
-  wait_for_status       = "succeeded"
-  poll_interval_seconds = 10
-  timeout_seconds       = 600
+  wait_for_status = "succeeded"
 }

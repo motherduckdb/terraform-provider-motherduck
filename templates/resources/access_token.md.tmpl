@@ -39,18 +39,18 @@ Token name, type, and TTL changes require replacement. A new token is
 `read_write` when `token_type` is omitted. Once the token exists, an omitted
 `token_type` keeps the type MotherDuck reports, so removing it from the
 configuration or importing a `read_scaling` token without it plans no change.
-A username change also
-requires replacement unless only its letter case changes, because MotherDuck
-compares usernames case-insensitively. MotherDuck
+A username change also requires replacement unless only its letter case
+changes, because MotherDuck compares usernames case-insensitively. MotherDuck
 cannot edit a token description, so changing a configured `description` also
 replaces the token. Omitting `description` keeps whatever MotherDuck reports,
 including a description set outside Terraform. The names `MotherDuck Extension`
 and `MotherDuck Flights` are reserved for tokens MotherDuck creates itself.
-Destroy revokes the token. TTL is not a rotation schedule. To avoid interrupting consumers,
-create a second token, update and verify consumers, then retire the old one.
+Destroy revokes the token. TTL is not a rotation schedule. To avoid
+interrupting consumers, create a second token, update and verify consumers,
+then retire the old one.
 
-The generated secret is stored in Terraform state. A sensitive output masks
-normal CLI display but does not encrypt state. If a token disappears from the
+The generated secret is stored in Terraform state. A sensitive output, as in
+the example, masks normal CLI display but does not encrypt state. If a token disappears from the
 API listing, refresh removes its state so the next apply can create a new one.
 The provider warns when it cannot explain the absence by the recorded expiry.
 The listing, and the `motherduck_user_tokens` data source, include only
@@ -68,10 +68,9 @@ The token ID must be the UUID MotherDuck reports, for example from
 or lower case, and Terraform records it in lower case.
 
 After import, run `terraform plan` with the token's name, and either its type
-or no `token_type`. Keep `ttl`
-omitted to adopt an existing token without requesting replacement. Import reads
-the description back, so either omit `description` or set it to the value
-MotherDuck reports. Terraform
-cannot recover the original lifetime or token secret.
+or no `token_type`. Keep `ttl` omitted to adopt an existing token without
+requesting replacement. Import reads the description back, so either omit
+`description` or set it to the value MotherDuck reports. Terraform cannot
+recover the original lifetime or token secret.
 
 {{ .SchemaMarkdown | trimspace }}

@@ -9,7 +9,11 @@ description: |-
 
 Reads MotherDuck database snapshot metadata from public SQL catalog tables.
 
-`rows_json` mirrors `MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS`. When `database_name` is set, MotherDuck can still return more than one row for that database, including retained snapshots whose `snapshot_name` is `null`. Filter the decoded JSON in Terraform or downstream tooling when you need only a specific named snapshot.
+Rows mirror `MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS`. When `database_name`
+is set, MotherDuck can still return more than one row for that database,
+including retained snapshots whose `snapshot_name` is null. Filter the typed
+`rows` with a `for` expression when you need only named snapshots, as in the
+example.
 
 ## Example Usage
 

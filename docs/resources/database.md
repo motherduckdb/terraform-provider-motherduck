@@ -22,8 +22,7 @@ compute must be isolated.
   configured value. Changing a recorded value replaces the database. Removing
   it from the configuration keeps the database.
 - Adding `data_inlining_row_limit` to a database whose state has no recorded
-  value, such as an imported database or one created by an earlier provider
-  release, does not replace it. Terraform records the value in place without
+  value, such as an imported database, does not replace it. Terraform records the value in place without
   running SQL and warns that MotherDuck cannot verify it.
 - Select `database_type = "iceberg"` to register an existing Iceberg REST
   catalog as a MotherDuck database. See [Iceberg catalogs](#iceberg-catalogs).
@@ -96,6 +95,8 @@ See [warehouse deployment](../guides/warehouse-examples.md) and
 ## Example Usage
 
 ```terraform
+# Destroy drops the database and all of its data. Add
+# lifecycle { prevent_destroy = true } to databases that hold production data.
 resource "motherduck_database" "analytics" {
   name                    = "analytics"
   snapshot_retention_days = 7

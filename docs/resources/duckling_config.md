@@ -70,6 +70,10 @@ Import by username. See [read scaling](../guides/sharing-and-read-scaling.md).
 ## Example Usage
 
 ```terraform
+resource "motherduck_service_account" "app" {
+  username = "analytics_app"
+}
+
 resource "motherduck_duckling_config" "app" {
   username = motherduck_service_account.app.username
 
@@ -78,10 +82,6 @@ resource "motherduck_duckling_config" "app" {
   read_scaling_instance_size    = "standard"
   read_scaling_flock_size       = 2
   read_scaling_cooldown_seconds = 600
-}
-
-resource "motherduck_service_account" "app" {
-  username = "analytics_app"
 }
 ```
 

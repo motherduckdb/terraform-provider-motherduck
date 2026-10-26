@@ -46,6 +46,9 @@ resource "motherduck_share" "usage" {
   depends_on      = [motherduck_table.daily_usage, motherduck_table.tenant_readers]
 }
 
+# Role grants and revokes take up to about a minute to reach
+# is_role_in_session(), so contact_email masking follows role changes with
+# that delay.
 resource "motherduck_share_secure_view" "daily_usage" {
   share    = motherduck_share.usage.name
   schema   = motherduck_table.daily_usage.schema

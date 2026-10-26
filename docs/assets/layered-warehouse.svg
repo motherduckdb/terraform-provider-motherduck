@@ -67,25 +67,25 @@
 <polyline points="610,394 610,452 972,452" fill="none" stroke="#3F7FA8" stroke-width="2"/>
 <polyline points="960,452 982,452" fill="none" stroke="#3F7FA8" stroke-width="2"/>
 <polygon points="982,452 974,447 974,457" fill="#3F7FA8"/>
-<rect x="662.72265625" y="422" width="234.5546875" height="21" rx="3" fill="#F4EFEA" stroke="none"/>
-<text x="667.72265625" y="437" fill="#3F7FA8" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">read-scaling token reads every layer</text>
+<rect x="672.72265625" y="402" width="234.5546875" height="21" rx="3" fill="#F4EFEA" stroke="none"/>
+<text x="677.72265625" y="417" fill="#3F7FA8" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">read-scaling token reads every layer</text>
 <rect x="1014" y="410" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
 <rect x="1002" y="422" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
 <rect x="990" y="434" width="96" height="66" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
 <rect x="1016.88" y="451.16" width="42.24" height="31.68" rx="3" fill="#97D4FF" stroke="#6E9FBF"/>
 <text x="1006.84375" y="524" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">Read pool</text>
-<rect x="1186" y="411" width="108" height="82" rx="4" fill="#FFFFFF" stroke="#383838"/>
-<polyline points="1186,429 1294,429" fill="none" stroke="#383838" stroke-width="1"/>
-<ellipse cx="1197.5" cy="419.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
-<ellipse cx="1206.5" cy="419.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
-<ellipse cx="1215.5" cy="419.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
-<rect x="1204" y="463" width="11" height="19" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
-<rect x="1224" y="446" width="11" height="36" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
-<rect x="1244" y="455" width="11" height="27" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
-<rect x="1264" y="438" width="11" height="44" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
-<text x="1231.57421875" y="524" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">BI</text>
-<polyline points="1124,452 1178,452" fill="none" stroke="#383838" stroke-width="2"/>
-<polygon points="1178,452 1170,447 1170,457" fill="#383838"/>
-<rect x="1123.046875" y="420" width="55.90625" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
-<text x="1128.046875" y="435" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">queries</text>
+<rect x="1206" y="411" width="108" height="82" rx="4" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="1206,429 1314,429" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="1217.5" cy="419.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<ellipse cx="1226.5" cy="419.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<ellipse cx="1235.5" cy="419.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<rect x="1224" y="463" width="11" height="19" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1244" y="446" width="11" height="36" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1264" y="455" width="11" height="27" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1284" y="438" width="11" height="44" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<text x="1251.57421875" y="524" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">BI</text>
+<polyline points="1118,452 1198,452" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="1198,452 1190,447 1190,457" fill="#383838"/>
+<rect x="1134.046875" y="420" width="55.90625" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="1139.046875" y="435" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">queries</text>
 </svg>

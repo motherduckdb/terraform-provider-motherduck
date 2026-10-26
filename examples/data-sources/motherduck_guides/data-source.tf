@@ -1,5 +1,4 @@
 data "motherduck_guides" "metrics" {
-  topic  = "metrics"
-  limit  = 20
-  offset = 0
+  topic = "metrics"
+  limit = 20
 }
