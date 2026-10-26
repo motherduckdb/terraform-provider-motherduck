@@ -66,6 +66,14 @@ satisfy it. If the direct grant is revoked outside Terraform, the next apply
 restores it. Destroy revokes that grant without deleting either role or principal.
 Permissions received through other grants remain in effect.
 
+### Roles in secure views
+
+A [secure view](share_secure_view.md) can check role membership with
+`is_role_in_session('role_name')` to mask a column for consumers outside the
+role. Grants and revokes take up to about a minute to
+reach `is_role_in_session()`, in open sessions as well as new ones, so a revoked
+role can still unmask a column briefly.
+
 ### Organizations that manage roles through SCIM
 
 An organization can make its identity provider the source of truth for user role
