@@ -9,18 +9,18 @@ description: |-
 
 Each workflow below has a Registry guide that explains its configuration and
 lifecycle, and a complete runnable project on GitHub. The projects include
-Python, Node, SQL templates, and dependency locks. Links point at the v0.3.8
+Python, Node, SQL templates, and dependency locks. Links point at the v0.3.9
 release tag. They are examples, not published Terraform Registry modules.
 
-| Goal | Registry guide | Complete v0.3.8 example |
+| Goal | Registry guide | Complete v0.3.9 example |
 | --- | --- | --- |
-| First warehouse | [Create your first warehouse](getting-started.md) | [Simple warehouse](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.8/examples/warehouses/simple) |
-| Dev/prod warehouse | [Warehouse layouts](warehouse-examples.md) and [environments](environments.md) | [Bootstrap and layered roots](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.8/examples/warehouses) |
-| Ingestion and dbt | [Ownership and deployment](deployment-model.md) | [Pinned dlt cookbook and dbt companion](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.8/examples/cookbook-pipeline) |
-| Tenant analytics | [Customer-facing analytics](customer-facing-analytics.md) | [Terraform root and Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.8/examples/customer-facing-analytics) |
-| Reusable tenant infrastructure | [Authentication and ownership](authentication.md) | [Writer bootstrap](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.8/examples/blueprints/writer-bootstrap) and [read hypertenancy](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.8/examples/blueprints/read-hypertenancy) |
-| Team roles and grants | [Manage and audit access](access-control.md) | [Access control](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.8/examples/access-control), [share audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.8/examples/share-access-audit), and [role audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.8/examples/role-access-audit) |
-| Pulumi Python | [Use the provider with Pulumi](pulumi.md) | [Pinned Python bridge example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.8/examples/pulumi/python) |
+| First warehouse | [Create your first warehouse](getting-started.md) | [Simple warehouse](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.9/examples/warehouses/simple) |
+| Dev/prod warehouse | [Warehouse layouts](warehouse-examples.md) and [environments](environments.md) | [Bootstrap and layered roots](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.9/examples/warehouses) |
+| Ingestion and dbt | [Ownership and deployment](deployment-model.md) | [Pinned dlt cookbook and dbt companion](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.9/examples/cookbook-pipeline) |
+| Tenant analytics | [Customer-facing analytics](customer-facing-analytics.md) | [Terraform root and Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.9/examples/customer-facing-analytics) |
+| Reusable tenant infrastructure | [Authentication and ownership](authentication.md) | [Writer bootstrap](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.9/examples/blueprints/writer-bootstrap) and [read hypertenancy](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.9/examples/blueprints/read-hypertenancy) |
+| Team roles and grants | [Manage and audit access](access-control.md) | [Access control](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.9/examples/access-control), [share audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.9/examples/share-access-audit), and [role audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.9/examples/role-access-audit) |
+| Pulumi Python | [Use the provider with Pulumi](pulumi.md) | [Pinned Python bridge example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.9/examples/pulumi/python) |
 
 ## Install and select credentials
 
@@ -31,7 +31,7 @@ Git source pinned independently from the provider version:
 
 ```hcl
 module "writer_bootstrap" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.3.8"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.3.9"
 
   writer_username = "svc_analytics_writer"
 }

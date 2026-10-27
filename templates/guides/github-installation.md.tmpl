@@ -30,7 +30,7 @@ The example uses the GitHub CLI, `shasum` (use `sha256sum` on Linux), and `awk`.
 You can also download the files from the release page.
 
 ```shell
-version=0.3.8
+version=0.3.9
 platform=darwin_arm64
 archive="terraform-provider-motherduck_${version}_${platform}.zip"
 sums="terraform-provider-motherduck_${version}_SHA256SUMS"
@@ -96,7 +96,7 @@ terraform {
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = "= 0.3.8"
+      version = "= 0.3.9"
     }
   }
 }

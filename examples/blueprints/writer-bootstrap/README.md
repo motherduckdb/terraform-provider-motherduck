@@ -23,7 +23,7 @@ terraform {
 provider "motherduck" {}
 
 module "writer_bootstrap" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.3.8"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.3.9"
 
   writer_username = "svc_writer_prod"
 }

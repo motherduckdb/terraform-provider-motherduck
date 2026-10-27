@@ -15,7 +15,7 @@ Resource addresses inside both modules are identical, so switching does not
 replace tenant resources:
 
 1. Change the module `source` to
-   `github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.3.8`.
+   `github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.3.9`.
    Keep the module block name, or add a `moved` block for the new name.
 2. Set `expected_writer_username` to the service account behind
    `MOTHERDUCK_TOKEN`.
