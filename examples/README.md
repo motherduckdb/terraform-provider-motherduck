@@ -12,7 +12,7 @@ Terraform 1.5 or later is supported. Ephemeral resources require Terraform 1.10.
 | Run dlt and dbt over provisioned infrastructure | [Cookbook pipeline](cookbook-pipeline/README.md) | Existing SQL writer | Repeatable ingest and tested runtime-owned models |
 | Serve tenant usage analytics | [Customer-facing analytics](customer-facing-analytics/README.md) and [backend](customer-facing-analytics/backend/README.md) | Writer plus admin, reader tokens only in backend | Tenant-isolated data and authenticated queries |
 | Compose reusable tenant infrastructure | [Writer bootstrap](blueprints/writer-bootstrap/README.md), then [read hypertenancy](blueprints/read-hypertenancy/README.md) | Admin bootstrap, writer plus admin for tenants | Explicit writer identity and reader attachment |
-| Use the lighter legacy tenant module | [Hypertenancy](blueprints/hypertenancy/README.md) | Writer plus admin | Similar resources without the writer identity precondition |
+| Move off the legacy tenant module | [Hypertenancy](blueprints/hypertenancy/README.md) | Writer plus admin | Switch steps to read hypertenancy, with no resource replacement |
 | Manage team access | [Access control](access-control/README.md) | SQL role administrator and share owner | Roles, memberships and share grants |
 | Audit access outside state | [Share audit](share-access-audit/README.md) and [role audit](role-access-audit/README.md) | SQL account able to inspect the objects | Read-only differences against explicit policy |
 | Use Pulumi Python | [Pulumi](pulumi/python/README.md) | Existing SQL writer | Database, schema and table through the pinned bridge |
@@ -21,7 +21,7 @@ Terraform 1.5 or later is supported. Ephemeral resources require Terraform 1.10.
 Install the provider with `terraform init` from the Terraform Registry. A
 filesystem mirror is optional for offline installation. Copy every file in a
 runnable root, including SQL templates. For modules, pin the Git source to a
-reviewed release tag such as `v0.3.0` and pass providers from your root. The module source ref
+reviewed release tag such as `v0.3.9` and pass providers from your root. The module source ref
 and the provider version constraint are independent.
 
 Check [authentication](../docs/guides/authentication.md) before applying. A

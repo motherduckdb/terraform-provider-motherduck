@@ -63,9 +63,9 @@ binary = OUT / 'terraform-provider-motherduck'
 run(['go', 'build', '-o', binary, '.'])
 platform = subprocess.check_output(['go', 'env', 'GOOS', 'GOARCH'], text=True).split()
 mirror = OUT / 'mirror'
-package = mirror / 'registry.terraform.io/motherduckdb/motherduck/0.2.10' / '_'.join(platform)
+package = mirror / 'registry.terraform.io/motherduckdb/motherduck/0.3.0' / '_'.join(platform)
 package.mkdir(parents=True)
-(package / 'terraform-provider-motherduck_v0.2.10').symlink_to(binary)
+(package / 'terraform-provider-motherduck_v0.3.0').symlink_to(binary)
 cli = OUT / 'terraformrc'
 cli.write_text('provider_installation {\n filesystem_mirror {\n path = ' + json.dumps(str(mirror)) + '\n }\n}\n')
 base['TF_CLI_CONFIG_FILE'] = str(cli)

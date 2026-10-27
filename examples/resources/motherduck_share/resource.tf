@@ -12,11 +12,10 @@ resource "motherduck_table" "orders" {
 }
 
 resource "motherduck_view" "daily_revenue" {
-  database   = motherduck_database.analytics.name
-  schema     = "main"
-  name       = "daily_revenue"
-  query      = "SELECT order_id FROM \"${motherduck_database.analytics.name}\".\"main\".\"${motherduck_table.orders.name}\""
-  depends_on = [motherduck_table.orders]
+  database = motherduck_database.analytics.name
+  schema   = "main"
+  name     = "daily_revenue"
+  query    = "SELECT order_id FROM \"${motherduck_database.analytics.name}\".\"main\".\"${motherduck_table.orders.name}\""
 }
 
 resource "motherduck_share" "analytics" {
@@ -26,7 +25,9 @@ resource "motherduck_share" "analytics" {
   visibility      = "hidden"
   update_mode     = "manual"
   include_pattern = ["main.orders", "main.daily_revenue"]
-  depends_on      = [motherduck_view.daily_revenue]
+
+  # include_pattern names objects by string, so order the share after them.
+  depends_on = [motherduck_view.daily_revenue]
 }
 
 resource "motherduck_share_grant" "reader" {
@@ -39,8 +40,4 @@ variable "reader_username" {
   type        = string
   default     = "reader_user"
   nullable    = false
-  validation {
-    condition     = length(trimspace(var.reader_username)) > 0 && trimspace(var.reader_username) == var.reader_username
-    error_message = "reader_username must be a non-empty principal without leading or trailing whitespace."
-  }
 }

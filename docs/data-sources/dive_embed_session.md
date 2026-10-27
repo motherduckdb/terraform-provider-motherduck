@@ -7,16 +7,38 @@ description: |-
 
 # motherduck_dive_embed_session (Data Source)
 
+~> **Deprecated:** Use the [motherduck_dive_embed_session](../ephemeral-resources/dive_embed_session.md)
+ephemeral resource instead. This data source stores the session credential in
+Terraform state.
+
 Creates a short-lived Dive embed session for a service account. The session is
 valid for 24 hours, and the lifetime cannot be changed. Embedding needs a
 Business plan or an active free trial, and `username` must be a service account
 in the same organization.
 
-~> Prefer the `motherduck_dive_embed_session` ephemeral resource for new configurations. This data source creates a credential and persists it in Terraform state.
+## Migrating to the ephemeral resource
+
+Replace the `data` block with an `ephemeral` block that takes the same
+arguments. The ephemeral resource requires Terraform 1.10 or later.
+
+```terraform
+ephemeral "motherduck_dive_embed_session" "reader" {
+  dive_id      = "11111111-1111-4111-8111-111111111111"
+  username     = "analytics_reader"
+  session_name = "dashboard"
+
+  # Seed the Dive's useDiveState values for this viewer.
+  initial_state = jsonencode({
+    region = "emea"
+  })
+}
+```
 
 ## Example Usage
 
 ```terraform
+# Deprecated. This data source stores the session credential in Terraform
+# state. Use the motherduck_dive_embed_session ephemeral resource instead.
 data "motherduck_dive_embed_session" "reader" {
   dive_id      = "11111111-1111-4111-8111-111111111111"
   username     = "analytics_reader"

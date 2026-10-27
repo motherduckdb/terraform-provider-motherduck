@@ -9,6 +9,9 @@ terraform {
   }
 }
 
+# Credentials come from the environment. MOTHERDUCK_TOKEN authorizes SQL
+# resources and MOTHERDUCK_ADMIN_TOKEN authorizes organization REST resources
+# such as service accounts and access tokens. Keep tokens out of configuration.
 provider "motherduck" {}
 
 resource "motherduck_database" "analytics" {

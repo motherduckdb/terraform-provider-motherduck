@@ -30,7 +30,9 @@ table = motherduck.Table(
     schema=schema.name,
     name="facts",
     columns={"id": "INTEGER", "label": "VARCHAR"},
-    opts=pulumi.ResourceOptions(provider=provider),
+    # A column change replaces the table under the same name, so drop the old
+    # table first. This deletes its rows, as terraform apply would.
+    opts=pulumi.ResourceOptions(provider=provider, delete_before_replace=True),
 )
 
 pulumi.export("database_name", database.name)

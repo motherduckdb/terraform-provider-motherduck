@@ -33,7 +33,7 @@ This is a disposable exercise. Start with an account where
 ## 1. Get the example
 
 ```shell
-git clone --depth 1 --branch v0.3.0 https://github.com/motherduckdb/terraform-provider-motherduck.git
+git clone --depth 1 --branch v0.3.9 https://github.com/motherduckdb/terraform-provider-motherduck.git
 cd terraform-provider-motherduck/examples/warehouses/simple
 terraform init
 ```

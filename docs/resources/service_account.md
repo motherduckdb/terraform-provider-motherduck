@@ -19,10 +19,10 @@ MotherDuck compares usernames case-insensitively, so changing only the letter
 case updates the resource in place without an API call. Any other rename
 replaces the account.
 
-Some older service accounts have legacy usernames that also contain hyphens,
-at signs, or periods, such as `mdw-writer@motherduck-com`. Import such an
-account by its username to manage it. MotherDuck no longer creates accounts
-with these characters, so a plan that would create or rename to one fails.
+Some older service accounts have usernames that also contain hyphens, at
+signs, or periods, such as `mdw-writer@motherduck-com`. Import such an account
+by its username to manage it. MotherDuck does not create accounts with these
+characters, so a plan that would create or rename to one fails.
 
 `description` is sent only when MotherDuck creates the account. MotherDuck has
 no API to read or change it, so the provider fails the plan when the configured
@@ -76,15 +76,10 @@ See [environment bootstrap](../guides/environments.md) and
 ## Example Usage
 
 ```terraform
+# Destroying a service account deletes the databases it owns. Add
+# lifecycle { prevent_destroy = true } to accounts that own production data.
 resource "motherduck_service_account" "app" {
   username = "analytics_app"
-}
-
-resource "motherduck_access_token" "app" {
-  username   = motherduck_service_account.app.username
-  name       = "terraform-managed"
-  token_type = "read_write"
-  ttl        = 2592000
 }
 ```
 

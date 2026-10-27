@@ -1,7 +1,8 @@
 # Roles and share access
 
-Custom roles require a MotherDuck Business or Enterprise plan and permission to
-create roles and assign membership. Share grants run as the share owner.
+Custom roles require a MotherDuck Business or Enterprise plan, or an active free
+trial, and permission to create roles and assign membership. Share grants run
+as the share owner.
 
 If you manage roles with Terraform, manage their memberships and share grants
 there too. Changes made outside Terraform can leave access different from the

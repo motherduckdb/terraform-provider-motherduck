@@ -7,10 +7,10 @@ description: |-
 
 # Run a local provider build
 
-Install Go using the toolchain in `go.mod`, a native C/C++ compiler for CGO,
-Terraform, and the shell utilities used by the Makefile. Native package checks
-also require `zip`, `unzip`, and `jq`. Use the supported Linux/macOS architecture
-matching the build host.
+You need the Go toolchain named in `go.mod`, a C/C++ compiler for CGO, Terraform,
+and the shell tools the Makefile uses. Builds run on Linux or macOS, amd64 or
+arm64. `make release-check` also needs `zip`, `unzip`, and `jq`. Tests also need
+ShellCheck and `gpg`.
 
 From the repository root:
 
@@ -19,8 +19,7 @@ mkdir -p bin
 go build -o bin/terraform-provider-motherduck .
 ```
 
-Create a separate Terraform CLI configuration file using the absolute path to
-that `bin` directory:
+Create a Terraform CLI configuration file with the absolute path to `bin`:
 
 ```hcl
 provider_installation {
@@ -31,23 +30,20 @@ provider_installation {
 }
 ```
 
-Set `TF_CLI_CONFIG_FILE` to that file for your development shell. Terraform
-prints a development-override warning. This is expected. In a module containing
-only this provider, skip `terraform init` and run `terraform validate`, `plan`,
-and `apply` directly. Initialize other providers and remote modules separately
-when needed.
+Set `TF_CLI_CONFIG_FILE` to that file in your development shell. Terraform prints
+a development-override warning, which is expected. In a module that uses only
+this provider, skip `terraform init` and run `terraform validate`, `plan`, and
+`apply` directly.
 
-The tests use filesystem mirrors instead of development overrides so they can
-exercise `terraform init` without requiring Registry publication.
+The test scripts use filesystem mirrors instead of development overrides so they
+can exercise `terraform init`.
 
-## Choose the relevant check
+## Which checks to run
 
-- Schema or validator changes: unit tests, invalid-configuration fixtures,
-  generated docs, and examples.
-- Resource behavior: a Terraform protocol contract plus the corresponding
-  live smoke where real service behavior matters.
+- Schema or validator changes: unit tests, invalid-configuration fixtures, examples, and `make docs`.
+- Resource behavior: a protocol contract, plus a live smoke where real service behavior matters.
 - SQL client changes: embedded DuckDB tests and `make test-live-required`.
-- Packaging changes: `make release-check` and the four native CI package jobs.
+- Packaging changes: `make release-check`.
 
-Run `make pre-push-check` before pushing. See [testing](testing.md) for the
-coverage map and credential boundaries.
+Run `make pre-push-check` before pushing. See [Test the provider](testing.md)
+for all targets.
