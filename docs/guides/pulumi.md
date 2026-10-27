@@ -173,5 +173,5 @@ for drift. Do not manage the same object from both Terraform and Pulumi.
   views, secrets, shares, snapshots, Flights, Guides, and Dives, and with an
   admin token also service accounts, access tokens, Duckling configuration,
   roles, and role grants.
-- `motherduck_share_grant` and the deprecated `motherduck_flight_run` map to
-  Pulumi but do not have a live Pulumi test.
+- `motherduck_share_grant`, `motherduck_share_secure_view`, and the deprecated
+  `motherduck_flight_run` map to Pulumi but do not have a live Pulumi test.

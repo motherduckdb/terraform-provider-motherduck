@@ -7,15 +7,15 @@ description: |-
 
 # motherduck_flight_run (Resource)
 
-Deprecated: trigger runs through a deployment pipeline or the MotherDuck CLI/SQL
-interface. See [resource scope and migration](../guides/resource-scope.md).
-Changing wait status, timeout, or polling interval updates stored preferences.
-It does not rerun a Flight or wait again. These settings apply when creating a
-new run. Changing Flight identity or run configuration still requires replacement.
+~> **Deprecated:** Use `schedule_cron` on [motherduck_flight](flight.md) for
+recurring runs, and trigger one-off runs from a deployment pipeline or the
+MotherDuck CLI or SQL interface. See [resource scope and migration](../guides/resource-scope.md).
 
 A Flight run is an operation recorded in Terraform state. Creating or replacing
-this resource can execute the Flight again. Use the Flight definition's schedule
-for recurring execution.
+this resource runs the Flight again. Changing the Flight ID or the run `config`
+replaces the resource. Changing `wait_for_status`, `timeout_seconds`, or
+`poll_interval_seconds` only updates the stored settings. It does not rerun the
+Flight or wait again.
 
 Refresh reads the run's status, timing, and `exit_code`. `started_at`,
 `ended_at`, and `exit_code` stay null until the run starts or finishes.
@@ -99,6 +99,9 @@ from the configuration or from state.
 ## Example Usage
 
 ```terraform
+# Deprecated. Each create or replacement runs the Flight again. Prefer
+# schedule_cron on motherduck_flight, or trigger runs from a deployment
+# pipeline.
 resource "motherduck_flight" "heartbeat" {
   name = "heartbeat"
 
@@ -122,9 +125,7 @@ resource "motherduck_flight_run" "heartbeat" {
     mode = "manual"
   }
 
-  wait_for_status       = "succeeded"
-  poll_interval_seconds = 10
-  timeout_seconds       = 600
+  wait_for_status = "succeeded"
 }
 ```
 

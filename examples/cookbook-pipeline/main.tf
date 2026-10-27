@@ -3,11 +3,13 @@ terraform {
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = ">= 0.2.10, < 1.0.0"
+      version = "~> 0.3.0"
     }
   }
 }
+
 provider "motherduck" {}
+
 variable "database_name" {
   description = "Unique database owned by the injected writer account. Changing it replaces the database and deletes its data."
   type        = string
@@ -18,10 +20,12 @@ variable "database_name" {
     error_message = "Use a lowercase database identifier of at most 64 characters."
   }
 }
+
 resource "motherduck_database" "pipeline" {
   name                    = var.database_name
   snapshot_retention_days = 7
 }
+
 output "pipeline_config" {
   description = "Non-secret settings consumed by the cookbook runner and dbt profile."
   value = {

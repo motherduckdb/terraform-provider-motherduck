@@ -54,7 +54,7 @@ resource "motherduck_share_grant" "reader" {
 
 ## Import
 
-Import new grants with `<share>/<grantee_type>/<username>`. The legacy `<share>/<username>` form remains accepted and imports a user grant:
+Import a grant with `<share>/<grantee_type>/<username>`. The two-part `<share>/<username>` form imports a user grant:
 
 ```shell
 terraform import motherduck_share_grant.reader analytics_share/role/analytics_readers

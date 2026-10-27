@@ -10,10 +10,9 @@ Three independent Terraform roots demonstrate environment ownership and two ware
 
 These follow MotherDuck's [resource-management](https://motherduck.com/docs/concepts/resource-management)
 and [environment-management](https://motherduck.com/docs/key-tasks/data-warehousing/environment-management)
-guidance. Layout follows
-[Terraform's standard structure](https://developer.hashicorp.com/terraform/language/modules/develop/structure).
-Like the [Databricks examples repository](https://github.com/databricks/terraform-databricks-examples),
-each directory explains its prerequisites, deployment, and cleanup.
+guidance. Each root follows
+[Terraform's standard module structure](https://developer.hashicorp.com/terraform/language/modules/develop/structure)
+and its README covers prerequisites, deployment, and cleanup.
 
 ## Environment boundary
 
@@ -146,15 +145,3 @@ reads succeed, writes fail, and the other environment is inaccessible unless
 explicitly shared. Raw/transform reads in the same environment are expected.
 
 See each root's README for sample data, expected results, and inputs.
-
-## Updating an already-applied version
-
-The earlier bootstrap created separate `dev_bi`/`prod_bi` accounts. This version
-removes those accounts, replaces their tokens with writer-owned tokens, and
-removes the layered share/grant. Token names and expiry settings also change.
-Review the replacement plan, detach old shares as the old reader with a
-read-write token, remove the old layered grants/shares with the writer, then
-apply bootstrap and securely update both pipeline and BI credentials. Keep the
-original writer credentials available until warehouse changes finish. Do not
-apply this switch if existing BI consumers still require curated-only access.
-Retain the separate-reader design above instead.

@@ -1,7 +1,7 @@
 # Pulumi Python
 
-This is a small Pulumi program using Pulumi's Any Terraform Provider bridge with
-the MotherDuck Terraform provider. It creates one database, schema, and table.
+A Pulumi program that runs the MotherDuck Terraform provider through Pulumi's
+Any Terraform Provider bridge. It creates one database, schema, and table.
 
 The recipe pins Pulumi `v3.271.0`, the bridge package `v1.5.0`, and the
 MotherDuck provider `0.3.8` in `Pulumi.yaml` and `requirements.txt`. The
@@ -38,14 +38,15 @@ pins every transitive Python dependency and documents how to regenerate it. `.ve
 
 `PULUMI_CONFIG_PASSPHRASE` must come from a secret manager or protected CI
 environment. The local backend encrypts stack secrets, but the passphrase and
-the local state directory still need filesystem protection. Choose a database name unique to this stack before running the example.
+the local state directory still need filesystem protection.
 
 ## Lifecycle
 
 Inject `MOTHERDUCK_TOKEN` into the environment from your secret manager, never
 by typing it into the shell, where it lands in history. Wrapping it in
 `pulumi.Output.secret` keeps the provider configuration and dependent values
-secret in Pulumi state and UI output.
+secret in Pulumi state and UI output. The table sets `delete_before_replace`
+because its name stays fixed across a column change.
 
 ```shell
 # MOTHERDUCK_TOKEN must already be set by your secret manager.
@@ -56,9 +57,8 @@ pulumi preview                 # should report no changes
 pulumi destroy
 ```
 
-The verified import IDs for this provider follow the Terraform provider's
-existing formats: `<database>`, `<database>.<schema>`, and
-`<database>.<schema>.<table>` for a database, schema, and table respectively.
+Import IDs match the Terraform provider: `<database>`, `<database>.<schema>`,
+and `<database>.<schema>.<table>` for a database, schema, and table.
 Use `pulumi import` with those IDs only after confirming the resource is intended
 for this stack and is no longer managed by another Terraform or Pulumi state, then copy the generated protected resource definitions into the
 program. Remove protection deliberately before destroying imported resources.

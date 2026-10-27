@@ -49,6 +49,9 @@ for what the body may contain.
 - Destroying a replacing secure view makes its table visible to consumers again
   when the share's `include_pattern` matches the table. With
   `include_pattern = []`, the table disappears for consumers instead.
+- A role grant or revoke takes up to about a minute to reach
+  `is_role_in_session()`, in open sessions as well as new ones. A column masked
+  by role membership can stay visible to a revoked role for that long.
 - Terraform orders resources only by references. Add `depends_on` from
   `motherduck_share_grant` to the secure views so a new consumer is never granted
   a share whose policies do not exist yet.
@@ -104,6 +107,9 @@ resource "motherduck_share" "usage" {
   depends_on      = [motherduck_table.daily_usage, motherduck_table.tenant_readers]
 }
 
+# Role grants and revokes take up to about a minute to reach
+# is_role_in_session(), so contact_email masking follows role changes with
+# that delay.
 resource "motherduck_share_secure_view" "daily_usage" {
   share    = motherduck_share.usage.name
   schema   = motherduck_table.daily_usage.schema

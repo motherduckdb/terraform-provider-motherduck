@@ -7,51 +7,69 @@ description: |-
 
 # Read hypertenancy with centralized writes
 
-This blueprint centralizes writes through one writer identity while isolating reads by tenant database and restricted shares. The writer service account owns every tenant database and share. Reader identities only consume their tenant share.
+This blueprint gives every tenant its own database, restricted share, reader
+service account, and read-scaling token. One writer service account owns every
+tenant database and share. Readers only query their own tenant's share. Use it
+for new multi-tenant deployments.
 
 ## Architecture
 
 ![A pipeline writes Acme and Globex data through one central writer that owns both tenant databases and their restricted shares. Each share is granted to and attached by its own tenant reader account with a separate read pool. The backend authenticates users and routes queries to the matching reader.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/customer-facing-analytics.png)
 
-## Grant semantics
+## Why the writer applies the data plane
 
-Two MotherDuck rules shape this blueprint. A database is writable only by the identity that owns it, and access is granted through shares: `GRANT READ ON SHARE <share> TO <username>` can be run only by the owner of the share. There is no database-level grant and no write grant.
-
-So the writer cannot be an identity Terraform merely creates on the side. The tenant data plane must be applied *as* the writer, making the writer the owner of every tenant database (so the pipeline can write) and every share (so the reader grants are permitted).
-
-## Terraform shape
+Only the identity that owns a database can write to it, and only the owner of
+a share can run `GRANT READ ON SHARE`. MotherDuck has no database-level grant
+and no write grant. The data plane must therefore be applied with the writer's
+token, so the writer owns every tenant database and share.
 
 Deploy in two stages, each with its own state:
 
-1. **Bootstrap** (`examples/blueprints/writer-bootstrap`): an organization admin applies this with `MOTHERDUCK_ADMIN_TOKEN` to create the writer service account and read-write token. The token goes into a secret manager.
-2. **Data plane** (`examples/blueprints/read-hypertenancy`): applied with `MOTHERDUCK_TOKEN` set to the writer token from stage one, plus `MOTHERDUCK_ADMIN_TOKEN` for REST-backed reader service accounts and tokens. Use `for_each` for tenant databases, shares, and reader identities.
+1. **Bootstrap** (`examples/blueprints/writer-bootstrap`): an organization
+   admin applies it with `MOTHERDUCK_ADMIN_TOKEN` to create the writer service
+   account and its read-write token. Store the token in a secret manager.
+2. **Data plane** (`examples/blueprints/read-hypertenancy`): apply it with
+   `MOTHERDUCK_TOKEN` set to the writer token, plus `MOTHERDUCK_ADMIN_TOKEN` for
+   reader service accounts, Duckling configuration, and tokens.
 
-The data-plane module accepts an optional `expected_writer_username` guard that fails the plan when the SQL session identity does not match the writer, so tenant databases are never accidentally created under a personal or CI identity.
+Set `expected_writer_username` so the plan fails when the SQL token belongs to
+a personal or CI identity instead of the writer.
 
-Generated names are intentionally conservative: `database_prefix`, `share_prefix`, and `reader_prefix` must start with an ASCII letter and contain only ASCII letters, digits, and underscores. Tenant keys and optional slugs are normalized into lowercase alphanumeric/underscore suffixes so generated names stay importable and shell-friendly, and normalized slugs must stay unique across tenants.
+## Terraform shape
+
+The module uses `for_each` over a tenant map. Each tenant gets a
+`motherduck_database`, an `app` `motherduck_schema`, a
+`motherduck_service_account`, a `motherduck_duckling_config`, a restricted
+`motherduck_share`, a `motherduck_share_grant`, and `motherduck_access_token`
+resources: a one-hour setup token, a read-scaling token, and one read-scaling
+token per rotation generation.
+
+`database_prefix`, `share_prefix`, and `reader_prefix` must start with an ASCII
+letter and contain only ASCII letters, digits, and underscores. Tenant keys and
+optional slugs are normalized into lowercase alphanumeric and underscore
+suffixes, and normalized slugs must be unique across tenants.
 
 ## Operating model
 
 Use this model when:
 
-- writes should be serialized through one controlled identity.
-- read workloads should be isolated by tenant.
-- tenants need separate share grants and reader credentials.
-- data pipelines need a predictable list of tenant databases to update.
+- writes should go through one controlled identity.
+- tenant data must be restorable, shareable, or dropped independently.
+- tenants need separate share grants, reader credentials, and read compute.
 
 Tradeoffs:
 
-- writer credentials have broad write access and need stricter handling.
-- Terraform for the data plane runs as the writer, so its credential management is coupled to the pipeline identity.
-- application teams should not use writer credentials for reads.
+- the writer token can write every tenant database. Give it only to the
+  ingestion runtime and the data-plane Terraform runtime, never to a
+  tenant-facing service.
+- more MotherDuck objects and Terraform state entries per tenant.
+- schema migrations must loop over every tenant database.
 
-## Write path
-
-The writer token belongs in the ingestion or modeling runtime secret manager and in the data-plane Terraform runtime. Terraform creates tenant databases as the writer. The runtime job performs actual data writes with the same identity.
-
-## Read path
-
-Each tenant receives a reader service account and token. The token should be distributed only to that tenant's serving layer. The tenant application reads through the restricted share instead of connecting as the writer.
+Give each reader token only to the serving layer for that tenant. When many
+small tenants share one schema and do not need an independent lifecycle, a
+pooled table with [secure views](row-and-column-security.md) can replace the
+per-tenant databases. Compare the two in
+[choose a tenancy model](customer-facing-analytics.md#choose-a-tenancy-model).
 
 ## Token lifecycle and offboarding
 
@@ -108,7 +126,7 @@ Stage one creates the writer (see the writer-bootstrap blueprint), and its token
 
 ```hcl
 module "writer_bootstrap" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.3.0"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.3.9"
 
   writer_username = "svc_writer_prod"
 }
@@ -118,7 +136,7 @@ Stage two, in a separate root module and state. Key each tenant by a stable inte
 
 ```hcl
 module "read_hypertenancy" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.3.0"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.3.9"
 
   expected_writer_username = "svc_writer_prod"
 

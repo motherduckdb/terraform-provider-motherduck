@@ -27,6 +27,7 @@ Shares let other accounts query published data on their own compute.
 | [Serve customer-facing analytics](guides/customer-facing-analytics.md) | One database and restricted share per customer, queried through tenant-specific readers |
 | [Deploy pipelines and dashboards](guides/blueprints-deployment.md) | Terraform infrastructure with Blueprints previews, staging, and production releases |
 | [Manage roles and share access](guides/access-control.md) | Create roles, assign members, and grant access to shares |
+| [Secure shared rows and columns](guides/row-and-column-security.md) | Filter rows, hide columns, and mask values per share consumer |
 | [Secure shared rows and columns](guides/row-and-column-security.md) | One share that filters rows per tenant and masks columns by role |
 
 ## Example usage
@@ -58,7 +59,7 @@ a database being created in the same apply.
 | --- | --- | --- |
 | Warehouse structure | [Database](resources/database.md), [schema](resources/schema.md), [table](resources/table.md), [view](resources/view.md) | Provision landing tables and SQL models |
 | Identity and compute | [Service account](resources/service_account.md), [access token](resources/access_token.md), [Duckling configuration](resources/duckling_config.md) | Separate pipelines, environments, and reader workloads |
-| Data access | [Share](resources/share.md), [share grant](resources/share_grant.md), [role](resources/role.md), [role grant](resources/role_grant.md) | Publish curated data to accounts and teams |
+| Data access | [Share](resources/share.md), [share grant](resources/share_grant.md), [share secure view](resources/share_secure_view.md), [role](resources/role.md), [role grant](resources/role_grant.md) | Publish curated data to accounts and teams, with per-consumer row and column rules |
 | Storage access and recovery | [Secret](resources/secret.md), [snapshot](resources/snapshot.md) | Configure external storage access and named recovery points |
 | Optional application definitions | [Flight](resources/flight.md), [Dive](resources/dive.md), [Guide](resources/guide.md) | Manage code and content only when Terraform is their sole deployment owner |
 
