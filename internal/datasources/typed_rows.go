@@ -29,11 +29,7 @@ func (s rowSpec) typedRowsAttribute() schema.ListNestedAttribute {
 
 func (s rowSpec) typedRowsValue(rowsJSON string) (types.List, diag.Diagnostics) {
 	var diags diag.Diagnostics
-	attrTypes := make(map[string]attr.Type, len(s.typedRows))
-	for _, rowAttr := range s.typedRows {
-		attrTypes[rowAttr.name] = types.StringType
-	}
-	objectType := types.ObjectType{AttrTypes: attrTypes}
+	objectType := s.typedRowsAttribute().NestedObject.Type().(types.ObjectType)
 
 	var rawRows []map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(rowsJSON), &rawRows); err != nil {
@@ -50,7 +46,7 @@ func (s rowSpec) typedRowsValue(rowsJSON string) (types.List, diag.Diagnostics) 
 			}
 			rowValues[rowAttr.name] = typedRowStringValue(rawRow[source])
 		}
-		objectValue, objectDiags := types.ObjectValue(attrTypes, rowValues)
+		objectValue, objectDiags := types.ObjectValue(objectType.AttrTypes, rowValues)
 		diags.Append(objectDiags...)
 		values = append(values, objectValue)
 	}
