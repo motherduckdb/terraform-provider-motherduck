@@ -6,7 +6,7 @@ This index lists the headline change for every release.
 
 ## v0.3.9
 
-This release adds the `motherduck_share_secure_view` resource and the `motherduck_share_secure_views` data source, which manage and audit row-level security, column-level security and column masking on shares, and a guide on securing shared rows and columns. It also refreshes the guides, examples and architecture diagrams. Version constraints such as `~> 0.3.0` select it. See the [v0.3.9 release notes](release-notes/v0.3.9.md).
+This release adds the `motherduck_share_secure_view` resource and the `motherduck_share_secure_views` data source, which manage and audit row-level security, column-level security and column masking on shares, together with a guide on securing shared rows and columns. Version constraints such as `~> 0.3.0` select it, and the [v0.3.9 release notes](release-notes/v0.3.9.md) describe each change.
 
 ## v0.3.8
 
