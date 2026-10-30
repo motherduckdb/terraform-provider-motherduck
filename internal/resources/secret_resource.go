@@ -408,7 +408,7 @@ func validateFlightSecretValues(values flightSecretValues, diags *diag.Diagnosti
 }
 
 // secretValidationValues carries the secret fields that are spliced into the
-// CREATE SECRET statement as raw SQL. Nil pointers mean "not provided or not
+// CREATE SECRET statement as raw SQL. Empty values mean "not provided or not
 // yet known", so the field is skipped.
 type secretValidationValues struct {
 	Type      string

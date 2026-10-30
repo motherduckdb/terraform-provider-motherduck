@@ -382,9 +382,9 @@ func (s rowSpec) attrRequired(name string) bool {
 func rowAttribute(name string, required bool) schema.Attribute {
 	switch name {
 	case "limit":
-		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Min("MotherDuck data source limit", 0)}, "Maximum number of rows to return when the underlying MotherDuck catalog function supports limits.")
+		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Min("MotherDuck data source limit", 0)}, "Maximum number of rows to return. Rows are sorted before paging, so pages are stable.")
 	case "offset":
-		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Min("MotherDuck data source offset", 0)}, "Number of rows to skip when the underlying MotherDuck catalog function supports offsets.")
+		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Min("MotherDuck data source offset", 0)}, "Number of sorted rows to skip before returning results.")
 	case "run_number":
 		return rowInt64Attribute(required, []validator.Int64{tfvalidators.Int64Min("MotherDuck data source run number", 1)}, "MotherDuck Flight run number.")
 	case "version":

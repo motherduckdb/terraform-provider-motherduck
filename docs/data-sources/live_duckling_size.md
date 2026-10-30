@@ -24,4 +24,4 @@ data "motherduck_live_duckling_size" "current" {}
 
 ### Read-Only
 
-- `value` (String) Scalar value returned by the MotherDuck SQL data source.
+- `value` (String) Duckling size of the current SQL session, as reported by `md_live_duckling_size()`.

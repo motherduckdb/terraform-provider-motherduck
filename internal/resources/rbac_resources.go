@@ -276,8 +276,8 @@ func (r *roleGrantResource) Schema(ctx context.Context, req resource.SchemaReque
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("user"),
-				MarkdownDescription: "Principal type: `user` or `role`. Defaults to `user`.",
-				PlanModifiers:       stringOptionalComputedRequiresReplaceIfConfigured(),
+				MarkdownDescription: "Principal type: `user` or `role`. Defaults to `user`. Changing it, including removing a configured `role`, replaces the grant.",
+				PlanModifiers:       stringRequiresReplace(),
 				Validators:          roleGranteeTypeValidators(),
 			},
 			"granted_at": schema.StringAttribute{

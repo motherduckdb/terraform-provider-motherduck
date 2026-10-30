@@ -25,4 +25,4 @@ data "motherduck_version" "current" {}
 ### Read-Only
 
 - `extension_hash` (String) Build hash of the MotherDuck extension. Null when the session does not report it.
-- `value` (String) Scalar value returned by the MotherDuck SQL data source.
+- `value` (String) MotherDuck version reported by `md_version()`.

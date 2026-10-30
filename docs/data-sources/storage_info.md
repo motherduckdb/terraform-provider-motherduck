@@ -43,8 +43,8 @@ output "analytics_active_bytes" {
 
 - `database_name` (String) MotherDuck database name filter.
 - `include_history` (Boolean) Whether to read every recorded storage computation from `STORAGE_INFO_HISTORY` instead of only the latest one. Defaults to false.
-- `limit` (Number) Maximum number of rows to return when the underlying MotherDuck catalog function supports limits.
-- `offset` (Number) Number of rows to skip when the underlying MotherDuck catalog function supports offsets.
+- `limit` (Number) Maximum number of rows to return. Rows are sorted before paging, so pages are stable.
+- `offset` (Number) Number of sorted rows to skip before returning results.
 
 ### Read-Only
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
 	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
@@ -59,16 +60,16 @@ func (p *motherduckProvider) Schema(ctx context.Context, req provider.SchemaRequ
 			"token": schema.StringAttribute{
 				Optional:            true,
 				Sensitive:           true,
-				MarkdownDescription: "MotherDuck token for SQL/data-plane operations. Defaults to `MOTHERDUCK_TOKEN`.",
+				MarkdownDescription: "MotherDuck token for SQL/data-plane operations. Defaults to `MOTHERDUCK_TOKEN` when unset or empty.",
 			},
 			"admin_token": schema.StringAttribute{
 				Optional:            true,
 				Sensitive:           true,
-				MarkdownDescription: "MotherDuck organization admin token for REST/control-plane operations. Defaults to `MOTHERDUCK_ADMIN_TOKEN`.",
+				MarkdownDescription: "MotherDuck organization admin token for REST/control-plane operations. Defaults to `MOTHERDUCK_ADMIN_TOKEN` when unset or empty.",
 			},
 			"api_base_url": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "MotherDuck REST API base URL. Must be an absolute HTTPS URL with a host, or HTTP for a loopback host, without credentials, a query string, or a fragment. Can also be set with the `MOTHERDUCK_API_BASE_URL` environment variable. Defaults to `https://api.motherduck.com`.",
+				MarkdownDescription: "MotherDuck REST API base URL. Must be an absolute HTTPS URL with a host, or HTTP for a loopback host, without credentials, a query string, or a fragment. Can also be set with the `MOTHERDUCK_API_BASE_URL` environment variable, which applies when this argument is unset or empty. Defaults to `https://api.motherduck.com`.",
 				Validators:          []validator.String{apiBaseURLValidator{}},
 			},
 			"database": schema.StringAttribute{
@@ -82,7 +83,8 @@ func (p *motherduckProvider) Schema(ctx context.Context, req provider.SchemaRequ
 			},
 			"custom_user_agent": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional custom user agent suffix sent on both the DuckDB/MotherDuck SQL connection and MotherDuck REST API requests.",
+				MarkdownDescription: "Optional custom user agent suffix sent on both the DuckDB/MotherDuck SQL connection and MotherDuck REST API requests. Must not contain control characters such as newlines.",
+				Validators:          []validator.String{userAgentValidator{}},
 			},
 			"request_timeout_seconds": schema.Int64Attribute{
 				Optional:            true,
@@ -100,11 +102,14 @@ func (p *motherduckProvider) Configure(ctx context.Context, req provider.Configu
 		return
 	}
 
-	token := stringValue(cfg.Token, os.Getenv("MOTHERDUCK_TOKEN"))
-	adminToken := stringValue(cfg.AdminToken, os.Getenv("MOTHERDUCK_ADMIN_TOKEN"))
-	apiBaseURL := stringValue(cfg.APIBaseURL, os.Getenv("MOTHERDUCK_API_BASE_URL"))
+	// An empty argument falls back to the environment, so a module variable
+	// that defaults to "" does not hide a token injected through the
+	// environment.
+	token := stringValueOrEnv(cfg.Token, "MOTHERDUCK_TOKEN")
+	adminToken := stringValueOrEnv(cfg.AdminToken, "MOTHERDUCK_ADMIN_TOKEN")
+	apiBaseURL := stringValueOrEnv(cfg.APIBaseURL, "MOTHERDUCK_API_BASE_URL")
 	apiBaseURLSource := "`api_base_url`"
-	if cfg.APIBaseURL.IsNull() {
+	if blankString(cfg.APIBaseURL) {
 		apiBaseURLSource = "`MOTHERDUCK_API_BASE_URL`"
 	}
 	if strings.TrimSpace(apiBaseURL) == "" {
@@ -200,6 +205,19 @@ func stringValue(value types.String, fallback string) string {
 	return value.ValueString()
 }
 
+// stringValueOrEnv returns the configured value, or the named environment
+// variable when the argument is unset or blank.
+func stringValueOrEnv(value types.String, env string) string {
+	if blankString(value) {
+		return os.Getenv(env)
+	}
+	return value.ValueString()
+}
+
+func blankString(value types.String) bool {
+	return value.IsNull() || value.IsUnknown() || strings.TrimSpace(value.ValueString()) == ""
+}
+
 func int64Value(value types.Int64, fallback int64) int64 {
 	if value.IsNull() || value.IsUnknown() {
 		return fallback
@@ -215,6 +233,32 @@ func (apiBaseURLValidator) Description(context.Context) string {
 
 func (apiBaseURLValidator) MarkdownDescription(context.Context) string {
 	return "must be an absolute HTTPS URL with a host, or an HTTP URL for a loopback host"
+}
+
+type userAgentValidator struct{}
+
+func (userAgentValidator) Description(context.Context) string {
+	return "must not contain control characters"
+}
+
+func (v userAgentValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+// ValidateString rejects control characters, which net/http refuses in a
+// header value. Without this check every REST request fails with an error that
+// does not name the provider argument.
+func (userAgentValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if strings.IndexFunc(strings.TrimSpace(req.ConfigValue.ValueString()), unicode.IsControl) >= 0 {
+		resp.Diagnostics.AddAttributeError(
+			req.Path,
+			"Invalid MotherDuck custom user agent",
+			"`custom_user_agent` must not contain control characters such as newlines or tabs between its words.",
+		)
+	}
 }
 
 type attachModeValidator struct{}

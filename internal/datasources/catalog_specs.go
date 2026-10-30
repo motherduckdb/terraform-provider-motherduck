@@ -52,7 +52,7 @@ func rowSpecs() []rowSpec {
 		}, build: func(m rowsModel) (string, error) {
 			query := "SELECT * FROM MD_INFORMATION_SCHEMA.DATABASES"
 			if !m.Name.IsNull() {
-				query += " WHERE name = " + sqlbuild.StringLiteral(m.Name.ValueString())
+				query += " WHERE lower(name) = lower(" + sqlbuild.StringLiteral(m.Name.ValueString()) + ")"
 			}
 			return appendRowLimitOffset(query+" ORDER BY name", m), nil
 		}},
@@ -80,7 +80,7 @@ func rowSpecs() []rowSpec {
 		}, build: func(m rowsModel) (string, error) {
 			query := "SELECT * FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS"
 			if !m.DatabaseName.IsNull() {
-				query += " WHERE database_name = " + sqlbuild.StringLiteral(m.DatabaseName.ValueString())
+				query += " WHERE lower(database_name) = lower(" + sqlbuild.StringLiteral(m.DatabaseName.ValueString()) + ")"
 			}
 			return appendRowLimitOffset(query+" ORDER BY database_name, created_ts, snapshot_id", m), nil
 		}},
@@ -97,7 +97,7 @@ func rowSpecs() []rowSpec {
 		}, build: func(m rowsModel) (string, error) {
 			query := "SELECT * FROM MD_INFORMATION_SCHEMA.OWNED_SHARES"
 			if !m.Name.IsNull() {
-				query += " WHERE name = " + sqlbuild.StringLiteral(m.Name.ValueString())
+				query += " WHERE lower(name) = lower(" + sqlbuild.StringLiteral(m.Name.ValueString()) + ")"
 			}
 			return appendRowLimitOffset(query+" ORDER BY name", m), nil
 		}},
@@ -114,9 +114,9 @@ func rowSpecs() []rowSpec {
 		}, build: func(m rowsModel) (string, error) {
 			query := "SELECT * FROM MD_INFORMATION_SCHEMA.SHARED_WITH_ME"
 			if !m.Name.IsNull() {
-				query += " WHERE name = " + sqlbuild.StringLiteral(m.Name.ValueString())
+				query += " WHERE lower(name) = lower(" + sqlbuild.StringLiteral(m.Name.ValueString()) + ")"
 			}
-			return appendRowLimitOffset(query+" ORDER BY name", m), nil
+			return appendRowLimitOffset(query+" ORDER BY name, owner, url", m), nil
 		}},
 		{name: "share_grants", description: "Lists direct user and role grants and whole-audience access on one MotherDuck share. Does not expand role membership.", requiredFunction: "md_list_share_grantees", attrs: []string{"share_name"}, requiredAttrs: []string{"share_name"}, typedRows: []typedRowAttribute{
 			{name: "share_owner", description: "Account that owns the share."},
@@ -152,7 +152,7 @@ func rowSpecs() []rowSpec {
 		}, build: func(m rowsModel) (string, error) {
 			query := "SELECT name, type, provider, persistent, storage, scope::VARCHAR FROM duckdb_secrets() WHERE storage = 'motherduck'"
 			if !m.Name.IsNull() {
-				query += " AND name = " + sqlbuild.StringLiteral(m.Name.ValueString())
+				query += " AND lower(name) = lower(" + sqlbuild.StringLiteral(m.Name.ValueString()) + ")"
 			}
 			return appendRowLimitOffset(query+" ORDER BY name", m), nil
 		}},
@@ -404,7 +404,7 @@ func rowSpecs() []rowSpec {
 			}
 			query := "SELECT * FROM " + table
 			if !m.DatabaseName.IsNull() {
-				query += " WHERE database_name = " + sqlbuild.StringLiteral(m.DatabaseName.ValueString())
+				query += " WHERE lower(database_name) = lower(" + sqlbuild.StringLiteral(m.DatabaseName.ValueString()) + ")"
 			}
 			return appendRowLimitOffset(query+" ORDER BY database_name, database_id, computed_ts", m), nil
 		}},

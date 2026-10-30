@@ -4,6 +4,7 @@ import (
 	"context"
 	stdsql "database/sql"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlcatalog"
@@ -47,7 +48,7 @@ func (d *ownedShareDataSource) Schema(ctx context.Context, req datasource.Schema
 		Attributes: map[string]schema.Attribute{
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Exact owned share name to read.",
+				MarkdownDescription: "Owned share name to read. Matching ignores letter case.",
 			},
 			"source_database": schema.StringAttribute{
 				Computed:            true,
@@ -99,7 +100,7 @@ func (d *ownedShareDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	}
 
 	share, err := sqlcatalog.ReadOwnedShare(ctx, client, config.Name.ValueString())
-	if err == stdsql.ErrNoRows {
+	if errors.Is(err, stdsql.ErrNoRows) {
 		resp.Diagnostics.AddError("MotherDuck owned share not found", "No owned share named "+config.Name.ValueString()+" was found in MD_INFORMATION_SCHEMA.OWNED_SHARES.")
 		return
 	}

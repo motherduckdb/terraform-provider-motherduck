@@ -8,8 +8,10 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 )
 
 type secretDataSource struct{ baseDataSource }
@@ -32,7 +34,7 @@ func (d *secretDataSource) Schema(ctx context.Context, req datasource.SchemaRequ
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Reads one MotherDuck-managed secret by name without exposing its value or managing its lifecycle. Fails when the secret is absent.",
 		Attributes: map[string]schema.Attribute{
-			"name":            schema.StringAttribute{Required: true, MarkdownDescription: "Secret name to look up. Matching is case-insensitive because DuckDB stores secret names in lowercase."},
+			"name":            schema.StringAttribute{Required: true, Validators: []validator.String{tfvalidators.StringLength("MotherDuck secret name", 1, 0)}, MarkdownDescription: "Secret name to look up. Matching is case-insensitive because DuckDB stores secret names in lowercase."},
 			"type":            schema.StringAttribute{Computed: true, MarkdownDescription: "Secret type reported by DuckDB."},
 			"secret_provider": schema.StringAttribute{Computed: true, MarkdownDescription: "Secret provider reported by DuckDB."},
 			"persistent":      schema.BoolAttribute{Computed: true, MarkdownDescription: "Whether the secret is persistent."},

@@ -28,7 +28,7 @@ packages:
     version: 1.5.0
     parameters:
       - registry.terraform.io/motherduckdb/motherduck
-      - 0.3.8
+      - 0.3.9
 ```
 
 Then run `pulumi install`. For Python, TypeScript, Go, and .NET programs this
@@ -40,7 +40,7 @@ Keep the `registry.terraform.io/` prefix. The bridge looks in the OpenTofu
 Registry by default, where this provider is not listed. Pin the bridge and the
 provider separately, because their versions are independent.
 
-The [Pulumi Python example](examples.md) is a complete, pinned project.
+The [Pulumi Python example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.3.9/examples/pulumi/python) is a complete, pinned project.
 
 ## Credentials
 

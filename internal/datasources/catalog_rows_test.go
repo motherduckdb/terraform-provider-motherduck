@@ -256,7 +256,7 @@ func TestStorageInfoQueries(t *testing.T) {
 		want  string
 	}{
 		{rowsModel{}, "SELECT * FROM MD_INFORMATION_SCHEMA.STORAGE_INFO ORDER BY database_name, database_id, computed_ts"},
-		{rowsModel{IncludeHistory: types.BoolValue(false), DatabaseName: types.StringValue("tenant's db")}, "SELECT * FROM MD_INFORMATION_SCHEMA.STORAGE_INFO WHERE database_name = 'tenant''s db' ORDER BY database_name, database_id, computed_ts"},
+		{rowsModel{IncludeHistory: types.BoolValue(false), DatabaseName: types.StringValue("tenant's db")}, "SELECT * FROM MD_INFORMATION_SCHEMA.STORAGE_INFO WHERE lower(database_name) = lower('tenant''s db') ORDER BY database_name, database_id, computed_ts"},
 		{rowsModel{IncludeHistory: types.BoolValue(true), Limit: types.Int64Value(10), Offset: types.Int64Value(20)}, "SELECT * FROM MD_INFORMATION_SCHEMA.STORAGE_INFO_HISTORY ORDER BY database_name, database_id, computed_ts LIMIT 10 OFFSET 20"},
 	}
 	for _, tc := range cases {

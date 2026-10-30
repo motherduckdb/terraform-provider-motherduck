@@ -99,7 +99,7 @@ resource "motherduck_share" "tenant" {
 }
 
 resource "motherduck_share_grant" "reader" {
-  for_each     = var.tenants
+  for_each     = local.active_tenants # var.tenants minus var.suspended_tenants
   share        = motherduck_share.tenant[each.key].name
   username     = motherduck_service_account.reader[each.key].username
   grantee_type = "user"

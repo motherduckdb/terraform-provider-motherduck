@@ -34,9 +34,9 @@ data "motherduck_shared_with_me" "analytics" {
 
 ### Optional
 
-- `limit` (Number) Maximum number of rows to return when the underlying MotherDuck catalog function supports limits.
+- `limit` (Number) Maximum number of rows to return. Rows are sorted before paging, so pages are stable.
 - `name` (String) Optional exact object name filter.
-- `offset` (Number) Number of rows to skip when the underlying MotherDuck catalog function supports offsets.
+- `offset` (Number) Number of sorted rows to skip before returning results.
 
 ### Read-Only
 

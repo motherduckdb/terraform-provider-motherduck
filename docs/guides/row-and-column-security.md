@@ -211,7 +211,8 @@ row.
 ## Verify as each consumer
 
 Identity functions evaluate as the session that runs the query, so test with
-each consumer's own credentials:
+each consumer's own credentials. The checks assume each reader attached the
+share with `ATTACH 'md:_share/...' AS reporting`:
 
 | Check | Expected result |
 | --- | --- |

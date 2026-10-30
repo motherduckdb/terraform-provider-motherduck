@@ -30,8 +30,8 @@ data "motherduck_buckets_for_secret" "analytics" {
 
 ### Optional
 
-- `limit` (Number) Maximum number of rows to return when the underlying MotherDuck catalog function supports limits.
-- `offset` (Number) Number of rows to skip when the underlying MotherDuck catalog function supports offsets.
+- `limit` (Number) Maximum number of rows to return. Rows are sorted before paging, so pages are stable.
+- `offset` (Number) Number of sorted rows to skip before returning results.
 
 ### Read-Only
 

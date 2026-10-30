@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf16"
 
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
@@ -1060,10 +1061,11 @@ func validateDucklingCooldowns(model *ducklingConfigModel, diags *diag.Diagnosti
 }
 
 func validateRESTUsernameImportID(id, usage string, diags *diag.Diagnostics) bool {
+	// Count UTF-16 code units, as restUsernameValidators does, so an ID that
+	// imports also passes configuration validation.
 	trimmed := strings.TrimSpace(id)
-	length := len([]rune(id))
-	if trimmed == "" || length < 1 || length > 255 {
-		diags.AddError("Invalid import ID", "Use "+usage+" with a MotherDuck username between 1 and 255 characters.")
+	if trimmed == "" || len(utf16.Encode([]rune(id))) > 255 {
+		diags.AddError("Invalid import ID", "Use "+usage+" with a MotherDuck username of 1 to 255 UTF-16 code units.")
 		return false
 	}
 	if id != trimmed {

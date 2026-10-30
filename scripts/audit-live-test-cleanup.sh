@@ -40,36 +40,41 @@ audit_queries=(
 audit_output="$(mktemp "${TMPDIR:-/tmp}/mdtf-audit.XXXXXX")"
 trap 'rm -f "${audit_output}"' EXIT
 
-for audit_index in "${!audit_queries[@]}"; do
-  label="${audit_labels[${audit_index}]}"
-  query_timeout="2m"
-  if [[ "${label}" == "named_snapshots" ]]; then
-    query_timeout="5m"
-  fi
-  if ! go run "${ROOT_DIR}/internal/dev/mdexec" -timeout "${query_timeout}" -scalar "${audit_queries[${audit_index}]}" > "${audit_output}"; then
-    echo "Live cleanup audit failed while reading ${label}." >&2
-    exit 1
-  fi
+run_audit() {
+  found=0
+  for audit_index in "${!audit_queries[@]}"; do
+    label="${audit_labels[${audit_index}]}"
+    query_timeout="2m"
+    if [[ "${label}" == "named_snapshots" ]]; then
+      query_timeout="5m"
+    fi
+    if ! go run "${ROOT_DIR}/internal/dev/mdexec" -timeout "${query_timeout}" -scalar "${audit_queries[${audit_index}]}" > "${audit_output}"; then
+      echo "Live cleanup audit failed while reading ${label}." >&2
+      exit 1
+    fi
 
-  result_count="$(awk 'END { print NR }' "${audit_output}")"
-  if [[ "${result_count}" -ne 1 ]]; then
-    echo "Live cleanup audit ${label} expected 1 result, got ${result_count}." >&2
-    exit 1
-  fi
-  IFS= read -r values < "${audit_output}"
-  if [[ -n "${values}" ]]; then
-    found=1
-    echo "${label}: ${values}"
-  else
-    echo "${label}: none"
-  fi
-done
+    result_count="$(awk 'END { print NR }' "${audit_output}")"
+    if [[ "${result_count}" -ne 1 ]]; then
+      echo "Live cleanup audit ${label} expected 1 result, got ${result_count}." >&2
+      exit 1
+    fi
+    IFS= read -r values < "${audit_output}"
+    if [[ -n "${values}" ]]; then
+      found=1
+      echo "${label}: ${values}"
+    else
+      echo "${label}: none"
+    fi
+  done
+}
 
+# Unname snapshots first so dropping a test database never has to remove a
+# named snapshot. Shares go before the databases that back them.
 sweep_live_test_objects() {
-  sweep_databases
-  sweep_shares
-  sweep_secrets
   sweep_named_snapshots
+  sweep_shares
+  sweep_databases
+  sweep_secrets
 }
 
 list_lines() {
@@ -79,7 +84,7 @@ list_lines() {
 
 sweep_databases() {
   local names
-  names="$(list_lines "SELECT coalesce(string_agg(name, '\n' ORDER BY name), '') FROM MD_INFORMATION_SCHEMA.DATABASES WHERE name LIKE 'tf\\_%' ESCAPE '\\'")"
+  names="$(list_lines "SELECT coalesce(string_agg(name, chr(10) ORDER BY name), '') FROM MD_INFORMATION_SCHEMA.DATABASES WHERE name LIKE 'tf\\_%' ESCAPE '\\'")"
   while IFS= read -r name; do
     [[ -z "${name}" ]] && continue
     go run "${ROOT_DIR}/internal/dev/mdexec" -allow-prefix "tf_" -sql "DROP DATABASE IF EXISTS $(sql_identifier "${name}") CASCADE"
@@ -88,7 +93,7 @@ sweep_databases() {
 
 sweep_shares() {
   local names
-  names="$(list_lines "SELECT coalesce(string_agg(name, '\n' ORDER BY name), '') FROM MD_INFORMATION_SCHEMA.OWNED_SHARES WHERE name LIKE 'tf\\_%' ESCAPE '\\'")"
+  names="$(list_lines "SELECT coalesce(string_agg(name, chr(10) ORDER BY name), '') FROM MD_INFORMATION_SCHEMA.OWNED_SHARES WHERE name LIKE 'tf\\_%' ESCAPE '\\'")"
   while IFS= read -r name; do
     [[ -z "${name}" ]] && continue
     go run "${ROOT_DIR}/internal/dev/mdexec" -allow-prefix "tf_" -sql "DROP SHARE IF EXISTS $(sql_identifier "${name}")"
@@ -97,7 +102,7 @@ sweep_shares() {
 
 sweep_secrets() {
   local names
-  names="$(list_lines "SELECT coalesce(string_agg(name, '\n' ORDER BY name), '') FROM duckdb_secrets() WHERE name LIKE 'tf\\_%' ESCAPE '\\'")"
+  names="$(list_lines "SELECT coalesce(string_agg(name, chr(10) ORDER BY name), '') FROM duckdb_secrets() WHERE name LIKE 'tf\\_%' ESCAPE '\\'")"
   while IFS= read -r name; do
     [[ -z "${name}" ]] && continue
     go run "${ROOT_DIR}/internal/dev/mdexec" -allow-prefix "tf_" -sql "DROP SECRET IF EXISTS $(sql_identifier "${name}") FROM motherduck"
@@ -106,7 +111,7 @@ sweep_secrets() {
 
 sweep_named_snapshots() {
   local rows
-  rows="$(list_lines "SELECT coalesce(string_agg(database_name || '\t' || snapshot_id::VARCHAR || '\t' || snapshot_name, '\n' ORDER BY database_name, snapshot_name), '') FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE snapshot_name LIKE 'tf\\_%' ESCAPE '\\'")"
+  rows="$(list_lines "SELECT coalesce(string_agg(database_name || chr(9) || snapshot_id::VARCHAR || chr(9) || snapshot_name, chr(10) ORDER BY database_name, snapshot_name), '') FROM MD_INFORMATION_SCHEMA.DATABASE_SNAPSHOTS WHERE snapshot_name LIKE 'tf\\_%' ESCAPE '\\'")"
   while IFS=$'\t' read -r database_name snapshot_id snapshot_name; do
     [[ -z "${database_name}" || -z "${snapshot_id}" || -z "${snapshot_name}" ]] && continue
     if [[ "${database_name}" != tf_* ]]; then
@@ -124,10 +129,17 @@ sweep_named_snapshots() {
   done <<<"${rows}"
 }
 
+run_audit
 if [[ "${found}" -ne 0 ]]; then
   if [[ "${mode}" == "sweep" ]]; then
     sweep_live_test_objects
-    exit 0
+    echo "Auditing again after the sweep."
+    run_audit
+    if [[ "${found}" -eq 0 ]]; then
+      exit 0
+    fi
+    echo "Live cleanup sweep left MotherDuck objects with the test prefix tf_." >&2
+    exit 1
   fi
   echo "Live cleanup audit found MotherDuck objects with the test prefix tf_." >&2
   exit 1

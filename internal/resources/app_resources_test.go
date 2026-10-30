@@ -812,6 +812,70 @@ func TestDiveUpdateStatusFailureKeepsWrittenContent(t *testing.T) {
 	}
 }
 
+// An access failure after a successful version write records the written
+// content in state, so an apply that skips refresh does not append the same
+// content as another Guide version.
+func TestGuideUpdateAccessFailureKeepsWrittenVersion(t *testing.T) {
+	ctx := t.Context()
+	content := "v1"
+	var version int64 = 1
+	client := &scriptedAppSQL{
+		queryRow: func(query string) mdsql.RowScanner {
+			if !strings.Contains(query, "FROM MD_GET_GUIDE(") {
+				return scannedRow{err: errors.New("unexpected query " + query)}
+			}
+			return scannedRow{values: []any{
+				nil, "Guide", nil, content, nil, nil, "user", "owner-id", "owner",
+				version, "c", "u", "vc", "[]",
+			}}
+		},
+		queryJSON: func(query string) (string, error) {
+			switch {
+			case strings.Contains(query, "FROM MD_UPDATE_GUIDE("):
+				content, version = "v2", version+1
+				return "[]", nil
+			case strings.Contains(query, "FROM MD_SET_GUIDE_ACCESS("):
+				return "", errors.New("Permission Error: Only organization admins can share a Guide with the organization")
+			}
+			return "", errors.New("unexpected JSON query " + query)
+		},
+	}
+	res := &guideResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	var schemaResp resource.SchemaResponse
+	res.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+	prior := guideModel{
+		ID: types.StringValue(testAppID), Title: types.StringValue("Guide"), Content: types.StringValue("v1"),
+		Access: types.StringValue("user"), CurrentVersion: types.Int64Value(1),
+		References: types.ListNull(types.ObjectType{AttrTypes: guideReferenceAttrTypes()}),
+		RoleNames:  types.SetNull(types.StringType),
+	}
+	planned := prior
+	planned.Content = types.StringValue("v2")
+	planned.Access = types.StringValue("organization")
+	planned.CurrentVersion = types.Int64Unknown()
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	plan := tfsdk.Plan{Schema: schemaResp.Schema}
+	if d := state.Set(ctx, &prior); d.HasError() {
+		t.Fatal(d)
+	}
+	if d := plan.Set(ctx, &planned); d.HasError() {
+		t.Fatal(d)
+	}
+	// The framework starts an Update response from the prior state.
+	resp := resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: state.Raw.Copy()}}
+	res.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, &resp)
+	if !resp.Diagnostics.HasError() || resp.Diagnostics.Errors()[0].Summary() != "Unable to update MotherDuck Guide access" {
+		t.Fatalf("expected the access error, got %v", resp.Diagnostics)
+	}
+	var got guideModel
+	if d := resp.State.Get(ctx, &got); d.HasError() {
+		t.Fatal(d)
+	}
+	if got.Content.ValueString() != "v2" || got.CurrentVersion.ValueInt64() != 2 || got.Access.ValueString() != "user" {
+		t.Fatalf("state content = %s, version = %s, access = %s, want the written v2 at version 2 with the user access MotherDuck kept", got.Content, got.CurrentVersion, got.Access)
+	}
+}
+
 func TestFlightWaitReportsConfiguredTimeout(t *testing.T) {
 	res := &flightRunResource{}
 	model := flightRunModel{

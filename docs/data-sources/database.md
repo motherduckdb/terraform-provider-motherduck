@@ -1,6 +1,6 @@
 ---
 page_title: "motherduck_database Data Source - motherduck"
-subcategory: "Warehouse structure"
+subcategory: "Data warehouse"
 description: |-
   Reads one existing MotherDuck database by exact name without managing its lifecycle.
 ---
@@ -46,7 +46,7 @@ passed as SQL parameters.
 
 ### Required
 
-- `name` (String) Exact database name to read.
+- `name` (String) Database name to read. Matching ignores letter case.
 
 ### Read-Only
 

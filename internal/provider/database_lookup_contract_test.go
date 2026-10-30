@@ -65,9 +65,9 @@ type databaseLookupSQL struct {
 }
 
 func (c *databaseLookupSQL) QueryRow(_ context.Context, query string, args ...any) mdsql.RowScanner {
-	const want = `SELECT uuid::VARCHAR, created_ts::VARCHAR, transient, historical_snapshot_retention::VARCHAR, type FROM MD_INFORMATION_SCHEMA.DATABASES WHERE name = ?`
+	const want = `SELECT uuid::VARCHAR, created_ts::VARCHAR, transient, historical_snapshot_retention::VARCHAR, type FROM MD_INFORMATION_SCHEMA.DATABASES WHERE lower(name) = lower(?)`
 	if query != want || len(args) != 1 || args[0] != "warehouse's data" {
-		return contractRow{err: fmt.Errorf("unexpected exact-name lookup: %q %#v", query, args)}
+		return contractRow{err: fmt.Errorf("unexpected name lookup: %q %#v", query, args)}
 	}
 	return contractRow{values: c.row, err: c.err}
 }

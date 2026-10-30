@@ -7,8 +7,10 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 )
 
 type databaseDataSource struct{ baseDataSource }
@@ -30,9 +32,9 @@ func (d *databaseDataSource) Metadata(ctx context.Context, req datasource.Metada
 
 func (d *databaseDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Reads one existing MotherDuck database by exact name without managing its lifecycle. Fails if the database is not visible in the caller's catalog.",
+		MarkdownDescription: "Reads one existing MotherDuck database by name without managing its lifecycle. Matching ignores letter case, as MotherDuck does. Fails if the database is not visible in the caller's catalog.",
 		Attributes: map[string]schema.Attribute{
-			"name":                          schema.StringAttribute{Required: true, MarkdownDescription: "Exact database name to read."},
+			"name":                          schema.StringAttribute{Required: true, Validators: []validator.String{tfvalidators.StringLength("MotherDuck database name", 1, 0)}, MarkdownDescription: "Database name to read. Matching ignores letter case."},
 			"uuid":                          schema.StringAttribute{Computed: true, MarkdownDescription: "Database UUID reported by MotherDuck."},
 			"created_ts":                    schema.StringAttribute{Computed: true, MarkdownDescription: "Database creation timestamp reported by MotherDuck."},
 			"database_type":                 schema.StringAttribute{Computed: true, MarkdownDescription: "Database type as reported by MotherDuck."},
@@ -55,7 +57,7 @@ func (d *databaseDataSource) Read(ctx context.Context, req datasource.ReadReques
 	var uuid, createdTS, retention, databaseType stdsql.NullString
 	var transient stdsql.NullBool
 	err := retry.SQL(ctx, func() error {
-		return client.QueryRow(ctx, `SELECT uuid::VARCHAR, created_ts::VARCHAR, transient, historical_snapshot_retention::VARCHAR, type FROM MD_INFORMATION_SCHEMA.DATABASES WHERE name = ?`, config.Name.ValueString()).Scan(&uuid, &createdTS, &transient, &retention, &databaseType)
+		return client.QueryRow(ctx, `SELECT uuid::VARCHAR, created_ts::VARCHAR, transient, historical_snapshot_retention::VARCHAR, type FROM MD_INFORMATION_SCHEMA.DATABASES WHERE lower(name) = lower(?)`, config.Name.ValueString()).Scan(&uuid, &createdTS, &transient, &retention, &databaseType)
 	})
 	if errors.Is(err, stdsql.ErrNoRows) {
 		resp.Diagnostics.AddError("MotherDuck database not found", "No database named "+config.Name.ValueString()+" was found in the caller's MD_INFORMATION_SCHEMA.DATABASES catalog.")

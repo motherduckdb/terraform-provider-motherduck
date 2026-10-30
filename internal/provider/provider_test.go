@@ -418,3 +418,53 @@ func TestConfigureCustomUserAgentIsSuffix(t *testing.T) {
 		t.Fatalf("SQLConfig.CustomUserAgent = %q, want %q", got, want)
 	}
 }
+
+func TestConfigureBlankArgumentsFallBackToEnvironment(t *testing.T) {
+	t.Setenv("MOTHERDUCK_TOKEN", "env_token")
+	t.Setenv("MOTHERDUCK_ADMIN_TOKEN", "")
+	t.Setenv("MOTHERDUCK_API_BASE_URL", "https://env.example.com/?invalid=1")
+
+	p := New("test")()
+	var resp provider.ConfigureResponse
+	p.Configure(context.Background(), provider.ConfigureRequest{Config: providerTestConfig(t, map[string]tftypes.Value{
+		"token":        tftypes.NewValue(tftypes.String, ""),
+		"api_base_url": tftypes.NewValue(tftypes.String, " "),
+	})}, &resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("a blank api_base_url must fall back to MOTHERDUCK_API_BASE_URL, which is invalid here")
+	}
+	if got := resp.Diagnostics[0].Detail(); !strings.Contains(got, "MOTHERDUCK_API_BASE_URL") {
+		t.Fatalf("diagnostic detail %q does not name the environment variable", got)
+	}
+
+	t.Setenv("MOTHERDUCK_API_BASE_URL", "")
+	resp = provider.ConfigureResponse{}
+	p.Configure(context.Background(), provider.ConfigureRequest{Config: providerTestConfig(t, map[string]tftypes.Value{
+		"token": tftypes.NewValue(tftypes.String, ""),
+	})}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+	}
+	if got := resp.ResourceData.(*providerctx.Context).SQLConfig.Token; got != "env_token" {
+		t.Fatalf("SQLConfig.Token = %q, want the MOTHERDUCK_TOKEN fallback for a blank argument", got)
+	}
+}
+
+func TestUserAgentValidatorRejectsControlCharacters(t *testing.T) {
+	for value, wantError := range map[string]bool{
+		"acme/1.0":       false,
+		"acme/1.0\n":     false,
+		"acme\n/1.0":     true,
+		"acme\t1.0":      true,
+		"acme/1.0 build": false,
+	} {
+		var resp validator.StringResponse
+		userAgentValidator{}.ValidateString(context.Background(), validator.StringRequest{
+			Path:        path.Root("custom_user_agent"),
+			ConfigValue: types.StringValue(value),
+		}, &resp)
+		if resp.Diagnostics.HasError() != wantError {
+			t.Fatalf("custom_user_agent %q error = %v, want %v", value, resp.Diagnostics.HasError(), wantError)
+		}
+	}
+}

@@ -12,7 +12,8 @@ Each entry in `teams` creates a role, grants its platform role, adds members,
 and grants access to shares. Users and shares must already exist. Shares must
 use `access = "restricted"`.
 
-Set `teams` in a `.tfvars` file:
+Set `teams` in `terraform.tfvars` so the plan and import commands below pick it
+up. Otherwise the variable default applies, including its sample `engineers` team:
 
 ```hcl
 teams = {

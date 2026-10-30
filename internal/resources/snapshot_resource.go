@@ -97,7 +97,7 @@ func (r *snapshotResource) Create(ctx context.Context, req resource.CreateReques
 	}
 	query := "CREATE SNAPSHOT " + sqlbuild.QuoteIdentifier(plan.Name.ValueString()) + " OF " + sqlbuild.QuoteIdentifier(plan.Database.ValueString())
 	if err := client.Exec(ctx, query); err != nil {
-		resp.Diagnostics.AddError("Unable to create MotherDuck snapshot", err.Error())
+		resp.Diagnostics.AddError("Unable to create MotherDuck snapshot", createErrorDetail(err, err.Error(), "snapshot", plan.Database.ValueString()+"."+plan.Name.ValueString()))
 		return
 	}
 	prepareSnapshotCreateState(&plan)

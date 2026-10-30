@@ -429,3 +429,21 @@ func TestDiveEmbedSessionDataSourceIsDeprecated(t *testing.T) {
 		}
 	}
 }
+
+func TestSortActiveAccountsOrdersJSONInventory(t *testing.T) {
+	accounts := []mdrest.ActiveAccount{
+		{Username: "b", Ducklings: []mdrest.Duckling{{ID: "2"}, {ID: "1"}}},
+		{Username: "a"},
+	}
+	payload, err := json.Marshal(sortActiveAccounts(accounts))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `[{"username":"a","ducklings":null},{"username":"b","ducklings":[{"id":"1","type":"","status":""},{"id":"2","type":"","status":""}]}]`
+	if string(payload) != want {
+		t.Fatalf("accounts_json = %s, want %s", payload, want)
+	}
+	if accounts[0].Username != "b" || accounts[0].Ducklings[0].ID != "2" {
+		t.Fatal("sortActiveAccounts must not reorder the caller's slices")
+	}
+}

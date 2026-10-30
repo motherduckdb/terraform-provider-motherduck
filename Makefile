@@ -9,7 +9,7 @@ GOVULNCHECK := $(TOOLS_DIR)/govulncheck
 GOVULNCHECK_VERSION := v1.9.0
 
 .PHONY: \
-  build clean-generated clean-tool-cache docs docs-check \
+  build clean-generated clean-test-results clean-tool-cache docs docs-check \
   fmt fmt-check lint pre-push-check release-check \
   release-package-local release-sign-check shellcheck static-check test-cli-versions \
   test-contract test-scripts test-unit test-integration test-acceptance \
@@ -58,6 +58,10 @@ clean-generated:
 	find tools/provider-bin tools/provider-mirror -type f -delete 2>/dev/null || true
 	find tools/provider-bin tools/provider-mirror -depth -type d -empty -delete 2>/dev/null || true
 
+# Per-run logs and Terraform working directories from local CLI and live tests.
+clean-test-results:
+	rm -rf test-results
+
 clean-tool-cache:
 	find tools/terraform tools/opentofu tools/bin -type f -delete 2>/dev/null || true
 	find tools/terraform tools/opentofu tools/bin -depth -type d -empty -delete 2>/dev/null || true
@@ -79,8 +83,11 @@ fmt:
 	gofmt -w .
 	terraform fmt -recursive examples test-fixtures
 
+# Check tracked files only, so ignored nested worktrees are not scanned, and
+# fail on gofmt errors such as a parse failure, which print nothing to stdout.
 fmt-check:
-	test -z "$$(gofmt -l .)"
+	@files=$$(git ls-files '*.go'); unformatted=$$(gofmt -l $$files) || exit 1; \
+	if [ -n "$$unformatted" ]; then echo "gofmt needed:" >&2; echo "$$unformatted" >&2; exit 1; fi
 	terraform fmt -check -recursive examples test-fixtures
 
 lint: $(GOLANGCI_LINT)
@@ -102,7 +109,7 @@ release-package-local:
 	VERSION=$${VERSION} ./scripts/package-release.sh
 
 release-check:
-	rm -rf dist/release-check dist/release-sign-test dist/release-check-darwin-amd64
+	rm -rf dist/release-check
 	VERSION=0.0.1 DIST_DIR=$$(pwd)/dist/release-check ./scripts/package-release.sh
 	cd dist/release-check && shasum -a 256 *.zip > terraform-provider-motherduck_0.0.1_SHA256SUMS
 	cd dist/release-check && shasum -a 256 -c terraform-provider-motherduck_0.0.1_SHA256SUMS

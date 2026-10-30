@@ -137,9 +137,6 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 	return nil
 }
 
-// connectionFailureHint explains a boot failure in which the MotherDuck
-// extension could not reach MotherDuck at all. Without it, users tend to
-// replace a working token, which cannot help.
 // isAuthenticationFailure reports whether MotherDuck refused the SQL token
 // while connecting, as opposed to a network failure or a later SQL error.
 func isAuthenticationFailure(err error) bool {
@@ -148,6 +145,9 @@ func isAuthenticationFailure(err error) bool {
 		strings.Contains(msg, "check your motherduck token")
 }
 
+// connectionFailureHint explains a boot failure in which the MotherDuck
+// extension could not reach MotherDuck at all. Without it, users tend to
+// replace a working token, which cannot help.
 func connectionFailureHint(err error) string {
 	if !strings.Contains(strings.ToLower(err.Error()), "could not connect to motherduck") {
 		return ""

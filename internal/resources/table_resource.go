@@ -157,7 +157,7 @@ func (r *tableResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanR
 	if resp.Diagnostics.HasError() || plan.Columns.Equal(state.Columns) {
 		return
 	}
-	if plan.Columns.IsUnknown() || state.Columns.IsNull() || state.Columns.IsUnknown() {
+	if plan.Columns.IsUnknown() || mapHasUnknownElement(plan.Columns) || state.Columns.IsNull() || state.Columns.IsUnknown() {
 		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("columns"))
 		return
 	}
@@ -213,6 +213,17 @@ func (r *tableResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	}
 	plan.ID = types.StringValue(qualifiedObjectID(plan.Database.ValueString(), plan.Schema.ValueString(), plan.Name.ValueString()))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// mapHasUnknownElement reports whether a known map holds an unknown value,
+// such as a column type that references another resource.
+func mapHasUnknownElement(value types.Map) bool {
+	for _, element := range value.Elements() {
+		if element.IsUnknown() {
+			return true
+		}
+	}
+	return false
 }
 
 // tableColumnMapsEquivalent reports whether two column maps have the same
@@ -378,21 +389,26 @@ func validateTableColumns(ctx context.Context, columnsValue types.Map, diags *di
 	if columnsValue.IsNull() || columnsValue.IsUnknown() {
 		return
 	}
-	columns := map[string]string{}
-	diags.Append(columnsValue.ElementsAs(ctx, &columns, false)...)
-	if diags.HasError() {
-		return
-	}
+	columns := columnsValue.Elements()
 	if len(columns) == 0 {
 		diags.AddAttributeError(path.Root("columns"), "Invalid MotherDuck table columns", "A table must define at least one column.")
 		return
 	}
-	for name, columnType := range columns {
+	for name, value := range columns {
 		columnPath := path.Root("columns").AtMapKey(name)
 		if strings.TrimSpace(name) == "" {
 			diags.AddAttributeError(columnPath, "Invalid MotherDuck table column", "Column names must not be empty.")
 		}
-		if detail := columnTypeSyntaxError(columnType); detail != "" {
+		// A type that depends on another resource is checked once it is known.
+		columnType, ok := value.(types.String)
+		if !ok || columnType.IsUnknown() {
+			continue
+		}
+		if columnType.IsNull() {
+			diags.AddAttributeError(columnPath, "Invalid MotherDuck table column type", "Column types must not be null.")
+			continue
+		}
+		if detail := columnTypeSyntaxError(columnType.ValueString()); detail != "" {
 			diags.AddAttributeError(columnPath, "Invalid MotherDuck table column type", detail)
 		}
 	}

@@ -76,7 +76,7 @@ This resource owns one grant. To review direct grants and the whole-organization
 
 ### Optional
 
-- `grantee_type` (String) Principal type: `user` or `role`. Defaults to `user`. The `username` field stores the principal name for both types.
+- `grantee_type` (String) Principal type: `user` or `role`. Defaults to `user`. The `username` field stores the principal name for both types. Changing it, including removing a configured `role`, replaces the grant.
 
 ### Read-Only
 

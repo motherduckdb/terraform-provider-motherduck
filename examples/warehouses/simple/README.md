@@ -10,8 +10,10 @@ writer and can read both schemas. For curated-only access, use the
 
 ## Apply
 
-Follow [bootstrap and identity selection](../README.md) first. Inject the dev
-writer token. In this root, choose `name_prefix` (default `example_dwh`) and
+For a first run, inject your own read-write token as `MOTHERDUCK_TOKEN`, as the
+[getting started guide](../../../docs/guides/getting-started.md) does. For a
+shared environment, follow [bootstrap and identity selection](../README.md)
+first and inject the dev writer token. In this root, choose `name_prefix` (default `example_dwh`) and
 `environment` (default `dev`).
 
 ```shell
