@@ -71,8 +71,9 @@ The default versions are listed in [CI and release](ci-and-release.md).
 - `MOTHERDUCK_ADMIN_TOKEN`: optional organization-admin token for REST administration resources and data sources.
 
 Live targets fail when a required token is missing. Admin-only scripts also fail
-when the token lacks organization-admin permission. Use a disposable test
-organization.
+when the token lacks organization-admin permission. `test-live-share-grant-drift`
+is the exception. It skips without `MOTHERDUCK_ADMIN_TOKEN`. Use a disposable
+test organization.
 
 ## Required live gate
 
@@ -160,6 +161,22 @@ and supported updates alternate across cycles. `MD_CYCLE_REPEATS` and
 of the source build, set `TF_TEST_PROVIDER_BINARY` to its absolute path and
 `PROVIDER_VERSION` to its version.
 
+## Pulumi and example runtimes
+
+These targets check the Pulumi bridge and the application code in the examples.
+Pull-request CI runs `make test-pulumi`, and Live Smoke runs
+`make test-live-pulumi` on `main`. CI runs none of the others, so run them
+before merging a dependency update for those examples.
+
+```bash
+make test-pulumi                                      # offline Pulumi schema and example checks
+make test-example-backend                             # customer-facing analytics backend build and tests
+MOTHERDUCK_TOKEN=... make test-live-pulumi            # admin program runs when MOTHERDUCK_ADMIN_TOKEN is set
+MOTHERDUCK_TOKEN=... make test-live-pulumi-example    # the checked-in Pulumi Python example
+MOTHERDUCK_TOKEN=... MOTHERDUCK_ADMIN_TOKEN=... make test-live-cookbook-pipeline  # through uv
+MOTHERDUCK_TOKEN=... MOTHERDUCK_ADMIN_TOKEN=... make test-live-role-audit
+```
+
 ## Output and cleanup
 
 Logs, state, and Terraform directories go under the ignored `test-results/`
@@ -175,11 +192,15 @@ MOTHERDUCK_TOKEN=... make test-live-cleanup-audit
 MOTHERDUCK_TOKEN=... ./scripts/audit-live-test-cleanup.sh --sweep
 ```
 
+The sweep unnames `tf_` snapshots, drops `tf_` shares, databases, and secrets,
+then audits again and fails if any remain.
+
 Free disk space:
 
 ```bash
-make clean-generated   # local provider binaries and mirrors
-make clean-tool-cache  # downloaded Terraform, OpenTofu, and tools/bin
+make clean-generated     # local provider binaries and mirrors
+make clean-tool-cache    # downloaded Terraform, OpenTofu, and tools/bin
+make clean-test-results  # per-run logs and working directories under test-results/
 ```
 
 Regenerate docs after changing schemas, templates, or examples with `make docs`.

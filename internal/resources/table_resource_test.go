@@ -55,6 +55,32 @@ func TestValidateTableColumns(t *testing.T) {
 	}
 }
 
+// A column type that references another resource is unknown during
+// validation. It must not be decoded as a string, which the framework reports
+// as a provider bug.
+func TestValidateTableColumnsSkipsUnknownTypes(t *testing.T) {
+	ctx := context.Background()
+	value := types.MapValueMust(types.StringType, map[string]attr.Value{
+		"id":   types.StringUnknown(),
+		"name": types.StringValue("VARCHAR"),
+	})
+	var diags diag.Diagnostics
+	validateTableColumns(ctx, value, &diags)
+	if diags.HasError() {
+		t.Fatalf("unknown column type must validate later: %v", diags)
+	}
+	if !mapHasUnknownElement(value) {
+		t.Fatal("mapHasUnknownElement must report the unknown column type")
+	}
+
+	nullType := types.MapValueMust(types.StringType, map[string]attr.Value{"id": types.StringNull()})
+	diags = nil
+	validateTableColumns(ctx, nullType, &diags)
+	if !diags.HasError() {
+		t.Fatal("a null column type must be rejected")
+	}
+}
+
 type fakeScalarStringer struct {
 	values map[string]string
 }

@@ -14,6 +14,10 @@ out, or replace values. The body can check the consumer with `current_user`,
 enforces it on its servers. It does not restrict the owner of the source
 database.
 
+This resource requires provider v0.3.9 or later. A lock file that selects an
+earlier 0.3.x release reports an unsupported resource type, so run
+`terraform init -upgrade` after adding it.
+
 Secure views need a Business or Enterprise plan, or an active free trial. They
 work on native MotherDuck databases and MotherDuck-hosted DuckLake databases.
 Run this resource with the share owner's read-write token. Only the share's

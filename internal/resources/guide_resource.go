@@ -176,7 +176,7 @@ func (r *guideResource) Schema(ctx context.Context, req resource.SchemaRequest, 
 			"access": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Guide access: `user`, `organization`, or the experimental `role`. Organization access requires administrator permission. `role` requires a MotherDuck SQL session whose `MD_SET_GUIDE_ACCESS` accepts `role_names`, which production MotherDuck does not offer yet.",
+				MarkdownDescription: "Guide access: `user`, `organization`, or the experimental `role`. Organization access requires administrator permission. `role` requires a MotherDuck SQL session whose `MD_SET_GUIDE_ACCESS` accepts `role_names`, which production MotherDuck does not offer yet. Removing a configured value keeps the last applied access.",
 				PlanModifiers:       stringUseStateForUnknown(),
 				Validators: []validator.String{stringEnumValidator{
 					name:   "MotherDuck Guide access",
@@ -328,6 +328,20 @@ func (r *guideResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		plannedRoleNames = state.RoleNames
 	}
 
+	versionChanged := !plan.Content.Equal(state.Content) ||
+		!guideReferencesEquivalent(ctx, plan.References, state.References) ||
+		!plan.ChangeComment.Equal(state.ChangeComment) ||
+		!plan.ExternalID.Equal(state.ExternalID)
+	// Build the references argument before any write so an invalid reference
+	// fails without leaving a partial metadata update behind.
+	var references string
+	if versionChanged && !plan.References.IsNull() {
+		var ok bool
+		if references, ok = guideReferencesArg(ctx, plan.References, &resp.Diagnostics); !ok {
+			return
+		}
+	}
+
 	metadataArgs := map[string]string{}
 	if !plan.Title.Equal(state.Title) {
 		metadataArgs["title"] = sqlbuild.StringLiteral(plan.Title.ValueString())
@@ -345,10 +359,6 @@ func (r *guideResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		}
 	}
 
-	versionChanged := !plan.Content.Equal(state.Content) ||
-		!guideReferencesEquivalent(ctx, plan.References, state.References) ||
-		!plan.ChangeComment.Equal(state.ChangeComment) ||
-		!plan.ExternalID.Equal(state.ExternalID)
 	if versionChanged {
 		if !r.sqlFunctionAvailable(ctx, client, &resp.Diagnostics, "md_update_guide", "motherduck_guide") {
 			return
@@ -360,10 +370,6 @@ func (r *guideResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		addConfiguredGuideString(versionArgs, "change_comment", plan.ChangeComment)
 		addConfiguredGuideString(versionArgs, "external_id", plan.ExternalID)
 		if !plan.References.IsNull() {
-			references, ok := guideReferencesArg(ctx, plan.References, &resp.Diagnostics)
-			if !ok {
-				return
-			}
 			versionArgs[`"references"`] = references
 		} else if !state.References.IsNull() {
 			versionArgs[`"references"`] = emptyGuideReferencesSQL()
@@ -377,6 +383,9 @@ func (r *guideResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	if (!plan.Access.Equal(state.Access) || !plannedRoleNames.Equal(state.RoleNames)) &&
 		!plan.Access.IsNull() && !plan.Access.IsUnknown() &&
 		!r.setGuideAccess(ctx, client, state.ID, plan.Access, plannedRoleNames, &resp.Diagnostics) {
+		if versionChanged {
+			r.keepAppliedGuideUpdate(ctx, plan, resp)
+		}
 		return
 	}
 
@@ -389,6 +398,20 @@ func (r *guideResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+}
+
+// keepAppliedGuideUpdate records a Guide version that an Update appended
+// before a later write failed. Without it the framework keeps the prior state,
+// and the next apply appends the same content as another Guide version. State
+// takes the Guide as read back, so the next plan retries only the part that
+// failed. If the read-back fails, the prior state stays.
+func (r *guideResource) keepAppliedGuideUpdate(ctx context.Context, plan guideModel, resp *resource.UpdateResponse) {
+	applied := plan
+	var readDiags diag.Diagnostics
+	if !r.readGuide(ctx, &applied, &readDiags) {
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &applied)...)
 }
 
 func (r *guideResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

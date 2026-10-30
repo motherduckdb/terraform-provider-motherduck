@@ -271,6 +271,12 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           GPG_FINGERPRINT: ${{ vars.GPG_FINGERPRINT }}
         run: |
+          # Pin the expected publisher key so a replaced GPG_PRIVATE_KEY
+          # secret cannot sign a release with an unexpected key.
+          if [[ -z "${GPG_FINGERPRINT}" ]]; then
+            echo "The GPG_FINGERPRINT repository variable is required to sign a release." >&2
+            exit 1
+          fi
           version="${VERSION#v}"
           ./scripts/sign-release.sh "dist/terraform-provider-motherduck_${version}_SHA256SUMS"
 

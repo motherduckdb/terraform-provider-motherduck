@@ -47,8 +47,10 @@ type appRegressionSQL struct {
 	diveContentWrites int
 
 	// Guide
-	guideExists bool
-	guideRefs   string
+	guideExists  bool
+	guideRefs    string
+	guideContent string
+	guideAccess  string
 	// guideVersions counts MD_UPDATE_GUIDE calls, each of which appends a
 	// Guide version.
 	guideVersions int
@@ -70,6 +72,7 @@ var (
 	appRegressionCronArg    = regexp.MustCompile(`schedule_cron := '([^']*)'`)
 	appRegressionContentArg = regexp.MustCompile(`content := '([^']*)'`)
 	appRegressionStatusArg  = regexp.MustCompile(`status := '([^']*)'`)
+	appRegressionAccessArg  = regexp.MustCompile(`access := '([^']*)'`)
 	appRegressionGuideRef   = regexp.MustCompile(`\{'type': '(\w+)', 'url': (?:NULL::VARCHAR|'([^']*)'), .*?'uuid': (?:NULL::UUID|'([^']*)'::UUID)`)
 )
 
@@ -162,6 +165,9 @@ func (c *appRegressionSQL) QueryRow(_ context.Context, query string, args ...any
 	// it as md:<database name>, and returns reference UUIDs in lowercase.
 	case strings.Contains(query, "FROM MD_CREATE_GUIDE("):
 		c.guideExists = true
+		if m := appRegressionContentArg.FindStringSubmatch(query); m != nil {
+			c.guideContent = m[1]
+		}
 		refs := []string{}
 		for _, m := range appRegressionGuideRef.FindAllStringSubmatch(query, -1) {
 			url, guideID, diveID := "null", "null", "null"
@@ -182,8 +188,15 @@ func (c *appRegressionSQL) QueryRow(_ context.Context, query string, args ...any
 		if !c.guideExists {
 			return flightDependencyRow{err: stdsql.ErrNoRows}
 		}
+		content, access := c.guideContent, c.guideAccess
+		if content == "" {
+			content = "# Guide"
+		}
+		if access == "" {
+			access = "user"
+		}
 		return flightDependencyRow{values: []any{
-			nil, "Regression Guide", nil, "# Guide", nil, nil, "user", "owner-id", "owner",
+			nil, "Regression Guide", nil, content, nil, nil, access, "owner-id", "owner",
 			int64(1), "c", "u", "vc", c.guideRefs,
 		}}
 	}
@@ -205,6 +218,15 @@ func (c *appRegressionSQL) QueryRowsJSON(_ context.Context, query string, args .
 		c.diveVersion++
 	case strings.Contains(query, "FROM MD_UPDATE_GUIDE("):
 		c.guideVersions++
+		if m := appRegressionContentArg.FindStringSubmatch(query); m != nil {
+			c.guideContent = m[1]
+		}
+	case strings.Contains(query, "FROM MD_SET_GUIDE_ACCESS("):
+		access := appRegressionAccessArg.FindStringSubmatch(query)[1]
+		if access == "organization" {
+			return "", errors.New("Permission Error: Only organization admins can share a Guide with the organization")
+		}
+		c.guideAccess = access
 	case strings.Contains(query, "FROM MD_UPDATE_DIVE_STATUS("):
 		status := appRegressionStatusArg.FindStringSubmatch(query)[1]
 		if status == "endorsed" {
@@ -586,6 +608,52 @@ resource "motherduck_guide" "test" {
 						defer sqlClient.mu.Unlock()
 						if sqlClient.guideVersions != 0 {
 							return fmt.Errorf("MD_UPDATE_GUIDE called %d times, want 0", sqlClient.guideVersions)
+						}
+						return nil
+					},
+				),
+			},
+		},
+	})
+}
+
+// An access failure after a successful content write records the written
+// content, so the next apply retries only the access change and appends no
+// second Guide version.
+func TestContractGuideUpdateAccessFailureKeepsWrittenVersion(t *testing.T) {
+	sqlClient := newAppRegressionSQL()
+	base := contractProviderConfig("http://127.0.0.1")
+	cfg := func(content, access string) string {
+		return base + `
+resource "motherduck_guide" "test" {
+  title   = "Regression Guide"
+  content = "` + content + `"
+  access  = "` + access + `"
+}
+`
+	}
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(sqlClient),
+		Steps: []resource.TestStep{
+			{Config: cfg("v1", "user")},
+			{Config: cfg("v2", "organization"), ExpectError: regexp.MustCompile(`Unable to update MotherDuck Guide access`)},
+			{
+				Config:             cfg("v2", "organization"),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
+			},
+			{
+				Config: cfg("v2", "user"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PostApplyPostRefresh: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("motherduck_guide.test", "content", "v2"),
+					func(*terraform.State) error {
+						sqlClient.mu.Lock()
+						defer sqlClient.mu.Unlock()
+						if sqlClient.guideVersions != 1 {
+							return fmt.Errorf("MD_UPDATE_GUIDE called %d times for one content change, want 1", sqlClient.guideVersions)
 						}
 						return nil
 					},

@@ -108,7 +108,7 @@ reference for role assignment and inheritance.
 
 ### Optional
 
-- `grantee_type` (String) Principal type: `user` or `role`. Defaults to `user`.
+- `grantee_type` (String) Principal type: `user` or `role`. Defaults to `user`. Changing it, including removing a configured `role`, replaces the grant.
 
 ### Read-Only
 

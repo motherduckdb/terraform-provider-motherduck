@@ -18,8 +18,10 @@ type scalarDataSource struct {
 	baseDataSource
 	name        string
 	description string
-	query       string
-	details     *scalarDetails
+	// valueDescription documents what `value` holds for this data source.
+	valueDescription string
+	query            string
+	details          *scalarDetails
 }
 
 // scalarDetails adds computed attributes read from the first row of a table
@@ -41,9 +43,10 @@ type scalarModel struct {
 
 func NewCurrentUserDataSource() datasource.DataSource {
 	return &scalarDataSource{
-		name:        "current_user",
-		description: "Reads the MotherDuck user for the current SQL session. `value` is the session user from `md_user()`. The other attributes come from `md_user_info()` and are null when the session does not expose them. When `md_user_info()` fails, they are null and the read adds a warning instead of failing.",
-		query:       "SELECT md_user()",
+		name:             "current_user",
+		description:      "Reads the MotherDuck user for the current SQL session. `value` is the session user from `md_user()`. The other attributes come from `md_user_info()` and are null when the session does not expose them. When `md_user_info()` fails, they are null and the read adds a warning instead of failing.",
+		valueDescription: "Session user reported by `md_user()`.",
+		query:            "SELECT md_user()",
 		details: &scalarDetails{
 			function:           "md_user_info",
 			query:              "SELECT * FROM md_user_info()",
@@ -62,9 +65,10 @@ func NewCurrentUserDataSource() datasource.DataSource {
 
 func NewVersionDataSource() datasource.DataSource {
 	return &scalarDataSource{
-		name:        "version",
-		description: "Reads the MotherDuck version for the current SQL session.",
-		query:       "SELECT md_version()",
+		name:             "version",
+		description:      "Reads the MotherDuck version for the current SQL session.",
+		valueDescription: "MotherDuck version reported by `md_version()`.",
+		query:            "SELECT md_version()",
 		details: &scalarDetails{
 			function: "md_pragma_version",
 			query:    "SELECT * FROM md_pragma_version()",
@@ -76,7 +80,12 @@ func NewVersionDataSource() datasource.DataSource {
 }
 
 func NewLiveDucklingSizeDataSource() datasource.DataSource {
-	return &scalarDataSource{name: "live_duckling_size", description: "Reads the live Duckling size for the current SQL session.", query: "SELECT type FROM md_live_duckling_size()"}
+	return &scalarDataSource{
+		name:             "live_duckling_size",
+		description:      "Reads the live Duckling size for the current SQL session.",
+		valueDescription: "Duckling size of the current SQL session, as reported by `md_live_duckling_size()`.",
+		query:            "SELECT type FROM md_live_duckling_size()",
+	}
 }
 
 func (d *scalarDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -87,7 +96,7 @@ func (d *scalarDataSource) Schema(ctx context.Context, req datasource.SchemaRequ
 	attrs := map[string]schema.Attribute{
 		"value": schema.StringAttribute{
 			Computed:            true,
-			MarkdownDescription: "Scalar value returned by the MotherDuck SQL data source.",
+			MarkdownDescription: d.valueDescription,
 		},
 	}
 	if d.details != nil {

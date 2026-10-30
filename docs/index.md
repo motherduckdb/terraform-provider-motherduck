@@ -27,7 +27,6 @@ Shares let other accounts query published data on their own compute.
 | [Serve customer-facing analytics](guides/customer-facing-analytics.md) | One database and restricted share per customer, queried through tenant-specific readers |
 | [Deploy pipelines and dashboards](guides/blueprints-deployment.md) | Terraform infrastructure with Blueprints previews, staging, and production releases |
 | [Manage roles and share access](guides/access-control.md) | Create roles, assign members, and grant access to shares |
-| [Secure shared rows and columns](guides/row-and-column-security.md) | Filter rows, hide columns, and mask values per share consumer |
 | [Secure shared rows and columns](guides/row-and-column-security.md) | One share that filters rows per tenant and masks columns by role |
 
 ## Example usage
@@ -142,13 +141,13 @@ a [GitHub issue](https://github.com/motherduckdb/terraform-provider-motherduck/i
 
 ### Optional
 
-- `admin_token` (String, Sensitive) MotherDuck organization admin token for REST/control-plane operations. Defaults to `MOTHERDUCK_ADMIN_TOKEN`.
-- `api_base_url` (String) MotherDuck REST API base URL. Must be an absolute HTTPS URL with a host, or HTTP for a loopback host, without credentials, a query string, or a fragment. Can also be set with the `MOTHERDUCK_API_BASE_URL` environment variable. Defaults to `https://api.motherduck.com`.
+- `admin_token` (String, Sensitive) MotherDuck organization admin token for REST/control-plane operations. Defaults to `MOTHERDUCK_ADMIN_TOKEN` when unset or empty.
+- `api_base_url` (String) MotherDuck REST API base URL. Must be an absolute HTTPS URL with a host, or HTTP for a loopback host, without credentials, a query string, or a fragment. Can also be set with the `MOTHERDUCK_API_BASE_URL` environment variable, which applies when this argument is unset or empty. Defaults to `https://api.motherduck.com`.
 - `attach_mode` (String) Optional MotherDuck attach mode. Supported values are `workspace` and `single`. Use `single` with `database` to attach that existing database without attaching other workspace databases. DuckDB/MotherDuck system catalogs such as `memory` and `md_information_schema` can still be present. Omit this argument for MotherDuck's default workspace attachment behavior.
-- `custom_user_agent` (String) Optional custom user agent suffix sent on both the DuckDB/MotherDuck SQL connection and MotherDuck REST API requests.
+- `custom_user_agent` (String) Optional custom user agent suffix sent on both the DuckDB/MotherDuck SQL connection and MotherDuck REST API requests. Must not contain control characters such as newlines.
 - `database` (String) Optional MotherDuck database to attach during provider SQL initialization.
 - `request_timeout_seconds` (Number) Optional timeout, in seconds, for MotherDuck REST API requests. Defaults to 30 seconds.
-- `token` (String, Sensitive) MotherDuck token for SQL/data-plane operations. Defaults to `MOTHERDUCK_TOKEN`.
+- `token` (String, Sensitive) MotherDuck token for SQL/data-plane operations. Defaults to `MOTHERDUCK_TOKEN` when unset or empty.
 
 ## Choose a runnable example
 

@@ -448,7 +448,7 @@ func TestRowsSpecSecretsFiltersMotherDuckStorage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(query, "storage = 'motherduck'") || !strings.Contains(query, "name = '__default_s3'") {
+	if !strings.Contains(query, "storage = 'motherduck'") || !strings.Contains(query, "lower(name) = lower('__default_s3')") {
 		t.Fatalf("unexpected query: %s", query)
 	}
 	if strings.Contains(query, "secret_string") {
@@ -462,7 +462,7 @@ func TestRowsSpecSharedWithMeCanFilterByName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(query, "MD_INFORMATION_SCHEMA.SHARED_WITH_ME") || !strings.Contains(query, "name = 'tenant share'") {
+	if !strings.Contains(query, "MD_INFORMATION_SCHEMA.SHARED_WITH_ME") || !strings.Contains(query, "lower(name) = lower('tenant share')") {
 		t.Fatalf("unexpected query: %s", query)
 	}
 }

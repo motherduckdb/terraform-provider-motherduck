@@ -90,21 +90,33 @@ func activeAccountsAttribute() schema.ListNestedAttribute {
 	}
 }
 
-// activeAccountsListValue sorts accounts by username and Ducklings by ID so
-// the listing does not depend on the order MotherDuck returns them in.
-func activeAccountsListValue(accounts []mdrest.ActiveAccount, diags *diag.Diagnostics) types.List {
-	accountType := activeAccountsAttribute().NestedObject.Type().(types.ObjectType)
-	ducklingType := accountType.AttrTypes["ducklings"].(types.ListType).ElemType.(types.ObjectType)
+// sortActiveAccounts returns a copy of accounts sorted by username, with each
+// account's Ducklings sorted by ID, so the listing and its JSON do not depend
+// on the order MotherDuck returns them in.
+func sortActiveAccounts(accounts []mdrest.ActiveAccount) []mdrest.ActiveAccount {
 	sorted := make([]mdrest.ActiveAccount, len(accounts))
 	copy(sorted, accounts)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Username < sorted[j].Username })
+	for i := range sorted {
+		if sorted[i].Ducklings == nil {
+			continue
+		}
+		ducklings := make([]mdrest.Duckling, len(sorted[i].Ducklings))
+		copy(ducklings, sorted[i].Ducklings)
+		sort.SliceStable(ducklings, func(a, b int) bool { return ducklings[a].ID < ducklings[b].ID })
+		sorted[i].Ducklings = ducklings
+	}
+	return sorted
+}
+
+func activeAccountsListValue(accounts []mdrest.ActiveAccount, diags *diag.Diagnostics) types.List {
+	accountType := activeAccountsAttribute().NestedObject.Type().(types.ObjectType)
+	ducklingType := accountType.AttrTypes["ducklings"].(types.ListType).ElemType.(types.ObjectType)
+	sorted := sortActiveAccounts(accounts)
 	values := make([]attr.Value, 0, len(sorted))
 	for _, account := range sorted {
-		ducklings := make([]mdrest.Duckling, len(account.Ducklings))
-		copy(ducklings, account.Ducklings)
-		sort.SliceStable(ducklings, func(i, j int) bool { return ducklings[i].ID < ducklings[j].ID })
-		ducklingValues := make([]attr.Value, 0, len(ducklings))
-		for _, duckling := range ducklings {
+		ducklingValues := make([]attr.Value, 0, len(account.Ducklings))
+		for _, duckling := range account.Ducklings {
 			ducklingValue, ducklingDiags := types.ObjectValue(ducklingType.AttrTypes, map[string]attr.Value{
 				"id":     types.StringValue(duckling.ID),
 				"type":   types.StringValue(duckling.Type),
@@ -140,7 +152,7 @@ func (d *activeAccountsDataSource) Read(ctx context.Context, req datasource.Read
 		resp.Diagnostics.AddError("Unable to read MotherDuck active accounts", err.Error())
 		return
 	}
-	payload, err := json.Marshal(accounts.Accounts)
+	payload, err := json.Marshal(sortActiveAccounts(accounts.Accounts))
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to encode active accounts", err.Error())
 		return

@@ -106,10 +106,10 @@ jobs:
   pulumi-lifecycle:
     name: Live Pulumi lifecycle
     timeout-minutes: 30
-    # Runs after the other main jobs, because the cleanup audit at its end
-    # would otherwise see their objects.
-    needs: [exact-main, admin-lifecycle]
-    if: always() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_admin_lifecycle))
+    # Runs after the other live jobs, because the cleanup audit at its end
+    # would otherwise see their objects. A cancelled run does not start it.
+    needs: [exact-main, admin-lifecycle, live-smoke]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.run_admin_lifecycle)) }}
     runs-on: ubuntu-latest
     environment: motherduck-live
     env:
@@ -199,6 +199,9 @@ jobs:
       matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
     env:
       MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+      # REST smokes skip without an admin token. Fall back to the SQL token,
+      # as the other live jobs do, so the matrix keeps its REST coverage.
+      MOTHERDUCK_ADMIN_TOKEN: ${{ secrets.MOTHERDUCK_ADMIN_TOKEN || secrets.MOTHERDUCK_TOKEN }}
       TF_VERSIONS: ${{ matrix.cli == 'terraform' && matrix.version || '' }}
       TOFU_VERSIONS: ${{ matrix.cli == 'opentofu' && matrix.version || '' }}
       TF_VERSION_SQL_LIFECYCLE: ${{ matrix.sql_lifecycle && '1' || '0' }}
@@ -227,7 +230,8 @@ jobs:
   cleanup:
     name: Audit live cleanup
     timeout-minutes: 15
-    needs: live-smoke
+    # Audit only after every live job of the run has finished.
+    needs: [live-smoke, admin-lifecycle, pulumi-lifecycle]
     if: always() && github.event_name != 'push'
     runs-on: ubuntu-latest
     environment: motherduck-live

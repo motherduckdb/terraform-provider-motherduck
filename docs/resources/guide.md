@@ -96,7 +96,7 @@ resource "motherduck_guide" "revenue" {
 
 ### Optional
 
-- `access` (String) Guide access: `user`, `organization`, or the experimental `role`. Organization access requires administrator permission. `role` requires a MotherDuck SQL session whose `MD_SET_GUIDE_ACCESS` accepts `role_names`, which production MotherDuck does not offer yet.
+- `access` (String) Guide access: `user`, `organization`, or the experimental `role`. Organization access requires administrator permission. `role` requires a MotherDuck SQL session whose `MD_SET_GUIDE_ACCESS` accepts `role_names`, which production MotherDuck does not offer yet. Removing a configured value keeps the last applied access.
 - `change_comment` (String) Audit comment attached to the managed Guide version. Changing it appends a version.
 - `description` (String) Optional Guide description. Set to an empty string or remove the attribute to clear it.
 - `external_id` (String) External identifier attached to the managed Guide version. Changing it appends a version.

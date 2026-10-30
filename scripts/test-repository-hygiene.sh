@@ -10,23 +10,20 @@ search_repository() {
   local case_mode="${2:-}"
 
   if command -v rg >/dev/null 2>&1; then
+    # Search hidden paths such as .github too, matching the find fallback.
+    local rg_flags=(-n --hidden)
     if [[ "${case_mode}" == "ignore-case" ]]; then
-      rg -n -i "${pattern}" \
-        --glob '!dist/**' \
-        --glob '!test-results/**' \
-        --glob '!tools/**' \
-        --glob '!**/.terraform/**' \
-        --glob '!private/**' \
-        .
-    else
-      rg -n "${pattern}" \
-        --glob '!dist/**' \
-        --glob '!test-results/**' \
-        --glob '!tools/**' \
-        --glob '!**/.terraform/**' \
-        --glob '!private/**' \
-        .
+      rg_flags+=(-i)
     fi
+    rg "${rg_flags[@]}" "${pattern}" \
+      --glob '!.git/**' \
+      --glob '!.claude/**' \
+      --glob '!dist/**' \
+      --glob '!test-results/**' \
+      --glob '!tools/**' \
+      --glob '!**/.terraform/**' \
+      --glob '!private/**' \
+      .
     return
   fi
 
@@ -38,6 +35,7 @@ search_repository() {
   find . \
     \( \
       -path './.git' -o \
+      -path './.claude' -o \
       -path './dist' -o \
       -path './test-results' -o \
       -path './tools' -o \

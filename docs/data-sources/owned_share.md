@@ -26,7 +26,7 @@ data "motherduck_owned_share" "pageviews" {
 
 ### Required
 
-- `name` (String) Exact owned share name to read.
+- `name` (String) Owned share name to read. Matching ignores letter case.
 
 ### Read-Only
 

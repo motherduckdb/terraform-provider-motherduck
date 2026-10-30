@@ -30,4 +30,4 @@ data "motherduck_current_user" "current" {}
 - `region` (String) MotherDuck region of the current session. Null when the MotherDuck client does not report it.
 - `user_id` (String) ID of the current user.
 - `username` (String) Username of the current user.
-- `value` (String) Scalar value returned by the MotherDuck SQL data source.
+- `value` (String) Session user reported by `md_user()`.

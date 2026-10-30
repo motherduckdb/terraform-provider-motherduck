@@ -287,6 +287,8 @@ func (r *flightResource) readFlight(ctx context.Context, model *flightModel, dia
 	model.Status = nullString(status)
 	if currentVersion.Valid {
 		model.CurrentVersion = types.Int64Value(currentVersion.Int64)
+	} else {
+		model.CurrentVersion = types.Int64Null()
 	}
 	model.CreatedAt = nullString(created)
 	model.UpdatedAt = nullString(updated)
@@ -461,7 +463,7 @@ func (v flightInstanceTypeValidator) ValidateString(ctx context.Context, req val
 	if slices.Contains(flightInstanceTypes, req.ConfigValue.ValueString()) {
 		return
 	}
-	resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck Flight instance type", fmt.Sprintf("Flight instance_type %q is not a MotherDuck instance size. Use one of %s. Sizes are case-sensitive.", req.ConfigValue.ValueString(), strings.Join(flightInstanceTypes, ", ")))
+	resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck Flight instance type", fmt.Sprintf("Flight instance_type %q is not a MotherDuck instance size. Use F4, F16, or F32. Sizes are case-sensitive.", req.ConfigValue.ValueString()))
 }
 
 func flightCreateArgs(ctx context.Context, model *flightModel, diags *diag.Diagnostics) (map[string]string, bool) {

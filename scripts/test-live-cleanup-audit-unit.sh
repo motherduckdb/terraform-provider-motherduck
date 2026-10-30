@@ -124,4 +124,72 @@ if MOTHERDUCK_TOKEN="" "${ROOT_DIR}/scripts/audit-live-test-cleanup.sh" >/dev/nu
   exit 1
 fi
 
+# Sweep mode must split multi-row listings into one statement per object,
+# unname snapshots before dropping databases, and audit again afterwards.
+cat > "${test_dir}/go" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+args="$*"
+if [[ "${args}" == *" -sql "* ]]; then
+  for ((i = 1; i <= $#; i++)); do
+    if [[ "${!i}" == "-sql" ]]; then
+      next=$((i + 1))
+      printf '%s\n' "${!next}" >> "${SWEEP_CALLS}"
+    fi
+  done
+  exit 0
+fi
+swept=0
+if [[ -s "${SWEEP_CALLS}" && "${SWEEP_LEAVE_OBJECTS:-}" != "1" ]]; then
+  swept=1
+fi
+if [[ "${args}" == *" -timeout "* ]]; then
+  if [[ "${swept}" -eq 0 && "${args}" == *"MD_INFORMATION_SCHEMA.DATABASES"* ]]; then
+    echo "tf_a, tf_b"
+  elif [[ "${swept}" -eq 0 && "${args}" == *"DATABASE_SNAPSHOTS"* ]]; then
+    echo "tf_snap"
+  else
+    echo
+  fi
+  exit 0
+fi
+if [[ "${args}" == *"'\n'"* || "${args}" == *"'\t'"* ]]; then
+  echo "Sweep listings must not rely on backslash escapes, which DuckDB keeps literally." >&2
+  exit 1
+fi
+case "${args}" in
+  *MD_INFORMATION_SCHEMA.DATABASES*) printf 'tf_a\ntf_b\n' ;;
+  *DATABASE_SNAPSHOTS*) printf 'tf_a\tsnap-1\ttf_snap\n' ;;
+  *) echo ;;
+esac
+STUB
+chmod +x "${test_dir}/go"
+: > "${test_dir}/sweep_calls"
+if ! actual="$(SWEEP_CALLS="${test_dir}/sweep_calls" MOTHERDUCK_TOKEN="unit-test-token" PATH="${test_dir}:${PATH}" \
+  "${ROOT_DIR}/scripts/audit-live-test-cleanup.sh" --sweep 2>&1)"; then
+  echo "Expected a successful sweep to pass, got:" >&2
+  printf '%s\n' "${actual}" >&2
+  exit 1
+fi
+expected_calls="$(printf '%s\n' \
+  "ALTER SNAPSHOT 'snap-1' SET snapshot_name = ''" \
+  'DROP DATABASE IF EXISTS "tf_a" CASCADE' \
+  'DROP DATABASE IF EXISTS "tf_b" CASCADE')"
+if [[ "$(cat "${test_dir}/sweep_calls")" != "${expected_calls}" ]]; then
+  echo "Unexpected sweep statements:" >&2
+  cat "${test_dir}/sweep_calls" >&2
+  exit 1
+fi
+
+: > "${test_dir}/sweep_calls"
+if actual="$(SWEEP_LEAVE_OBJECTS=1 SWEEP_CALLS="${test_dir}/sweep_calls" MOTHERDUCK_TOKEN="unit-test-token" PATH="${test_dir}:${PATH}" \
+  "${ROOT_DIR}/scripts/audit-live-test-cleanup.sh" --sweep 2>&1)"; then
+  echo "Expected a sweep that leaves objects behind to fail" >&2
+  exit 1
+fi
+if ! printf '%s\n' "${actual}" | grep -q 'sweep left MotherDuck objects'; then
+  echo "Expected the incomplete sweep to be reported" >&2
+  exit 1
+fi
+
 echo "live cleanup audit checks passed"

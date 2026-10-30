@@ -41,10 +41,10 @@ func newCatalogSQL() *catalogSQL {
 		},
 		rows: map[string]string{
 			// An older extension omits region, which must read back as null.
-			"SELECT * FROM md_user_info()":                                     `[{"user_id":"u-1","username":"svc_writer","org_id":"o-1","org_name":"Analytics","org_type":"business"}]`,
-			"SELECT * FROM md_pragma_version()":                                `[{"md_extension_version":"v1.5.6-2026-10-484","md_extension_hash":"9f30707f97"}]`,
-			"SELECT * FROM md_access_tokens()":                                 `[{"token_name":"writer","token_type":"read_write","created_ts":"2026-09-01T00:00:00Z","expire_at":null},{"token_name":"ci","token_type":"read_scaling","created_ts":"2026-09-02T00:00:00Z","expire_at":"2027-01-01T00:00:00Z"}]`,
-			"SELECT * FROM MD_INFORMATION_SCHEMA.SHARED_WITH_ME ORDER BY name": `[{"name":"tenant","url":"` + contractReceivedShareURL + `","owner":"owner","visibility":"DISCOVERABLE","created_ts":"2026-09-01T00:00:00Z","updated_ts":"2026-09-03T00:00:00Z","update_mode":"AUTOMATIC","access":"ORGANIZATION"}]`,
+			"SELECT * FROM md_user_info()":                                                 `[{"user_id":"u-1","username":"svc_writer","org_id":"o-1","org_name":"Analytics","org_type":"business"}]`,
+			"SELECT * FROM md_pragma_version()":                                            `[{"md_extension_version":"v1.5.6-2026-10-484","md_extension_hash":"9f30707f97"}]`,
+			"SELECT * FROM md_access_tokens()":                                             `[{"token_name":"writer","token_type":"read_write","created_ts":"2026-09-01T00:00:00Z","expire_at":null},{"token_name":"ci","token_type":"read_scaling","created_ts":"2026-09-02T00:00:00Z","expire_at":"2027-01-01T00:00:00Z"}]`,
+			"SELECT * FROM MD_INFORMATION_SCHEMA.SHARED_WITH_ME ORDER BY name, owner, url": `[{"name":"tenant","url":"` + contractReceivedShareURL + `","owner":"owner","visibility":"DISCOVERABLE","created_ts":"2026-09-01T00:00:00Z","updated_ts":"2026-09-03T00:00:00Z","update_mode":"AUTOMATIC","access":"ORGANIZATION"}]`,
 		},
 		rowsErr: map[string]error{},
 		share:   []any{"tenant", contractReceivedShareURL, "tenant_db", "00000000-0000-0000-0000-0000000000a1", "ORGANIZATION", "DISCOVERABLE", "AUTOMATIC", "2026-09-01 00:00:00+00"},

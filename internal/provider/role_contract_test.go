@@ -392,3 +392,40 @@ func unquoteRole(value string) string {
 type roleContractRow struct{ err error }
 
 func (r roleContractRow) Scan(...any) error { return r.err }
+
+// Removing grantee_type = "role" falls back to the "user" default. That is a
+// different principal, so the plan must replace the grant rather than plan an
+// in-place update that Update always rejects.
+func TestContractRoleGrantGranteeTypeRemovalReplaces(t *testing.T) {
+	sqlClient := newRoleContractSQL()
+	base := contractProviderConfig("http://127.0.0.1") + `
+resource "motherduck_role" "new" {
+  name = "contract_readers"
+}
+`
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(sqlClient),
+		Steps: []resource.TestStep{
+			{
+				Config: base + `
+resource "motherduck_role_grant" "nested" {
+  role_name    = "existing_custom"
+  grantee_name = motherduck_role.new.name
+  grantee_type = "role"
+}
+`,
+			},
+			{
+				Config: base + `
+resource "motherduck_role_grant" "nested" {
+  role_name    = "existing_custom"
+  grantee_name = motherduck_role.new.name
+}
+`,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction("motherduck_role_grant.nested", plancheck.ResourceActionDestroyBeforeCreate)},
+				},
+			},
+		},
+	})
+}

@@ -117,7 +117,7 @@ func (r *diveResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"status": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "Dive governance status. New Dives default to `draft`. Owners can set `draft`, `ready`, or `archived`, while `endorsed` requires organization-admin permission. If MotherDuck rejects the status of a new Dive, the apply keeps the Dive with a warning and the next plan retries the status in place.",
+				MarkdownDescription: "Dive governance status. New Dives default to `draft`. Owners can set `draft`, `ready`, or `archived`, while `endorsed` requires organization-admin permission. If MotherDuck rejects the status of a new Dive, the apply keeps the Dive with a warning and the next plan retries the status in place. Removing a configured value keeps the last applied status.",
 				Validators:          diveStatusValidators(),
 				PlanModifiers:       stringUseStateForUnknown(),
 			},
@@ -507,6 +507,8 @@ func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *di
 	model.Description = clearableStringFromLive(model.Description, description)
 	if currentVersion.Valid {
 		model.CurrentVersion = types.Int64Value(currentVersion.Int64)
+	} else {
+		model.CurrentVersion = types.Int64Null()
 	}
 	model.CreatedAt = nullString(created)
 	model.UpdatedAt = nullString(updated)
