@@ -175,7 +175,13 @@ MOTHERDUCK_TOKEN=... make test-live-pulumi            # admin program runs when 
 MOTHERDUCK_TOKEN=... make test-live-pulumi-example    # the checked-in Pulumi Python example
 MOTHERDUCK_TOKEN=... MOTHERDUCK_ADMIN_TOKEN=... make test-live-cookbook-pipeline  # through uv
 MOTHERDUCK_TOKEN=... MOTHERDUCK_ADMIN_TOKEN=... make test-live-role-audit
+MOTHERDUCK_TOKEN=... MOTHERDUCK_ADMIN_TOKEN=... make test-live-example-lifecycle  # needs jq and Node.js
 ```
+
+`test-live-example-lifecycle` rotates the reader and writer tokens of the
+blueprint modules, then deploys the customer-facing analytics example and runs
+its backend against the live tenants, including suspension and token
+revocation. Set `LIVE_EXAMPLE_PHASE=cfa` to run only the analytics example.
 
 ## Output and cleanup
 

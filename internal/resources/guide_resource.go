@@ -469,7 +469,7 @@ func (r *guideResource) readGuide(ctx context.Context, model *guideModel, diags 
 			&ownerID, &ownerName, &currentVersion, &createdAt, &updatedAt, &versionCreatedAt, &referencesJSON,
 		)
 	})
-	if err == stdsql.ErrNoRows || isGuideNotFound(err) {
+	if errors.Is(err, stdsql.ErrNoRows) || isGuideNotFound(err) {
 		return false
 	}
 	if err != nil {

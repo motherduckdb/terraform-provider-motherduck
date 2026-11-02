@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlcatalog"
 )
 
 type secretResource struct{ baseResource }
@@ -46,13 +47,13 @@ func (r *secretResource) Schema(ctx context.Context, req resource.SchemaRequest,
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:            true,
-				PlanModifiers:       stringUseStateForUnknown(),
+				PlanModifiers:       identifierID("name"),
 				MarkdownDescription: "Secret resource ID. This is the secret name.",
 			},
 			"name": schema.StringAttribute{
 				Required:            true,
-				MarkdownDescription: "Secret name of at most 255 characters.",
-				PlanModifiers:       stringRequiresReplace(),
+				MarkdownDescription: "Secret name of at most 255 characters. DuckDB stores secret names with ASCII letters in lowercase, so changing only the case of ASCII letters updates the secret in place. Any other change, including the case of a non-ASCII letter such as `Ä`, names a different secret and replaces it.",
+				PlanModifiers:       catalogIdentifierRequiresReplace(),
 				Validators:          secretNameValidators(),
 			},
 			"type": schema.StringAttribute{
@@ -298,10 +299,10 @@ func (r *secretResource) readSecret(ctx context.Context, model *secretModel, dia
 	}
 	var secretType, provider, storage, scope stdsql.NullString
 	err := retry.SQL(ctx, func() error {
-		// DuckDB stores secret names in lowercase, even when the CREATE SECRET
-		// name is quoted, so match case-insensitively and keep the configured
-		// spelling in state.
-		return client.QueryRow(ctx, `SELECT type, provider, storage, scope::VARCHAR FROM duckdb_secrets() WHERE lower(name) = lower(?) AND storage = 'motherduck'`, model.Name.ValueString()).Scan(&secretType, &provider, &storage, &scope)
+		// DuckDB stores secret names with ASCII letters lowered, even when the
+		// CREATE SECRET name is quoted, so state keeps the configured spelling.
+		query, args := sqlcatalog.SecretByName("type, provider, storage, scope::VARCHAR", model.Name.ValueString())
+		return client.QueryRow(ctx, query, args...).Scan(&secretType, &provider, &storage, &scope)
 	})
 	if errors.Is(err, stdsql.ErrNoRows) {
 		return false

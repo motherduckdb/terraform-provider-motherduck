@@ -127,8 +127,8 @@ type secretLookupSQL struct {
 }
 
 func (c *secretLookupSQL) QueryRow(_ context.Context, query string, args ...any) mdsql.RowScanner {
-	const want = `SELECT type, provider, persistent, scope::VARCHAR FROM duckdb_secrets() WHERE lower(name) = lower(?) AND storage = 'motherduck'`
-	if query != want || len(args) != 1 || args[0] != "Lakehouse'Catalog" {
+	const want = `SELECT type, provider, persistent, scope::VARCHAR FROM duckdb_secrets() WHERE lower(name) = lower(?) AND storage = 'motherduck' ORDER BY name = ? DESC, name LIMIT 1`
+	if query != want || len(args) != 2 || args[0] != "Lakehouse'Catalog" || args[1] != "lakehouse'catalog" {
 		return contractRow{err: fmt.Errorf("unexpected exact-name lookup: %q %#v", query, args)}
 	}
 	return contractRow{values: c.row, err: c.err}

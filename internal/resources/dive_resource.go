@@ -496,7 +496,7 @@ func (r *diveResource) readDive(ctx context.Context, model *diveModel, diags *di
 	err = retry.SQL(ctx, func() error {
 		return client.QueryRow(ctx, query).Scan(scanTargets...)
 	})
-	if err == stdsql.ErrNoRows || isDiveNotFound(err) {
+	if errors.Is(err, stdsql.ErrNoRows) || isDiveNotFound(err) {
 		return false
 	}
 	if err != nil {

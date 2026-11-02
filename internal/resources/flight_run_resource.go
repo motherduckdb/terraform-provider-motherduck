@@ -390,7 +390,7 @@ func (r *flightRunResource) readFlightRunStatus(ctx context.Context, model *flig
 	err := retry.SQL(ctx, func() error {
 		return client.QueryRow(ctx, query).Scan(row.scanTargets()...)
 	})
-	if err == stdsql.ErrNoRows || isNotFound(err) || (lookup.direct && flightRunMissing(err)) {
+	if errors.Is(err, stdsql.ErrNoRows) || isNotFound(err) || (lookup.direct && flightRunMissing(err)) {
 		return false
 	}
 	if err != nil {
@@ -619,7 +619,7 @@ func (r *flightRunResource) flightExists(ctx context.Context, client providerctx
 	var id string
 	query := "SELECT flight_id::VARCHAR FROM MD_GET_FLIGHT(flight_id := " + sqlbuild.StringLiteral(flightID) + "::UUID)"
 	err = retry.SQL(ctx, func() error { return client.QueryRow(ctx, query).Scan(&id) })
-	if err == stdsql.ErrNoRows || isNotFound(err) {
+	if errors.Is(err, stdsql.ErrNoRows) || isNotFound(err) {
 		return false, true
 	}
 	if err != nil {

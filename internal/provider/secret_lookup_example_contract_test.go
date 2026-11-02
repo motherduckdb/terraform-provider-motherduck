@@ -45,8 +45,8 @@ func TestContractSecretLookupIcebergExample(t *testing.T) {
 type secretLookupExampleSQL struct{ *databaseIcebergSQL }
 
 func (c *secretLookupExampleSQL) QueryRow(ctx context.Context, query string, args ...any) mdsql.RowScanner {
-	const lookup = `SELECT type, provider, persistent, scope::VARCHAR FROM duckdb_secrets() WHERE lower(name) = lower(?) AND storage = 'motherduck'`
-	if query == lookup && len(args) == 1 && args[0] == "lakehouse_catalog" {
+	const lookup = `SELECT type, provider, persistent, scope::VARCHAR FROM duckdb_secrets() WHERE lower(name) = lower(?) AND storage = 'motherduck' ORDER BY name = ? DESC, name LIMIT 1`
+	if query == lookup && len(args) == 2 && args[0] == "lakehouse_catalog" && args[1] == "lakehouse_catalog" {
 		return contractRow{values: []any{"iceberg", "config", true, nil}}
 	}
 	return c.databaseIcebergSQL.QueryRow(ctx, query, args...)
