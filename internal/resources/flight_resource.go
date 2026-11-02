@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	stdsql "database/sql"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -273,7 +274,7 @@ func (r *flightResource) readFlight(ctx context.Context, model *flightModel, dia
 	err := retry.SQL(ctx, func() error {
 		return client.QueryRow(ctx, query).Scan(&name, &schedule, &scheduleStatus, &status, &currentVersion, &created, &updated, &owner)
 	})
-	if err == stdsql.ErrNoRows || isNotFound(err) {
+	if errors.Is(err, stdsql.ErrNoRows) || isNotFound(err) {
 		return false
 	}
 	if err != nil {

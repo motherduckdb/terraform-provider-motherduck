@@ -51,7 +51,7 @@ resource "motherduck_database" "lakehouse" {
 
 ### Required
 
-- `name` (String) Secret name to look up. Matching is case-insensitive because DuckDB stores secret names in lowercase.
+- `name` (String) Secret name to look up. DuckDB stores secret names with ASCII letters in lowercase, so the case of ASCII letters is ignored.
 
 ### Read-Only
 

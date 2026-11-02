@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlcatalog"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 )
 
@@ -34,7 +35,7 @@ func (d *secretDataSource) Schema(ctx context.Context, req datasource.SchemaRequ
 	resp.Schema = schema.Schema{
 		MarkdownDescription: "Reads one MotherDuck-managed secret by name without exposing its value or managing its lifecycle. Fails when the secret is absent.",
 		Attributes: map[string]schema.Attribute{
-			"name":            schema.StringAttribute{Required: true, Validators: []validator.String{tfvalidators.StringLength("MotherDuck secret name", 1, 0)}, MarkdownDescription: "Secret name to look up. Matching is case-insensitive because DuckDB stores secret names in lowercase."},
+			"name":            schema.StringAttribute{Required: true, Validators: []validator.String{tfvalidators.StringLength("MotherDuck secret name", 1, 0)}, MarkdownDescription: "Secret name to look up. DuckDB stores secret names with ASCII letters in lowercase, so the case of ASCII letters is ignored."},
 			"type":            schema.StringAttribute{Computed: true, MarkdownDescription: "Secret type reported by DuckDB."},
 			"secret_provider": schema.StringAttribute{Computed: true, MarkdownDescription: "Secret provider reported by DuckDB."},
 			"persistent":      schema.BoolAttribute{Computed: true, MarkdownDescription: "Whether the secret is persistent."},
@@ -60,7 +61,8 @@ func (d *secretDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 	var secretType, provider, scope stdsql.NullString
 	var persistent stdsql.NullBool
 	err := retry.SQL(ctx, func() error {
-		return client.QueryRow(ctx, `SELECT type, provider, persistent, scope::VARCHAR FROM duckdb_secrets() WHERE lower(name) = lower(?) AND storage = 'motherduck'`, config.Name.ValueString()).Scan(&secretType, &provider, &persistent, &scope)
+		query, args := sqlcatalog.SecretByName("type, provider, persistent, scope::VARCHAR", config.Name.ValueString())
+		return client.QueryRow(ctx, query, args...).Scan(&secretType, &provider, &persistent, &scope)
 	})
 	if errors.Is(err, stdsql.ErrNoRows) {
 		resp.Diagnostics.AddError("MotherDuck secret not found", "No MotherDuck-managed secret named "+config.Name.ValueString()+" was found in duckdb_secrets().")

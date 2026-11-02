@@ -124,7 +124,7 @@ variable "partner_api_key" {
 
 ### Required
 
-- `name` (String) Secret name of at most 255 characters.
+- `name` (String) Secret name of at most 255 characters. DuckDB stores secret names with ASCII letters in lowercase, so changing only the case of ASCII letters updates the secret in place. Any other change, including the case of a non-ASCII letter such as `Ä`, names a different secret and replaces it.
 - `type` (String) DuckDB secret type, such as `s3`, or `flights` for a secret that Flights read as environment variables.
 
 ### Optional

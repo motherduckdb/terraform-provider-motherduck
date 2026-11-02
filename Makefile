@@ -8,14 +8,38 @@ GOLANGCI_LINT_VERSION := v2.15.0
 GOVULNCHECK := $(TOOLS_DIR)/govulncheck
 GOVULNCHECK_VERSION := v1.9.0
 
+.DEFAULT_GOAL := help
+
 .PHONY: \
   build clean-generated clean-test-results clean-tool-cache docs docs-check \
   fmt fmt-check lint pre-push-check release-check \
   release-package-local release-sign-check shellcheck static-check test-cli-versions \
   test-contract test-scripts test-unit test-integration test-acceptance \
   test-live-cleanup-audit test-terraform-versions-blueprint test-terraform-versions-lifecycle tools tools-ci \
-  tools-docs vulncheck workflow-check $(TFPLUGINDOCS) $(ACTIONLINT) \
+  tools-docs vulncheck workflow-check help test-live-example-lifecycle $(TFPLUGINDOCS) $(ACTIONLINT) \
   $(GOLANGCI_LINT) $(GOVULNCHECK) release-preflight-check
+
+help:
+	@echo 'Common targets:'
+	@echo '  build                  Build the provider'
+	@echo '  docs                   Regenerate docs/ from templates/, examples/, and schemas'
+	@echo '  fmt                    Format Go code and Terraform examples'
+	@echo '  pre-push-check         Run the local gate to pass before opening or updating a PR'
+	@echo '  test-unit              Run Go unit tests'
+	@echo '  test-contract          Run hermetic provider behavior contracts'
+	@echo '  test-scripts           Run hermetic script and tooling tests'
+	@echo '  test-cli               Run offline Terraform CLI checks against a local build'
+	@echo '  release-check          Package the provider and smoke test the archive'
+	@echo '  test-pulumi            Run offline Pulumi bridge checks'
+	@echo ''
+	@echo 'Live targets need MOTHERDUCK_TOKEN, and REST coverage needs MOTHERDUCK_ADMIN_TOKEN:'
+	@echo '  test-acceptance        Run Terraform acceptance tests'
+	@echo '  test-live-required     Run the required live smoke suite'
+	@echo '  test-live-examples     Deploy and verify the checked-in examples'
+	@echo '  test-live-cycles       Repeat plan and apply cycles over the examples'
+	@echo '  test-live-cleanup-audit  Report leftover tf_ test objects'
+	@echo ''
+	@echo 'See docs/guides/testing.md for every target.'
 
 tools: tools-docs
 
@@ -171,6 +195,7 @@ test-acceptance:
 
 .PHONY: test-live-admin
 test-live-admin:
+	@if [ -z "$${MOTHERDUCK_TOKEN:-}" ] || [ -z "$${MOTHERDUCK_ADMIN_TOKEN:-}" ]; then echo "MOTHERDUCK_TOKEN and MOTHERDUCK_ADMIN_TOKEN are required for the admin acceptance test" >&2; exit 1; fi
 	TF_ACC=1 MD_TF_ACC=1 go test -timeout=20m -tags=acceptance,admin_acceptance -run '^TestPluginTestingAdminGraphLifecycle$$' -count=1 ./internal/acceptance
 	./scripts/test-live-blueprint-writer-path.sh
 
@@ -285,3 +310,9 @@ test-live-pulumi:
 
 test-live-role-audit:
 	./scripts/test-live-role-audit.sh
+
+# Rotates blueprint tokens and runs the customer-facing analytics backend
+# against live tenants. Needs jq and Node.js. Set LIVE_EXAMPLE_PHASE=cfa to run
+# only the analytics example.
+test-live-example-lifecycle:
+	./scripts/example-lifecycle-live-e01-e07.sh

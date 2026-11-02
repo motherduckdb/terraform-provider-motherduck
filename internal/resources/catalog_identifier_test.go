@@ -21,7 +21,7 @@ import (
 const kelvinSign = "K"
 
 // DuckDB folds only ASCII letters when it compares schema, table, and view
-// names, while MotherDuck resolves database names with a Unicode
+// names and when it stores secret names, while MotherDuck resolves database names with a Unicode
 // case-insensitive collation. The plan modifiers must replace an object
 // exactly when the new name resolves to a different object. MotherDuck cannot
 // attach a database by a spelling that differs in the case of non-ASCII
@@ -61,6 +61,7 @@ func TestIdentifierPlanModifiersMatchCatalogResolution(t *testing.T) {
 		{NewViewResource(), "name", false},
 		{NewViewResource(), "schema", false},
 		{NewViewResource(), "database", true},
+		{NewSecretResource(), "name", false},
 	} {
 		var schemaResp resource.SchemaResponse
 		tc.resource.Schema(ctx, resource.SchemaRequest{}, &schemaResp)

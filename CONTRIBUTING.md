@@ -36,6 +36,7 @@ and `gpg` (`brew install shellcheck gnupg` on macOS). Then:
 make pre-push-check   # required before pushing
 make docs             # after changing schemas, examples, or templates
 make release-check    # after changing release scripts or workflows
+make help             # lists the common targets
 ```
 
 When bumping `github.com/duckdb/duckdb-go/*` or `github.com/duckdb/duckdb-go-bindings*`,
