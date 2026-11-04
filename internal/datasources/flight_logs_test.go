@@ -75,7 +75,7 @@ func TestFlightListingsDocumentServerDefaults(t *testing.T) {
 			t.Fatalf("%s description must document the %s-row default page: %s", name, want, description)
 		}
 	}
-	if description := findSpec(t, "flight_logs").description; !strings.Contains(description, "1,000 lines") {
+	if description := findSpec(t, "flight_logs").description; !strings.Contains(description, "100 lines") {
 		t.Fatalf("flight_logs description must document the default log window: %s", description)
 	}
 	for _, attr := range findSpec(t, "role_members").typedRows {

@@ -3,10 +3,12 @@ package datasources
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 
@@ -65,6 +67,8 @@ type rowsModel struct {
 	IncludeOrgShares types.Bool   `tfsdk:"include_org_shares"`
 	OwnerOnly        types.Bool   `tfsdk:"owner_only"`
 	IncludeHistory   types.Bool   `tfsdk:"include_history"`
+	StartTime        types.String `tfsdk:"start_time"`
+	EndTime          types.String `tfsdk:"end_time"`
 	RowsJSON         types.String `tfsdk:"rows_json"`
 }
 
@@ -200,8 +204,8 @@ func (d *rowsDataSource) queryRows(ctx context.Context, client interface {
 		// such as the Guide reference_url, so diagnostics redact them. The
 		// configured URL is redacted exactly, whatever its format.
 		message := redactShareURL(err.Error(), shareURL)
-		if d.spec.permissionHint != "" && strings.Contains(strings.ToLower(message), "admin only") {
-			diags.AddError("MotherDuck organization admin permission required", d.spec.permissionHint+" MotherDuck reported: "+message)
+		if summary, ok := d.spec.permissionError(message); ok {
+			diags.AddError(summary, d.spec.permissionHint+" MotherDuck reported: "+message)
 			return "", false
 		}
 		if mdsql.IsUnsupportedCommand(err) {
@@ -436,6 +440,10 @@ func rowAttribute(name string, required bool) schema.Attribute {
 			return schema.BoolAttribute{Required: true, MarkdownDescription: "Whether to read every recorded storage computation instead of only the latest one."}
 		}
 		return schema.BoolAttribute{Optional: true, MarkdownDescription: "Whether to read every recorded storage computation from `STORAGE_INFO_HISTORY` instead of only the latest one. Defaults to false."}
+	case "start_time":
+		return rowStringAttribute(required, rfc3339Validators(), "Optional RFC 3339 timestamp, for example `2026-11-01T00:00:00Z`. Returns only usage windows that start at or after it.")
+	case "end_time":
+		return rowStringAttribute(required, rfc3339Validators(), "Optional RFC 3339 timestamp, for example `2026-11-02T00:00:00Z`. Returns only usage windows that end at or before it. Must be later than `start_time` when both are set.")
 	case "name":
 		return rowStringAttribute(required, nil, "Optional exact object name filter.")
 	case "database_name":
@@ -539,6 +547,10 @@ func (m *rowsModel) attribute(name string) attr.Value {
 		return &m.OwnerOnly
 	case "include_history":
 		return &m.IncludeHistory
+	case "start_time":
+		return &m.StartTime
+	case "end_time":
+		return &m.EndTime
 	default:
 		return nil
 	}
@@ -569,6 +581,11 @@ func (d *rowsDataSource) ValidateConfig(ctx context.Context, req datasource.Vali
 		return
 	}
 	if err := d.spec.validate(model); err != nil {
+		var attrErr attributeConfigError
+		if errors.As(err, &attrErr) {
+			resp.Diagnostics.AddAttributeError(path.Root(attrErr.attribute), attrErr.summary, attrErr.Error())
+			return
+		}
 		resp.Diagnostics.AddAttributeError(path.Root("offset"), "Invalid MotherDuck data source paging", err.Error())
 	}
 }
@@ -584,5 +601,31 @@ func (d *rowsDataSource) setState(ctx context.Context, state interface {
 	resp.Diagnostics.Append(state.SetAttribute(ctx, path.Root("rows_json"), rowsJSON)...)
 	if len(d.spec.typedRows) > 0 {
 		resp.Diagnostics.Append(state.SetAttribute(ctx, path.Root("rows"), typedRows)...)
+	}
+}
+
+func rfc3339Validators() []validator.String {
+	return []validator.String{rfc3339Validator{}}
+}
+
+// rfc3339Validator accepts timestamps with an explicit offset, so a window
+// does not depend on the time zone of the MotherDuck session.
+type rfc3339Validator struct{}
+
+func (rfc3339Validator) Description(context.Context) string {
+	return "must be an RFC 3339 timestamp with a time zone offset"
+}
+
+func (v rfc3339Validator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (rfc3339Validator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
+	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
+		return
+	}
+	if _, err := time.Parse(time.RFC3339, req.ConfigValue.ValueString()); err != nil {
+		resp.Diagnostics.AddAttributeError(req.Path, "Invalid MotherDuck timestamp",
+			fmt.Sprintf("Value %q must be an RFC 3339 timestamp with a time zone offset, for example 2026-11-01T00:00:00Z.", req.ConfigValue.ValueString()))
 	}
 }

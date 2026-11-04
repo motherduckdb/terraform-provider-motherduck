@@ -235,11 +235,20 @@ share with `ATTACH 'md:_share/...' AS reporting`:
 - DuckLake shares with secure views must use `update_mode = "automatic"`.
   Consumers of those shares cannot time travel or call DuckLake metadata
   functions.
-- A share holds at most 100 secure views. Each view's SQL is limited to 256 KiB
+- A share holds at most 1,000 secure views. Each view's SQL is limited to 256 KiB
   and the total to 4 MiB per share.
 - A secure view body reads only the shared database. It cannot use table
   functions, `LIMIT`, `SAMPLE`, volatile functions such as `random()`, or
   session functions such as `current_setting()`.
+- MotherDuck binds a secure view body with default settings and the `UTC` time
+  zone, not with the consumer's session settings. A consumer's `SET TimeZone`,
+  `SET default_collation`, or `SET integer_division` does not change which rows
+  or values the policy hides.
+- A function whose value is fixed for one query, such as `current_date` or
+  `now()`, cannot be used inside a lambda in the body, for example
+  `list_filter(dates, d -> d <= current_date)`. MotherDuck refuses the `CREATE`
+  or `ALTER SHARE` statement. Use the function outside the lambda. The role
+  checks such as `is_role_in_session()` are allowed.
 
 See [manage roles and share access](access-control.md) for role membership and
 grant audits.

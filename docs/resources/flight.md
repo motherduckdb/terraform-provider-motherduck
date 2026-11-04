@@ -80,9 +80,12 @@ update to MotherDuck.
 
 The provider validates at plan time that `source_code` is 1 to 204,800 bytes,
 that `requirements_txt` is at most 20,480 bytes, that `instance_type` is a
-MotherDuck size name (`F4`, `F8`, `F16`, or `F32`, case-sensitive), and that
+MotherDuck size name (`F4`, `F8`, `F16`, or `F32`, case-sensitive, although no
+plan currently offers `F8`), and that
 `config` does not use a reserved name: `MOTHERDUCK_TOKEN`, `MOTHERDUCK_FLIGHTS_RUN`,
-`MOTHERDUCK_FLIGHT_ID`, or `MOTHERDUCK_FLIGHT_RUN_ID`.
+`MOTHERDUCK_FLIGHT_ID`, `MOTHERDUCK_FLIGHT_RUN_ID`, or `MOTHERDUCK_HOST`.
+MotherDuck sets `MOTHERDUCK_HOST` to the API host of the region the run
+executes in, so a run connects to its own region with `duckdb.connect("md:")`.
 
 ## Lifecycle and import
 
@@ -129,7 +132,7 @@ resource "motherduck_flight" "heartbeat" {
 ### Optional
 
 - `access_token_name` (String) Optional MotherDuck access token name for the Flight. When omitted, MotherDuck uses its default Flight token behavior and Terraform keeps this field unset.
-- `config` (Map of String) Optional string configuration passed to the Flight. Keys become Flight runtime environment variables and must be valid Flight config names.
+- `config` (Map of String) Optional string configuration passed to the Flight. Keys become Flight runtime environment variables and must be valid Flight config names. `MOTHERDUCK_TOKEN`, `MOTHERDUCK_FLIGHTS_RUN`, `MOTHERDUCK_FLIGHT_ID`, `MOTHERDUCK_FLIGHT_RUN_ID`, and `MOTHERDUCK_HOST` are reserved.
 - `flight_secret_names` (List of String) Optional MotherDuck secret names available to the Flight.
 - `instance_type` (String) Runner size for Flight runs: `F4`, `F16`, or `F32`, with 4, 16, or 32 GB of memory. Each plan offers a subset: `F4`, `F16`, and `F32` on the Business plan and during a free trial, `F4` and `F16` on the Lite plan, and `F4` on the Free plan. An expired free trial gets the Free plan sizes. MotherDuck rejects a size the plan does not offer. When omitted at creation, MotherDuck applies the plan default: `F16` on the Business and Lite plans and during a free trial, and `F4` on the Free plan. Removing a configured value keeps the last applied size, so set the value explicitly to change it. A change creates a new Flight version.
 - `max_runtime_sec` (Number) Maximum Flight runtime in seconds. MotherDuck enforces a per-plan cap: 3,600 seconds (1 hour) on the Lite and Free plans, 28,800 seconds (8 hours) during a free trial, and no cap on the Business plan. On a capped plan, a value above the cap or `0` is rejected. On the Business plan, `0` removes the runtime limit. When omitted at creation, MotherDuck applies the plan default: 8 hours on the Business plan and during a free trial, and 1 hour on the Lite and Free plans. Removing a configured value keeps the last applied limit, so set the value explicitly to change it.

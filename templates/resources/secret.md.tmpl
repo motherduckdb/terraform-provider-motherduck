@@ -43,10 +43,10 @@ variables. Set its values in `flight_params`, which the provider sends as
 `PARAMS MAP {...}`. `params` is not valid for this type. Attach the secret to a
 Flight with `flight_secret_names`. The run receives each pair twice, as `<key>`
 and as `<secret name>_<key>`. MotherDuck sets `MOTHERDUCK_TOKEN`,
-`MOTHERDUCK_FLIGHTS_RUN`, `MOTHERDUCK_FLIGHT_ID`, and `MOTHERDUCK_FLIGHT_RUN_ID`
-itself, so a key with one of those names is available only under its prefixed
-name. MotherDuck lists the keys of a `flights` secret but always redacts the
-values.
+`MOTHERDUCK_FLIGHTS_RUN`, `MOTHERDUCK_FLIGHT_ID`, `MOTHERDUCK_FLIGHT_RUN_ID`, and
+`MOTHERDUCK_HOST` itself, so a key with one of those names is available only
+under its prefixed name. MotherDuck lists the keys of a `flights` secret but
+always redacts the values.
 
 ## Example Usage
 

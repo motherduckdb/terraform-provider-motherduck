@@ -78,7 +78,7 @@ func (r *flightResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"config": schema.MapAttribute{
 				Optional:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Optional string configuration passed to the Flight. Keys become Flight runtime environment variables and must be valid Flight config names.",
+				MarkdownDescription: "Optional string configuration passed to the Flight. Keys become Flight runtime environment variables and must be valid Flight config names. `MOTHERDUCK_TOKEN`, `MOTHERDUCK_FLIGHTS_RUN`, `MOTHERDUCK_FLIGHT_ID`, `MOTHERDUCK_FLIGHT_RUN_ID`, and `MOTHERDUCK_HOST` are reserved.",
 				Validators:          flightConfigMapValidators(),
 			},
 			"access_token_name": schema.StringAttribute{
@@ -380,21 +380,14 @@ func (v flightConfigMapValidator) ValidateMap(ctx context.Context, req validator
 	}
 }
 
-// reservedFlightConfigKeys mirrors the run parameters MotherDuck sets itself.
-// The server rejects them as config keys with an exact, case-sensitive match.
-var reservedFlightConfigKeys = map[string]bool{
-	"MOTHERDUCK_TOKEN":         true,
-	"MOTHERDUCK_FLIGHTS_RUN":   true,
-	"MOTHERDUCK_FLIGHT_ID":     true,
-	"MOTHERDUCK_FLIGHT_RUN_ID": true,
-}
-
 func invalidFlightConfigKey(key string) string {
 	switch {
 	case key == "":
 		return "Flight config keys must not be empty."
-	case reservedFlightConfigKeys[key]:
-		return fmt.Sprintf("Flight config key %q is reserved and cannot be set.", key)
+	// The server rejects the run parameters it sets itself as config keys,
+	// with an exact, case-sensitive match.
+	case slices.Contains(flightReservedParamNames, key):
+		return fmt.Sprintf("Flight config key %q is reserved because MotherDuck sets it for every run. Choose a different name.", key)
 	case strings.Contains(key, "="):
 		return fmt.Sprintf("Flight config key %q must not contain \"=\".", key)
 	case strings.Contains(key, "\x00"):

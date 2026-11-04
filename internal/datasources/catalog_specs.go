@@ -2,6 +2,8 @@ package datasources
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/guideref"
@@ -19,8 +21,13 @@ type rowSpec struct {
 	requiredAttrs     []string
 	typedRows         []typedRowAttribute
 	// permissionHint, when set, replaces the generic read error for
-	// MotherDuck functions that only organization admins can call.
+	// MotherDuck functions that only some principals can call.
 	permissionHint string
+	// permissionSummary and permissionMarkers describe the permission error
+	// that permissionHint explains. They default to the organization admin
+	// error that MotherDuck reports as "admin only".
+	permissionSummary string
+	permissionMarkers []string
 	// pagingMax caps limit and offset at the largest value the MotherDuck
 	// function accepts, so a larger value fails at plan time instead of in
 	// MotherDuck. Zero leaves them uncapped.
@@ -314,7 +321,7 @@ func rowSpecs() []rowSpec {
 			}
 			return "SELECT * FROM MD_LIST_FLIGHT_RUNS" + sqlbuild.NamedArgs(args) + suffix, nil
 		}},
-		{name: "flight_logs", description: "Reads line-oriented logs for one MotherDuck Flight run, in ascending line order. Without `limit`, MotherDuck returns only the most recent 1,000 lines. Set `limit` to read a window of lines from the start of the log, add `offset` to skip lines, and set `order = \"desc\"` to count the window from the end of the log instead. MotherDuck applies the window on the server, so large logs are not transferred in full. An `offset` without `limit` skips lines within the most recent 1,000.", requiredFunction: "md_get_flight_logs", pagingMax: maxUInteger, attrs: []string{"flight_id", "run_number", "limit", "offset", "order"}, requiredAttrs: []string{"flight_id", "run_number"}, typedRows: []typedRowAttribute{
+		{name: "flight_logs", description: "Reads line-oriented logs for one MotherDuck Flight run, in ascending line order. Without `limit`, MotherDuck returns only the most recent 100 lines. Set `limit` to read a window of lines from the start of the log, add `offset` to skip lines, and set `order = \"desc\"` to count the window from the end of the log instead. MotherDuck applies the window on the server, so large logs are not transferred in full. An `offset` without `limit` skips lines within the most recent 100. Set `limit` to read more of a long log.", requiredFunction: "md_get_flight_logs", pagingMax: maxUInteger, attrs: []string{"flight_id", "run_number", "limit", "offset", "order"}, requiredAttrs: []string{"flight_id", "run_number"}, typedRows: []typedRowAttribute{
 			{name: "line_number", description: "Absolute zero-based position of the line in the Flight run log."},
 			{name: "reported_at", description: "Timestamp reported for the Flight log line."},
 			{name: "line", description: "Flight stdout or stderr line.", sensitive: true},
@@ -408,7 +415,96 @@ func rowSpecs() []rowSpec {
 			}
 			return appendRowLimitOffset(query+" ORDER BY database_name, database_id, computed_ts", m), nil
 		}},
+		{name: "compute_usage", description: "Reads Duckling compute usage for the organization from `MD_INFORMATION_SCHEMA.COMPUTE_USAGE`. Each row covers one Duckling for one user in one 30-second window and reports its billable uptime and query count. Requires a Business plan and query history access, which organization admins have. Rows are sorted by window start, user name, and Duckling ID. Set `start_time` to bound long histories.", requiredFunction: "md_compute_usage", attrs: []string{"username", "start_time", "end_time", "limit", "offset"},
+			permissionSummary: "MotherDuck query history access required",
+			permissionMarkers: []string{"missing permission for query history", "query history is not available on your plan"},
+			permissionHint:    "motherduck_compute_usage reads query history, which needs a Business plan and query history access. Organization admins have that access. Use a MotherDuck token for a principal with query history access.",
+			typedRows: []typedRowAttribute{
+				{name: "start_time", description: "Start of the 30-second usage window, inclusive."},
+				{name: "end_time", description: "End of the 30-second usage window, exclusive."},
+				{name: "user_id", description: "UUID of the user or service account that used the Duckling."},
+				{name: "user_name", description: "Name of the user or service account that used the Duckling."},
+				{name: "duckling_size", description: "Duckling size name, for example `Pulse` or `Standard`."},
+				{name: "duckling_id", description: "Duckling ID. Can be empty when MotherDuck did not record one."},
+				{name: "is_read_scaling", description: "Whether the Duckling is a read-scaling replica, as `true` or `false`. Null when MotherDuck did not record it."},
+				{name: "uptime_seconds", description: "Billable Duckling uptime in the window, in seconds, as a decimal string."},
+				{name: "duckling_size_multiplier", description: "Billing multiplier of the Duckling size, for example `0.25` for Pulse and `1` for Standard."},
+				{name: "queries", description: "Number of queries the Duckling ran in the window."},
+			},
+			validate: validateComputeUsageWindow,
+			build: func(m rowsModel) (string, error) {
+				var filters []string
+				if !m.Username.IsNull() && !m.Username.IsUnknown() {
+					filters = append(filters, "lower(user_name) = lower("+sqlbuild.StringLiteral(m.Username.ValueString())+")")
+				}
+				for _, bound := range []struct {
+					value types.String
+					sql   string
+				}{{m.StartTime, "start_time >= "}, {m.EndTime, "end_time <= "}} {
+					if bound.value.IsNull() || bound.value.IsUnknown() {
+						continue
+					}
+					at, err := time.Parse(time.RFC3339, bound.value.ValueString())
+					if err != nil {
+						return "", err
+					}
+					filters = append(filters, bound.sql+sqlbuild.StringLiteral(at.UTC().Format(time.RFC3339Nano))+"::TIMESTAMPTZ")
+				}
+				query := "SELECT * FROM MD_INFORMATION_SCHEMA.COMPUTE_USAGE"
+				if len(filters) > 0 {
+					query += " WHERE " + strings.Join(filters, " AND ")
+				}
+				return appendRowLimitOffset(query+" ORDER BY start_time, user_name, duckling_id, is_read_scaling", m), nil
+			}},
 	}
+}
+
+// validateComputeUsageWindow rejects an empty time window at plan time.
+func validateComputeUsageWindow(m rowsModel) error {
+	if m.StartTime.IsNull() || m.StartTime.IsUnknown() || m.EndTime.IsNull() || m.EndTime.IsUnknown() {
+		return nil
+	}
+	start, startErr := time.Parse(time.RFC3339, m.StartTime.ValueString())
+	end, endErr := time.Parse(time.RFC3339, m.EndTime.ValueString())
+	if startErr != nil || endErr != nil || end.After(start) {
+		return nil
+	}
+	return attributeConfigError{
+		attribute: "end_time",
+		summary:   "Invalid MotherDuck compute usage window",
+		detail:    fmt.Sprintf("end_time %s must be later than start_time %s.", m.EndTime.ValueString(), m.StartTime.ValueString()),
+	}
+}
+
+// attributeConfigError is a validate error that belongs to one attribute.
+type attributeConfigError struct {
+	attribute string
+	summary   string
+	detail    string
+}
+
+func (e attributeConfigError) Error() string { return e.detail }
+
+// permissionError reports whether a MotherDuck error is the permission error
+// that permissionHint explains, and the diagnostic summary for it.
+func (s rowSpec) permissionError(message string) (string, bool) {
+	if s.permissionHint == "" {
+		return "", false
+	}
+	markers := s.permissionMarkers
+	if len(markers) == 0 {
+		markers = []string{"admin only"}
+	}
+	lower := strings.ToLower(message)
+	for _, marker := range markers {
+		if strings.Contains(lower, marker) {
+			if s.permissionSummary != "" {
+				return s.permissionSummary, true
+			}
+			return "MotherDuck organization admin permission required", true
+		}
+	}
+	return "", false
 }
 
 // diveSummaryRows mirrors the summary columns of MD_LIST_DIVES.

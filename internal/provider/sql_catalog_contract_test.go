@@ -216,6 +216,42 @@ data "motherduck_current_user" "test" {}
 	})
 }
 
+const computeUsageContractQuery = "SELECT * FROM MD_INFORMATION_SCHEMA.COMPUTE_USAGE WHERE lower(user_name) = lower('ETL_Service') AND start_time >= '2026-11-01T00:00:00Z'::TIMESTAMPTZ AND end_time <= '2026-11-02T00:00:00Z'::TIMESTAMPTZ ORDER BY start_time, user_name, duckling_id, is_read_scaling"
+
+func TestContractComputeUsageReadsTypedRows(t *testing.T) {
+	client := newCatalogSQL()
+	client.functions["md_compute_usage"] = true
+	client.rows[computeUsageContractQuery] = `[{"start_time":"2026-11-01T10:00:00Z","end_time":"2026-11-01T10:00:30Z","user_id":"ea8f3b1d-892f-4519-b479-9683360691db","user_name":"etl_service","duckling_size":"Standard","duckling_id":"d-1","is_read_scaling":false,"uptime_seconds":"30.000","duckling_size_multiplier":1.0,"queries":5},{"start_time":"2026-11-01T10:00:30Z","end_time":"2026-11-01T10:01:00Z","user_id":"ea8f3b1d-892f-4519-b479-9683360691db","user_name":"etl_service","duckling_size":"Pulse","duckling_id":"","is_read_scaling":null,"uptime_seconds":"12.500","duckling_size_multiplier":0.25,"queries":1}]`
+	resource.UnitTest(t, resource.TestCase{
+		ProtoV6ProviderFactories: contractProviderFactories(client),
+		Steps: []resource.TestStep{{
+			// The offset bound is sent in UTC.
+			Config: contractProviderConfig("http://127.0.0.1") + `
+data "motherduck_compute_usage" "test" {
+  username   = "ETL_Service"
+  start_time = "2026-11-01T01:00:00+01:00"
+  end_time   = "2026-11-02T00:00:00Z"
+}
+
+output "uptime" {
+  value = sum([for row in data.motherduck_compute_usage.test.rows : tonumber(row.uptime_seconds)])
+}
+`,
+			Check: resource.ComposeAggregateTestCheckFunc(
+				resource.TestCheckResourceAttr("data.motherduck_compute_usage.test", "rows.#", "2"),
+				resource.TestCheckResourceAttr("data.motherduck_compute_usage.test", "rows.0.duckling_size", "Standard"),
+				resource.TestCheckResourceAttr("data.motherduck_compute_usage.test", "rows.0.is_read_scaling", "false"),
+				resource.TestCheckResourceAttr("data.motherduck_compute_usage.test", "rows.0.queries", "5"),
+				resource.TestCheckResourceAttr("data.motherduck_compute_usage.test", "rows.1.duckling_size_multiplier", "0.25"),
+				resource.TestCheckResourceAttr("data.motherduck_compute_usage.test", "rows.1.duckling_id", ""),
+				resource.TestCheckNoResourceAttr("data.motherduck_compute_usage.test", "rows.1.is_read_scaling"),
+				resource.TestCheckResourceAttr("data.motherduck_compute_usage.test", "start_time", "2026-11-01T01:00:00+01:00"),
+				resource.TestCheckOutput("uptime", "42.5"),
+			),
+		}},
+	})
+}
+
 func TestContractCatalogDataSourceErrors(t *testing.T) {
 	storageQuery := "SELECT * FROM MD_INFORMATION_SCHEMA.STORAGE_INFO ORDER BY database_name, database_id, computed_ts"
 	for name, tc := range map[string]struct {
@@ -229,6 +265,26 @@ func TestContractCatalogDataSourceErrors(t *testing.T) {
 			},
 			config:    `data "motherduck_storage_info" "test" {}`,
 			wantError: "organization admin permission required",
+		},
+		"compute usage needs md_compute_usage": {
+			config:    `data "motherduck_compute_usage" "test" {}`,
+			wantError: "md_compute_usage is not exposed by the current MotherDuck SQL session",
+		},
+		"compute usage needs query history access": {
+			configure: func(c *catalogSQL) {
+				c.functions["md_compute_usage"] = true
+				c.rowsErr["SELECT * FROM MD_INFORMATION_SCHEMA.COMPUTE_USAGE ORDER BY start_time, user_name, duckling_id, is_read_scaling"] = errors.New("Invalid Error: MDExternalException: Missing permission for query history. Ask an organization admin to grant you access.")
+			},
+			config:    `data "motherduck_compute_usage" "test" {}`,
+			wantError: "MotherDuck query history access required",
+		},
+		"compute usage rejects an empty window": {
+			config:    `data "motherduck_compute_usage" "test" {` + "\n" + `  start_time = "2026-11-02T00:00:00Z"` + "\n" + `  end_time = "2026-11-01T00:00:00Z"` + "\n" + `}`,
+			wantError: "end_time 2026-11-01T00:00:00Z must be later than start_time",
+		},
+		"compute usage rejects a timestamp without an offset": {
+			config:    `data "motherduck_compute_usage" "test" {` + "\n" + `  start_time = "2026-11-01 00:00:00"` + "\n" + `}`,
+			wantError: "Invalid MotherDuck timestamp",
 		},
 		"share needs exactly one lookup": {
 			config:    `data "motherduck_share" "test" {}`,
