@@ -4,6 +4,10 @@ Each release has a versioned notes file under `release-notes/`, which is also th
 body of the matching [GitHub release](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
 This index lists the headline change for every release.
 
+## v0.3.11
+
+This release adds the `motherduck_compute_usage` data source for Duckling compute usage and rejects the `MOTHERDUCK_HOST` Flight configuration key, which MotherDuck now reserves. Version constraints such as `~> 0.3.0` select it. See the [v0.3.11 release notes](release-notes/v0.3.11.md).
+
 ## v0.3.10
 
 This release updates a `motherduck_secret` in place when its name changes only in ASCII letter case, instead of replacing it, and reads the correct secret when two names differ only in the case of a non-ASCII letter. Version constraints such as `~> 0.3.0` select it. See the [v0.3.10 release notes](release-notes/v0.3.10.md).
