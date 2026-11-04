@@ -53,6 +53,7 @@ func TestProviderRegistersResourcesAndDataSources(t *testing.T) {
 		"motherduck_active_accounts",
 		"motherduck_attached_databases",
 		"motherduck_buckets_for_secret",
+		"motherduck_compute_usage",
 		"motherduck_current_user",
 		"motherduck_current_user_tokens",
 		"motherduck_database",

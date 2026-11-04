@@ -228,6 +228,7 @@ func TestTypedRowsMatchLiveColumns(t *testing.T) {
 		"shared_with_me":      "name,url,owner,visibility,created_ts,updated_ts,update_mode,access",
 		"current_user_tokens": "token_name,token_type,created_ts,expire_at",
 		"storage_info":        "database_name,database_id,created_ts,deleted_ts,user_name,active_bytes,historical_bytes,retained_for_clone_bytes,failsafe_bytes,transient,historical_snapshot_retention,computed_ts",
+		"compute_usage":       "start_time,end_time,user_id,user_name,duckling_size,duckling_id,is_read_scaling,uptime_seconds,duckling_size_multiplier,queries",
 		"dives":               "id,title,description,owner_id,current_version,created_at,updated_at,owner_name,status,status_changed_at,status_set_by,status_applies_to_version,required_resources",
 		"dive":                "id,title,description,owner_id,current_version,created_at,updated_at,owner_name,status,status_changed_at,status_set_by,status_applies_to_version,version_id,version_storage_url,version_description,version_created_at,version_api_version,version_required_resources,content",
 		"dive_versions":       "id,version,storage_url,description,created_at,api_version,required_resources",

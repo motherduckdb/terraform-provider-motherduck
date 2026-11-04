@@ -44,6 +44,7 @@ func TestRowSpecsCoverPlannedSQLDataSources(t *testing.T) {
 		"guide_versions":      true,
 		"current_user_tokens": true,
 		"storage_info":        true,
+		"compute_usage":       true,
 	}
 	got := map[string]bool{}
 	for _, spec := range rowSpecs() {
@@ -222,6 +223,8 @@ func TestRowsSpecAttributesAreSupportedByConfigAndStateSwitches(t *testing.T) {
 		"run_number":         true,
 		"version":            true,
 		"include_history":    true,
+		"start_time":         true,
+		"end_time":           true,
 		"limit":              true,
 		"offset":             true,
 		"order":              true,
@@ -536,6 +539,7 @@ func TestRowsSpecSchemasExposeOnlyRelevantAttributes(t *testing.T) {
 		"guide_versions":      {"guide_id", "limit", "offset", "rows", "rows_json"},
 		"current_user_tokens": {"rows", "rows_json"},
 		"storage_info":        {"database_name", "include_history", "limit", "offset", "rows", "rows_json"},
+		"compute_usage":       {"username", "start_time", "end_time", "limit", "offset", "rows", "rows_json"},
 	}
 	for name, want := range tests {
 		t.Run(name, func(t *testing.T) {

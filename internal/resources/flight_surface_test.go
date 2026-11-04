@@ -18,13 +18,13 @@ import (
 )
 
 func TestInvalidFlightConfigKeyRejectsEveryReservedName(t *testing.T) {
-	for _, key := range []string{"MOTHERDUCK_TOKEN", "MOTHERDUCK_FLIGHTS_RUN", "MOTHERDUCK_FLIGHT_ID", "MOTHERDUCK_FLIGHT_RUN_ID"} {
+	for _, key := range []string{"MOTHERDUCK_TOKEN", "MOTHERDUCK_FLIGHTS_RUN", "MOTHERDUCK_FLIGHT_ID", "MOTHERDUCK_FLIGHT_RUN_ID", "MOTHERDUCK_HOST"} {
 		if detail := invalidFlightConfigKey(key); !strings.Contains(detail, "reserved") {
 			t.Fatalf("invalidFlightConfigKey(%q) = %q, want a reserved-name error", key, detail)
 		}
 	}
 	// MotherDuck matches reserved names exactly, so other spellings are allowed.
-	for _, key := range []string{"motherduck_flight_id", "MOTHERDUCK_FLIGHT_IDS", "WAREHOUSE"} {
+	for _, key := range []string{"motherduck_flight_id", "MOTHERDUCK_FLIGHT_IDS", "motherduck_host", "MOTHERDUCK_HOSTNAME", "WAREHOUSE"} {
 		if detail := invalidFlightConfigKey(key); detail != "" {
 			t.Fatalf("invalidFlightConfigKey(%q) = %q, want no error", key, detail)
 		}

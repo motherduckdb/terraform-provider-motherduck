@@ -2,12 +2,12 @@
 page_title: "motherduck_flight_logs Data Source - motherduck"
 subcategory: "Application definitions"
 description: |-
-  Reads line-oriented logs for one MotherDuck Flight run, in ascending line order. Without limit, MotherDuck returns only the most recent 1,000 lines. Set limit to read a window of lines from the start of the log, add offset to skip lines, and set order = "desc" to count the window from the end of the log instead. MotherDuck applies the window on the server, so large logs are not transferred in full. An offset without limit skips lines within the most recent 1,000.
+  Reads line-oriented logs for one MotherDuck Flight run, in ascending line order. Without limit, MotherDuck returns only the most recent 100 lines. Set limit to read a window of lines from the start of the log, add offset to skip lines, and set order = "desc" to count the window from the end of the log instead. MotherDuck applies the window on the server, so large logs are not transferred in full. An offset without limit skips lines within the most recent 100. Set limit to read more of a long log.
 ---
 
 # motherduck_flight_logs (Data Source)
 
-Reads line-oriented logs for one MotherDuck Flight run, in ascending line order. Without `limit`, MotherDuck returns only the most recent 1,000 lines. Set `limit` to read a window of lines from the start of the log, add `offset` to skip lines, and set `order = "desc"` to count the window from the end of the log instead. MotherDuck applies the window on the server, so large logs are not transferred in full. An `offset` without `limit` skips lines within the most recent 1,000.
+Reads line-oriented logs for one MotherDuck Flight run, in ascending line order. Without `limit`, MotherDuck returns only the most recent 100 lines. Set `limit` to read a window of lines from the start of the log, add `offset` to skip lines, and set `order = "desc"` to count the window from the end of the log instead. MotherDuck applies the window on the server, so large logs are not transferred in full. An `offset` without `limit` skips lines within the most recent 100. Set `limit` to read more of a long log.
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it after the referenced objects exist and with credentials that can read

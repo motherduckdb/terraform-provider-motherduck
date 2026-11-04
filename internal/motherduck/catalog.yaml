@@ -67,6 +67,7 @@ sql:
     - motherduck_version
     - motherduck_live_duckling_size
     - motherduck_storage_info
+    - motherduck_compute_usage
     - motherduck_buckets_for_secret
     - motherduck_files
     - motherduck_roles

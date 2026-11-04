@@ -80,9 +80,12 @@ update to MotherDuck.
 
 The provider validates at plan time that `source_code` is 1 to 204,800 bytes,
 that `requirements_txt` is at most 20,480 bytes, that `instance_type` is a
-MotherDuck size name (`F4`, `F8`, `F16`, or `F32`, case-sensitive), and that
+MotherDuck size name (`F4`, `F8`, `F16`, or `F32`, case-sensitive, although no
+plan currently offers `F8`), and that
 `config` does not use a reserved name: `MOTHERDUCK_TOKEN`, `MOTHERDUCK_FLIGHTS_RUN`,
-`MOTHERDUCK_FLIGHT_ID`, or `MOTHERDUCK_FLIGHT_RUN_ID`.
+`MOTHERDUCK_FLIGHT_ID`, `MOTHERDUCK_FLIGHT_RUN_ID`, or `MOTHERDUCK_HOST`.
+MotherDuck sets `MOTHERDUCK_HOST` to the API host of the region the run
+executes in, so a run connects to its own region with `duckdb.connect("md:")`.
 
 ## Lifecycle and import
 

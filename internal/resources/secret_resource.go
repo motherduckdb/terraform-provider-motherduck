@@ -336,8 +336,10 @@ func validateSecretConfig(config secretModel, diags *diag.Diagnostics) {
 
 // flightReservedParamNames are Flight run parameters that MotherDuck sets
 // itself. A FLIGHTS secret key with one of these names is exposed to the run
-// only under its <secret name>_<key> alias.
-var flightReservedParamNames = []string{"MOTHERDUCK_TOKEN", "MOTHERDUCK_FLIGHTS_RUN", "MOTHERDUCK_FLIGHT_ID", "MOTHERDUCK_FLIGHT_RUN_ID"}
+// only under its <secret name>_<key> alias, and a Flight config key with one
+// of these names is rejected. MOTHERDUCK_HOST carries the API host of the
+// region the run executes in.
+var flightReservedParamNames = []string{"MOTHERDUCK_TOKEN", "MOTHERDUCK_FLIGHTS_RUN", "MOTHERDUCK_FLIGHT_ID", "MOTHERDUCK_FLIGHT_RUN_ID", "MOTHERDUCK_HOST"}
 
 // flightSecretValues carries the fields that decide whether a FLIGHTS secret
 // is well formed. An empty Type means the type is not known yet.
