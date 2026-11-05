@@ -1,6 +1,10 @@
 package sqlcatalog
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
+)
 
 // SecretByName returns a query and its arguments that select the given
 // columns of the MotherDuck secret a configured name resolves to.
@@ -13,6 +17,16 @@ import "strings"
 func SecretByName(columns, name string) (string, []any) {
 	query := "SELECT " + columns + " FROM duckdb_secrets() WHERE lower(name) = lower(?) AND storage = 'motherduck' ORDER BY name = ? DESC, name LIMIT 1"
 	return query, []any{name, FoldSecretName(name)}
+}
+
+// SecretNameFilter returns a condition on duckdb_secrets() rows that keeps the
+// MotherDuck secrets a configured name resolves to, by the same rule as
+// SecretByName. When a secret has the stored spelling of the name, only that
+// secret matches. Otherwise every secret that lower() matches is kept.
+func SecretNameFilter(name string) string {
+	stored := sqlbuild.StringLiteral(FoldSecretName(name))
+	return "lower(name) = lower(" + sqlbuild.StringLiteral(name) + ") AND (name = " + stored +
+		" OR NOT EXISTS (SELECT 1 FROM duckdb_secrets() AS stored WHERE stored.storage = 'motherduck' AND stored.name = " + stored + "))"
 }
 
 // FoldSecretName returns the spelling DuckDB stores for a secret name.

@@ -451,7 +451,7 @@ func TestRowsSpecSecretsFiltersMotherDuckStorage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(query, "storage = 'motherduck'") || !strings.Contains(query, "lower(name) = lower('__default_s3')") {
+	if !strings.Contains(query, "storage = 'motherduck'") || !strings.Contains(query, "lower(name) = lower('__default_s3')") || !strings.Contains(query, "name = '__default_s3'") {
 		t.Fatalf("unexpected query: %s", query)
 	}
 	if strings.Contains(query, "secret_string") {

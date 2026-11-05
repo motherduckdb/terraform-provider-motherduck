@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/guideref"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlcatalog"
 )
 
 type rowSpec struct {
@@ -159,7 +160,9 @@ func rowSpecs() []rowSpec {
 		}, build: func(m rowsModel) (string, error) {
 			query := "SELECT name, type, provider, persistent, storage, scope::VARCHAR FROM duckdb_secrets() WHERE storage = 'motherduck'"
 			if !m.Name.IsNull() {
-				query += " AND lower(name) = lower(" + sqlbuild.StringLiteral(m.Name.ValueString()) + ")"
+				// lower() also folds non-ASCII letters, so it matches secrets
+				// such as "äpfel" for the name "Äpfel" that DuckDB keeps apart.
+				query += " AND " + sqlcatalog.SecretNameFilter(m.Name.ValueString())
 			}
 			return appendRowLimitOffset(query+" ORDER BY name", m), nil
 		}},
