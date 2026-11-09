@@ -95,6 +95,8 @@ Flight-run resources are deprecated. See [resource scope](docs/guides/resource-s
   resources, understand replacement, and protect data.
 - [Terraform best practices](docs/guides/terraform-best-practices.md): modules,
   dependency ordering, and production configuration.
+- [Troubleshooting](docs/guides/troubleshooting.md): common diagnostics, their
+  causes, and how to resolve them.
 
 Table column changes replace tables. Protect important data before adopting
 these examples. Token and secret values can be stored in state even when marked
