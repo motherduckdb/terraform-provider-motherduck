@@ -53,6 +53,10 @@ updates:
       # uv as the file header describes when Pulumi allows protobuf 7.
       - dependency-name: "protobuf"
         update-types: ["version-update:semver-major"]
+      # The pulumi SDK pin must equal PULUMI_CLI_VERSION in
+      # scripts/lib/pulumi-cli.sh, which Dependabot cannot update. Bump the
+      # CLI, bridge, and SDK pins together by hand. See the CI and release guide.
+      - dependency-name: "pulumi"
     groups:
       pulumi-python:
         patterns:

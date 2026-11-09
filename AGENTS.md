@@ -9,6 +9,29 @@ Repository-specific guidance for coding agents working on the MotherDuck Terrafo
 - Treat `internal/` as implementation detail, not as a stable public Go API.
 - Preserve the public provider source address: `registry.terraform.io/motherduckdb/motherduck`.
 
+## Where Things Are
+
+- `internal/provider`: provider configuration, registration, and the hermetic `TestContract*` lifecycle tests (build tag `contract`).
+- `internal/resources` and `internal/datasources`: one file per resource, and `catalog_specs.go` for catalog data sources.
+- `internal/client/sql` and `internal/client/rest`: the only packages that talk to MotherDuck. SQL runs on one serialized connection.
+- `internal/motherduck/catalog.yaml`: the inventory of REST paths and SQL surfaces the provider covers. Update it with every new resource or data source.
+- `templates/` and `examples/`: sources for everything under `docs/`. Never edit `docs/` by hand.
+- `docs/guides/troubleshooting.md`: user-facing diagnostics and fixes. Add a row when a change adds or rewords a diagnostic users act on.
+
+## Fast Feedback
+
+Run a focused check while iterating, then the full gate before pushing:
+
+```bash
+go test ./internal/resources -run 'TestName' -count=1
+go test -tags=contract ./internal/provider -run 'TestContractName' -count=1
+make docs
+```
+
+- Unit and contract tests need no credentials. They use in-memory DuckDB and fake SQL and REST clients.
+- State changes that drop data, such as replacing a table, database, or service account, need a test for the plan that must not replace.
+- Text spliced into SQL must be validated at plan time and again at apply time, because values unknown during planning skip plan-time validators.
+
 ## Writing
 
 - Do not use semicolons or em dashes in authored prose, comments, descriptions, or user-facing messages.

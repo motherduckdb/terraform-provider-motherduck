@@ -98,6 +98,16 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 			return nil
 		}
 		if _, err := execer.ExecContext(initCtx, "USE "+sqlbuild.QuoteIdentifier(i.defaultDatabase), nil); err != nil {
+			if isMissingUseTarget(err) {
+				// The default database was dropped after boot, for example by
+				// destroying the motherduck_database that the provider
+				// `database` argument names. Failing here would break every
+				// later operation, so the connection keeps the DuckDB default
+				// and later connections stop selecting the dropped database.
+				tflog.Debug(initCtx, "default MotherDuck database no longer exists, keeping the connection default", map[string]any{"database": i.defaultDatabase})
+				i.defaultDatabase = ""
+				return nil
+			}
 			return fmt.Errorf("select default database on new connection: %s", redactToken(err.Error(), i.token))
 		}
 		return nil
@@ -135,6 +145,14 @@ func (i *oneTimeInitializer) run(ctx context.Context, execer driver.ExecerContex
 	}
 	i.initialized = true
 	return nil
+}
+
+// isMissingUseTarget reports whether a USE statement failed because its
+// database no longer exists. DuckDB reports this as a catalog error such as
+// `SET schema: No catalog + schema named "analytics" found.`
+func isMissingUseTarget(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "catalog error") && strings.Contains(msg, "no catalog + schema named")
 }
 
 // isAuthenticationFailure reports whether MotherDuck refused the SQL token

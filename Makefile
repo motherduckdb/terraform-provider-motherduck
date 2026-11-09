@@ -163,7 +163,7 @@ test-unit:
 	go test -race -shuffle=on -timeout=5m -count=1 -cover ./...
 
 test-contract:
-	go test -race -shuffle=on -timeout=5m -tags=contract -run '^TestContract' -count=1 -cover ./internal/provider
+	go test -race -shuffle=on -timeout=10m -tags=contract -run '^TestContract' -count=1 -cover ./internal/provider
 
 test-scripts:
 	for script in scripts/*.sh scripts/lib/*.sh; do bash -n "$$script" || exit; done

@@ -111,6 +111,11 @@ verify_manifest_signature() {
   return "${result}"
 }
 
+# CLI_DOWNLOAD_CURL_ARGS are the curl arguments for every CLI download. Release
+# hosts answer with a transient 502, 503, or 504 often enough to fail a CI
+# matrix job, so each download is retried before the job gives up.
+CLI_DOWNLOAD_CURL_ARGS=(-fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 30 --retry 5 --retry-delay 2 --retry-all-errors)
+
 cleanup_cli_download() {
   local download_dir="$1"
   local download_archive="$2"
@@ -181,12 +186,12 @@ download_verified_archive() {
   local download_signature="${download_dir}/SHA256SUMS.sig"
   local -a cleanup_args=("${download_dir}" "${download_archive}" "${download_manifest}" "${download_signature}")
 
-  if ! curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 "${manifest_url}" -o "${download_manifest}"; then
+  if ! curl "${CLI_DOWNLOAD_CURL_ARGS[@]}" "${manifest_url}" -o "${download_manifest}"; then
     cleanup_cli_download "${cleanup_args[@]}" || true
     return 1
   fi
   if [[ "${check_signature}" == "true" ]]; then
-    if ! curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 "${signature_url}" -o "${download_signature}"; then
+    if ! curl "${CLI_DOWNLOAD_CURL_ARGS[@]}" "${signature_url}" -o "${download_signature}"; then
       cleanup_cli_download "${cleanup_args[@]}" || true
       return 1
     fi
@@ -195,7 +200,7 @@ download_verified_archive() {
       return 1
     fi
   fi
-  if ! curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 "${archive_url}" -o "${download_archive}"; then
+  if ! curl "${CLI_DOWNLOAD_CURL_ARGS[@]}" "${archive_url}" -o "${download_archive}"; then
     cleanup_cli_download "${cleanup_args[@]}" || true
     return 1
   fi

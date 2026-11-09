@@ -307,3 +307,45 @@ func TestOneTimeInitializerExplainsRejectedToken(t *testing.T) {
 		t.Fatalf("authentication error reads like an internal or network failure: %q", got)
 	}
 }
+
+// A default database that was dropped after boot must not break every later
+// connection. The reconnect keeps the DuckDB default and stops selecting it.
+func TestOneTimeInitializerSkipsDroppedDefaultDatabaseOnReconnect(t *testing.T) {
+	db, err := stdsql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	_, useErr := db.Exec(`USE "dropped_default"`)
+	if useErr == nil || !isMissingUseTarget(useErr) {
+		t.Fatalf("DuckDB error for a missing USE target = %v, want it recognized as a missing database", useErr)
+	}
+
+	initializer := &oneTimeInitializer{initialized: true, defaultDatabase: "dropped_default", token: "test-token"}
+	execer := &useFailingExecer{err: useErr}
+	if err := initializer.run(context.Background(), execer); err != nil {
+		t.Fatalf("reconnect after the default database was dropped = %v, want success", err)
+	}
+	if err := initializer.run(context.Background(), execer); err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(execer.queries); got != `[USE "dropped_default"]` {
+		t.Fatalf("reconnect queries = %s, want one USE attempt and none after it failed", got)
+	}
+
+	initializer = &oneTimeInitializer{initialized: true, defaultDatabase: "analytics", token: "test-token"}
+	err = initializer.run(context.Background(), &useFailingExecer{err: errors.New("IO Error: connection reset")})
+	if err == nil || !strings.Contains(err.Error(), "select default database on new connection") {
+		t.Fatalf("reconnect with a transport failure = %v, want the USE error", err)
+	}
+}
+
+type useFailingExecer struct {
+	queries []string
+	err     error
+}
+
+func (e *useFailingExecer) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+	e.queries = append(e.queries, query)
+	return nil, e.err
+}
