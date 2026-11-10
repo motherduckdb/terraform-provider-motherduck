@@ -60,6 +60,9 @@ resource "motherduck_table" "facts" {
   schema   = motherduck_schema.app.name
   name     = "facts"
   columns  = local.columns
+
+  primary_key = ["id"]
+  not_null    = ["label"]
 }
 
 resource "motherduck_view" "facts_v" {

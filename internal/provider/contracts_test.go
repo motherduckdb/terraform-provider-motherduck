@@ -542,6 +542,10 @@ func (c *contractSQL) QueryRow(_ context.Context, query string, args ...any) mds
 }
 
 func (c *contractSQL) QueryRowsJSON(_ context.Context, query string, args ...any) (string, error) {
+	if strings.Contains(query, "duckdb_constraints()") {
+		// These contracts manage tables without a primary key.
+		return "[]", nil
+	}
 	c.record("query-json", query, args...)
 	c.mu.Lock()
 	defer c.mu.Unlock()

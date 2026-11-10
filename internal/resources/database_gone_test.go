@@ -104,7 +104,7 @@ func TestChildDeletesTolerateDroppedDatabase(t *testing.T) {
 			client := &scriptedSQLClient{execErr: tc.execErr}
 			r := &tableResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
 			state := emptyResourceState(ctx, t, r)
-			model := tableModel{ID: types.StringValue("tf_gone.app.facts"), Database: types.StringValue("tf_gone"), Schema: types.StringValue("app"), Name: types.StringValue("facts"), Columns: types.MapNull(types.StringType)}
+			model := tableModel{ID: types.StringValue("tf_gone.app.facts"), Database: types.StringValue("tf_gone"), Schema: types.StringValue("app"), Name: types.StringValue("facts"), Columns: types.MapNull(types.StringType), ColumnOrder: types.ListNull(types.StringType), PrimaryKey: types.ListNull(types.StringType), NotNull: types.SetNull(types.StringType)}
 			if d := state.Set(ctx, &model); d.HasError() {
 				t.Fatal(d)
 			}

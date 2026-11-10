@@ -237,7 +237,8 @@ func TestTableModifyPlanExplainsUnresolvableColumnType(t *testing.T) {
 		return tableModel{
 			ID: types.StringValue("analytics.main.facts"), Database: types.StringValue("analytics"),
 			Schema: types.StringValue("main"), Name: types.StringValue("facts"),
-			Columns: types.MapValueMust(types.StringType, map[string]attr.Value{"m": types.StringValue(columnType)}),
+			Columns:     types.MapValueMust(types.StringType, map[string]attr.Value{"m": types.StringValue(columnType)}),
+			ColumnOrder: types.ListNull(types.StringType), PrimaryKey: types.ListNull(types.StringType), NotNull: types.SetNull(types.StringType),
 		}
 	}
 	state := tfsdk.State{Schema: schemaResp.Schema}
@@ -249,7 +250,7 @@ func TestTableModifyPlanExplainsUnresolvableColumnType(t *testing.T) {
 		t.Fatal(diags)
 	}
 	resp := &resource.ModifyPlanResponse{Plan: plan}
-	r.ModifyPlan(ctx, resource.ModifyPlanRequest{State: state, Plan: plan}, resp)
+	r.ModifyPlan(ctx, resource.ModifyPlanRequest{State: state, Plan: plan, Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: plan.Raw}}, resp)
 	if len(resp.RequiresReplace) != 0 || resp.Diagnostics.ErrorsCount() != 1 {
 		t.Fatalf("diagnostics = %v, replace = %v, want one error and no replacement", resp.Diagnostics, resp.RequiresReplace)
 	}

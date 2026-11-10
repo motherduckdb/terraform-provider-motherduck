@@ -76,6 +76,6 @@ access, so review effective access separately.
 
 Removing a tenant from `tenants` is the separate purge action and destroys its
 database and reader account. Snapshot or export data and review retention before
-purging. Changing table columns replaces the table. For disposable cleanup,
+purging. Changing a table column type replaces the table. For disposable cleanup,
 detach shares as readers, destroy this root as the writer with the admin
 credential available, then destroy the writer bootstrap last.

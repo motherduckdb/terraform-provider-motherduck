@@ -377,6 +377,10 @@ func (c *caseCatalogSQL) QueryRow(_ context.Context, query string, args ...any) 
 }
 
 func (c *caseCatalogSQL) QueryRowsJSON(_ context.Context, query string, args ...any) (string, error) {
+	if strings.Contains(query, "duckdb_constraints()") {
+		// These contracts manage tables without a primary key.
+		return "[]", nil
+	}
 	c.record("query-json", query)
 	c.mu.Lock()
 	defer c.mu.Unlock()

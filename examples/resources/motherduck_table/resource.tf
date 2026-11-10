@@ -17,4 +17,10 @@ resource "motherduck_table" "events" {
     occurred_at = "TIMESTAMP"
     payload     = "JSON"
   }
+
+  # Optional. Without column_order, a new table has its columns in
+  # alphabetical order.
+  column_order = ["event_id", "occurred_at", "payload"]
+  primary_key  = ["event_id"]
+  not_null     = ["occurred_at"]
 }

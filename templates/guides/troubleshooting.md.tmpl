@@ -49,7 +49,8 @@ to match another resource does not create a dependency.
 
 | Diagnostic | Cause | Resolution |
 | --- | --- | --- |
-| A table plan shows `must be replaced` after a column change | A table column change replaces the table and removes its rows. | Migrate the data with a reviewed SQL migration, or move schema ownership to the modeling tool. See the [table resource](../resources/table.md). |
+| A table plan shows `must be replaced` | The type of an existing column, the primary key, or the order of existing columns changed. Replacing the table removes its rows. Adding or dropping a column does not replace the table. | Migrate the data with a reviewed SQL migration, or move schema ownership to the modeling tool. See the [table resource](../resources/table.md). |
+| `Unable to update MotherDuck table` naming a `SET NOT NULL` statement | The column already holds a `NULL`, or a DuckLake table has no statistics for the column yet. | Backfill the column and apply again. Terraform recorded the statements that succeeded. |
 | `Unable to compare MotherDuck table column types` | The provider could not resolve a column type during planning, so it refused to plan a replacement. | Check connectivity. Qualify a user-defined type with its database and schema, such as `analytics.main.mood`, or write out its definition. |
 | `Service account description cannot change` | MotherDuck sets the description only when it creates the account. Replacing the account would delete its data. | Restore the previous description, or follow the steps in the message to record a new description without changing the account. |
 | `Unsupported MotherDuck database name spelling` | The new name differs from the existing one only in the case of a non-ASCII letter, which MotherDuck cannot attach. | Keep the existing spelling. |
