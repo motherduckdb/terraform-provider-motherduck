@@ -133,7 +133,7 @@ func (r *serviceAccountResource) Read(ctx context.Context, req resource.ReadRequ
 	// is the only source that says whether a username is a service account.
 	// The listing pages by offset and can skip a live user, so a username
 	// absent from it is removed only after a probe confirms it is gone.
-	user, err := findUser(ctx, client, state.Username.ValueString())
+	user, err := findUserForRefresh(ctx, client, state.Username.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read MotherDuck service account", err.Error())
 		return
@@ -337,6 +337,35 @@ func findUser(ctx context.Context, client *mdrest.Client, username string) (*mdr
 		}
 	}
 	return nil, nil
+}
+
+// userListingMaxAge is how long a refresh reuses an organization user listing.
+// It covers the refresh phase of one plan, where every managed service account
+// is read within seconds.
+const userListingMaxAge = time.Minute
+
+// findUserForRefresh is findUser for Read. It reuses a recent listing so that
+// refreshing many service accounts lists the organization once instead of
+// once per account. A username missing from a reused listing is looked up
+// again in a new listing, so an account created after the listing was fetched
+// is still found. Delete never uses it, because it must see the current
+// account type.
+func findUserForRefresh(ctx context.Context, client *mdrest.Client, username string) (*mdrest.User, error) {
+	reused := false
+	for _, serviceAccounts := range []bool{true, false} {
+		users, cached, err := client.ListUsersRecent(ctx, mdrest.ListUsersFilter{IsServiceAccount: &serviceAccounts}, userListingMaxAge)
+		if err != nil {
+			return nil, err
+		}
+		reused = reused || cached
+		if user := matchUsername(users, username); user != nil {
+			return user, nil
+		}
+	}
+	if !reused {
+		return nil, nil
+	}
+	return findUser(ctx, client, username)
 }
 
 func matchUsername(users []mdrest.User, username string) *mdrest.User {
