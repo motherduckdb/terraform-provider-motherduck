@@ -99,6 +99,7 @@ func TestCreateReadbackFailureKeepsCleanupState(t *testing.T) {
 				case "secret":
 					r = &secretResource{baseResource: base}
 					model = &secretModel{
+						ParamsWO: types.MapNull(types.StringType), FlightParamsWO: types.MapNull(types.StringType),
 						Name: types.StringValue("tf_readback"), Type: types.StringValue("s3"), ID: types.StringUnknown(),
 						SecretProvider: types.StringUnknown(), Params: types.MapNull(types.StringType), FlightParams: types.MapNull(types.StringType), Storage: types.StringUnknown(),
 						Scope: types.StringUnknown(), SecretSQL: types.StringNull(),

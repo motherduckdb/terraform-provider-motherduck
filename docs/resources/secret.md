@@ -28,9 +28,51 @@ example `[mybucket]`. When `params` sets `scope`, planning renders the
 configured value the same way and plans an update only when the live scope
 differs.
 
-MotherDuck redacts secret values on reads, but the configured values are still
-stored in Terraform state. Here, "write-only" describes the service response,
-not Terraform write-only arguments. Protect state and saved plans.
+MotherDuck redacts secret values on reads. Values set in `params` and
+`flight_params` are still stored in Terraform state and saved plans, so protect
+both.
+
+## Keep values out of state
+
+With Terraform 1.11 or later, set the values in `params_wo` or
+`flight_params_wo` instead. Terraform sends these write-only arguments to
+MotherDuck and stores them in neither the plan nor the state. They take the
+same keys as `params` and `flight_params`, and each cannot be combined with its
+stored form.
+
+Terraform cannot detect a change in a value it does not store. Set
+`params_wo_version` to a number and change it whenever the values change. That
+change plans an in-place update, which writes the current values. To move an
+existing secret, replace `params` with `params_wo`, add `params_wo_version`,
+and apply. The update rewrites the secret and removes the values from state.
+Earlier state versions kept by the backend still contain them.
+
+```terraform
+resource "motherduck_secret" "s3" {
+  name = "analytics_s3"
+  type = "s3"
+
+  # Sent to MotherDuck on create and whenever params_wo_version changes.
+  # Not stored in the plan or the state. Requires Terraform 1.11 or later.
+  params_wo = {
+    key_id = var.aws_access_key_id
+    secret = var.aws_secret_access_key
+    region = "us-east-1"
+    scope  = "s3://analytics-bucket/"
+  }
+  params_wo_version = 1
+}
+
+variable "aws_access_key_id" {
+  type      = string
+  sensitive = true
+}
+
+variable "aws_secret_access_key" {
+  type      = string
+  sensitive = true
+}
+```
 
 Import recovers public metadata, not credential values. Supply the intended
 secret body deliberately before a rotation or update. See
@@ -129,8 +171,13 @@ variable "partner_api_key" {
 
 ### Optional
 
+> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
+
 - `flight_params` (Map of String, Sensitive) Sensitive key and value pairs of a `flights` secret, sent as `PARAMS MAP {...}`. Required when `type = "flights"` unless `secret_sql` supplies `PARAMS`, and only valid for that type. A Flight that attaches the secret receives each pair as the environment variables `<key>` and `<secret name>_<key>`. MotherDuck redacts the values on read, so import cannot recover them.
+- `flight_params_wo` (Map of String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only form of `flight_params`. Terraform sends the values to MotherDuck and stores them in neither the plan nor the state. Requires Terraform 1.11 or later. Cannot be combined with `flight_params`, and requires `params_wo_version`.
 - `params` (Map of String, Sensitive) Sensitive secret parameters inserted into the CREATE SECRET statement. Not valid for `flights` secrets, which use `flight_params`.
+- `params_wo` (Map of String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only form of `params`. Terraform sends the values to MotherDuck and stores them in neither the plan nor the state. Requires Terraform 1.11 or later. Cannot be combined with `params`, and requires `params_wo_version`.
+- `params_wo_version` (Number) Version of the write-only values. Terraform cannot detect a change in `params_wo` or `flight_params_wo` because it does not store them, so change this number to write new values to MotherDuck.
 - `secret_provider` (String) Optional DuckDB secret provider.
 - `secret_sql` (String, Sensitive) Optional raw secret body entries, for advanced provider-specific clauses. Values are inserted inside the CREATE SECRET parentheses after TYPE/PROVIDER.
 
