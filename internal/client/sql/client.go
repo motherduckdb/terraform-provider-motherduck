@@ -30,13 +30,50 @@ type Client struct {
 	db      *sql.DB
 	semOnce sync.Once
 	sem     chan struct{}
+	// statementTimeout overrides DefaultStatementTimeout when positive.
+	statementTimeout time.Duration
 }
+
+// DefaultStatementTimeout bounds one SQL statement whose context carries no
+// deadline. Terraform gives most operations no deadline, so without this bound
+// a statement that MotherDuck never answers would hang the run until it is
+// interrupted. Resources with a `timeouts` block set their own deadline, which
+// takes precedence.
+const DefaultStatementTimeout = 30 * time.Minute
 
 type Row struct {
 	row     *sql.Row
 	err     error
 	release func()
+	wrap    func(error) error
 	once    sync.Once
+}
+
+// statementContext returns the context for one admitted statement. A context
+// that already has a deadline is returned unchanged. The time spent waiting
+// for admission behind another statement is not counted.
+func (c *Client) statementContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, c.statementLimit())
+}
+
+func (c *Client) statementLimit() time.Duration {
+	if c.statementTimeout > 0 {
+		return c.statementTimeout
+	}
+	return DefaultStatementTimeout
+}
+
+// statementError names the default statement deadline when it, and not the
+// caller, ended the statement. DuckDB reports the interrupt without saying
+// why the statement was stopped.
+func (c *Client) statementError(parent, statement context.Context, err error) error {
+	if err == nil || parent.Err() != nil || !errors.Is(statement.Err(), context.DeadlineExceeded) {
+		return err
+	}
+	return fmt.Errorf("MotherDuck SQL statement did not finish within %s and was canceled: %w", c.statementLimit(), err)
 }
 
 // RowScanner is the narrow result contract consumed by provider resources and
@@ -226,7 +263,11 @@ func (r *Row) Scan(dest ...any) error {
 	if r.err != nil {
 		return r.err
 	}
-	return r.row.Scan(dest...)
+	err := r.row.Scan(dest...)
+	if r.wrap != nil {
+		err = r.wrap(err)
+	}
+	return err
 }
 
 func New(ctx context.Context, cfg Config) (*Client, error) {
@@ -320,7 +361,9 @@ func (c *Client) Exec(ctx context.Context, query string, args ...any) error {
 		return err
 	}
 	defer c.release()
-	return execOn(ctx, c.db, query, args...)
+	statementCtx, cancel := c.statementContext(ctx)
+	defer cancel()
+	return c.statementError(ctx, statementCtx, execOn(statementCtx, c.db, query, args...))
 }
 
 func execOn(ctx context.Context, session sqlSession, query string, args ...any) error {
@@ -351,6 +394,9 @@ func (c *Client) WithDatabaseUse(ctx context.Context, database string, fn func(e
 		return err
 	}
 	defer c.release()
+	parent := ctx
+	ctx, cancelStatement := c.statementContext(ctx)
+	defer cancelStatement()
 
 	// A dedicated connection lets the scope discard it when the previous
 	// database cannot be restored, so later operations never inherit the
@@ -375,7 +421,7 @@ func (c *Client) WithDatabaseUse(ctx context.Context, database string, fn func(e
 	}
 	if err := execOn(ctx, conn, "USE "+sqlbuild.QuoteIdentifier(database)); err != nil {
 		discard = true
-		return err
+		return c.statementError(parent, ctx, err)
 	}
 	// Discard the connection unless the previous database is restored, which
 	// also covers a panic inside fn.
@@ -391,7 +437,7 @@ func (c *Client) WithDatabaseUse(ctx context.Context, database string, fn func(e
 		return errors.Join(runErr, fmt.Errorf("restore previous database %q: %w", previous, restoreErr))
 	}
 	discard = false
-	return runErr
+	return c.statementError(parent, ctx, runErr)
 }
 
 // QueryRow holds the client's single admission slot until Scan is called on
@@ -407,9 +453,15 @@ func (c *Client) QueryRow(ctx context.Context, query string, args ...any) RowSca
 	if err := c.acquire(ctx); err != nil {
 		return &Row{err: err}
 	}
+	statementCtx, cancel := c.statementContext(ctx)
 	return &Row{
-		row:     c.db.QueryRowContext(ctx, query, args...),
-		release: c.release,
+		row: c.db.QueryRowContext(statementCtx, query, args...),
+		// The statement context must outlive Scan, which reads the row.
+		release: func() {
+			cancel()
+			c.release()
+		},
+		wrap: func(err error) error { return c.statementError(ctx, statementCtx, err) },
 	}
 }
 
@@ -424,7 +476,10 @@ func (c *Client) QueryRowsJSON(ctx context.Context, query string, args ...any) (
 		return "", err
 	}
 	defer c.release()
-	rows, err := c.db.QueryContext(ctx, query, args...)
+	statementCtx, cancel := c.statementContext(ctx)
+	defer cancel()
+	defer func() { err = c.statementError(ctx, statementCtx, err) }()
+	rows, err := c.db.QueryContext(statementCtx, query, args...)
 	if err != nil {
 		return "", err
 	}
@@ -484,7 +539,10 @@ func (c *Client) ScalarString(ctx context.Context, query string, args ...any) (s
 		return "", err
 	}
 	defer c.release()
-	return scalarStringOn(ctx, c.db, query, args...)
+	statementCtx, cancel := c.statementContext(ctx)
+	defer cancel()
+	value, err := scalarStringOn(statementCtx, c.db, query, args...)
+	return value, c.statementError(ctx, statementCtx, err)
 }
 
 func scalarStringOn(ctx context.Context, session sqlSession, query string, args ...any) (string, error) {
@@ -506,9 +564,11 @@ func (c *Client) Exists(ctx context.Context, query string, args ...any) (bool, e
 		return false, err
 	}
 	defer c.release()
+	statementCtx, cancel := c.statementContext(ctx)
+	defer cancel()
 	var count int
-	if err := c.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
-		return false, err
+	if err := c.db.QueryRowContext(statementCtx, query, args...).Scan(&count); err != nil {
+		return false, c.statementError(ctx, statementCtx, err)
 	}
 	return count > 0, nil
 }

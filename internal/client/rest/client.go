@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -31,6 +32,20 @@ type Client struct {
 	token      string
 	userAgent  string
 	httpClient *http.Client
+	users      *userListCache
+}
+
+// userListCache holds recent GET /v1/users listings. A refresh reads one
+// listing per managed service account, so without it an organization with
+// many service accounts walks the whole user list once per account.
+type userListCache struct {
+	mu      sync.Mutex
+	entries map[string]userListEntry
+}
+
+type userListEntry struct {
+	users   []User
+	fetched time.Time
 }
 
 // options collects Option values before the client is built, so the result
@@ -101,6 +116,7 @@ func New(baseURL, token string, opts ...Option) (*Client, error) {
 		token:      strings.TrimSpace(token),
 		userAgent:  o.userAgent,
 		httpClient: httpClient,
+		users:      &userListCache{entries: map[string]userListEntry{}},
 	}, nil
 }
 
@@ -152,11 +168,58 @@ func (c *Client) Available() bool {
 func (c *Client) CreateServiceAccount(ctx context.Context, req CreateServiceAccountRequest) (*ServiceAccount, error) {
 	var out ServiceAccount
 	err := c.do(ctx, http.MethodPost, "/v1/users", req, &out)
+	c.forgetUsers()
 	return &out, err
 }
 
 func (c *Client) DeleteUser(ctx context.Context, username string) error {
-	return c.do(ctx, http.MethodDelete, "/v1/users/"+url.PathEscape(username), nil, nil)
+	err := c.do(ctx, http.MethodDelete, "/v1/users/"+url.PathEscape(username), nil, nil)
+	c.forgetUsers()
+	return err
+}
+
+// forgetUsers drops the cached listings after a write that changes them.
+func (c *Client) forgetUsers() {
+	if c == nil || c.users == nil {
+		return
+	}
+	c.users.mu.Lock()
+	c.users.entries = map[string]userListEntry{}
+	c.users.mu.Unlock()
+}
+
+// ListUsersRecent returns a listing fetched at most maxAge ago, or fetches a
+// new one. cached reports whether the result came from an earlier fetch.
+// Concurrent callers wait for one fetch and share its result. Use it only
+// where a slightly old listing is acceptable and a miss is confirmed with
+// ListUsers, never to decide a delete.
+func (c *Client) ListUsersRecent(ctx context.Context, filter ListUsersFilter, maxAge time.Duration) (users []User, cached bool, err error) {
+	if c == nil || c.users == nil {
+		users, err = c.ListUsers(ctx, filter)
+		return users, false, err
+	}
+	key := filter.cacheKey()
+	c.users.mu.Lock()
+	defer c.users.mu.Unlock()
+	if entry, ok := c.users.entries[key]; ok && time.Since(entry.fetched) <= maxAge {
+		return entry.users, true, nil
+	}
+	users, err = c.ListUsers(ctx, filter)
+	if err != nil {
+		return nil, false, err
+	}
+	c.users.entries[key] = userListEntry{users: users, fetched: time.Now()}
+	return users, false, nil
+}
+
+func (f ListUsersFilter) cacheKey() string {
+	part := func(value *bool) string {
+		if value == nil {
+			return "any"
+		}
+		return strconv.FormatBool(*value)
+	}
+	return part(f.IsServiceAccount) + "/" + part(f.IsDeprovisioned)
 }
 
 func (c *Client) CreateToken(ctx context.Context, username string, req CreateTokenRequest) (*Token, error) {
