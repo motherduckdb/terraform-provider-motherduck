@@ -161,7 +161,7 @@ Destroying `motherduck_database` drops the database and contained objects, inclu
 
 `motherduck_schema` destroys restrictively by default so Terraform does not silently remove unmanaged tables or views. Set `cascade_on_delete = true` only for schemas where Terraform is intentionally responsible for cleaning up everything left inside the schema at destroy time.
 
-Table column changes replace `motherduck_table`. MotherDuck allows dropping the table even if an unmanaged view depends on it, so an unmanaged view can become invalid when the replacement removes referenced columns. Manage dependent views in Terraform, or keep table replacements compatible with unmanaged views that must continue working.
+Adding or dropping a `motherduck_table` column updates the table in place. Changing a column type, the primary key, or the order of existing columns replaces the table. MotherDuck allows dropping a table or a column even if an unmanaged view depends on it, so an unmanaged view can become invalid when a change removes referenced columns. Manage dependent views in Terraform, or keep table changes compatible with unmanaged views that must continue working.
 
 `motherduck_view` stores the server-rendered view definition in Terraform private state after create and update. User configuration stays authoritative in visible state, while out-of-band changes to the live `information_schema.views` definition appear as drift and are repaired by the next apply. View queries must be a single SELECT body and must not contain semicolons.
 

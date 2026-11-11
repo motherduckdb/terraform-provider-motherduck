@@ -98,7 +98,7 @@ Flight-run resources are deprecated. See [resource scope](docs/guides/resource-s
 - [Troubleshooting](docs/guides/troubleshooting.md): common diagnostics, their
   causes, and how to resolve them.
 
-Table column changes replace tables. Protect important data before adopting
+Changing a table column type or primary key replaces the table. Protect important data before adopting
 these examples. Token and secret values can be stored in state even when marked
 sensitive, so use an encrypted backend with restricted access and locking.
 

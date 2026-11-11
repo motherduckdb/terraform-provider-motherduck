@@ -112,7 +112,8 @@ See [authentication and account ownership](guides/authentication.md).
 - Use separate accounts and state for independent environments. Two tokens for
   the same account do not isolate its data.
 - Read the resource's lifecycle notes before changing names or table columns.
-  A table schema change replaces the table.
+  Changing a column type or the primary key replaces the table and its rows.
+  Adding or dropping a column updates it in place.
 - Store state and saved plans in an encrypted, access-controlled backend.
   `sensitive` masks output, but secrets can still be stored in state.
 - Assign each object to one deployment tool. Terraform and dbt or Blueprints
