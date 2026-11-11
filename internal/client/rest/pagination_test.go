@@ -7,7 +7,9 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestClientPaginationCursorPrecedence(t *testing.T) {
@@ -185,5 +187,47 @@ func TestCollectPagesEmptyListingEncodesAsEmptyArray(t *testing.T) {
 				t.Fatalf("empty listing encodes as %s, want []", encoded)
 			}
 		})
+	}
+}
+
+func TestClientListUsersRecentReusesAListingUntilAWrite(t *testing.T) {
+	var listings atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			listings.Add(1)
+			_, _ = fmt.Fprint(w, `{"users":[{"id":"1","username":"svc","is_service_account":true}]}`)
+		case http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		}
+	}))
+	defer server.Close()
+	client, err := New(server.URL, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	serviceAccounts := true
+	filter := ListUsersFilter{IsServiceAccount: &serviceAccounts}
+
+	for i, wantCached := range []bool{false, true, true} {
+		users, cached, err := client.ListUsersRecent(t.Context(), filter, time.Minute)
+		if err != nil || len(users) != 1 || cached != wantCached {
+			t.Fatalf("read %d = %v, cached %t, %v, want one user and cached %t", i, users, cached, err, wantCached)
+		}
+	}
+	if _, cached, err := client.ListUsersRecent(t.Context(), ListUsersFilter{}, time.Minute); err != nil || cached {
+		t.Fatalf("another filter must fetch its own listing, cached %t, %v", cached, err)
+	}
+	if _, cached, err := client.ListUsersRecent(t.Context(), filter, -1); err != nil || cached {
+		t.Fatalf("an expired listing must be fetched again, cached %t, %v", cached, err)
+	}
+	if err := client.DeleteUser(t.Context(), "svc"); err != nil {
+		t.Fatal(err)
+	}
+	if _, cached, err := client.ListUsersRecent(t.Context(), filter, time.Minute); err != nil || cached {
+		t.Fatalf("a listing must be fetched again after a delete, cached %t, %v", cached, err)
+	}
+	if got := listings.Load(); got != 4 {
+		t.Fatalf("listings fetched = %d, want 4", got)
 	}
 }

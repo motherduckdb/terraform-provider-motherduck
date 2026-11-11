@@ -349,3 +349,49 @@ func (e *useFailingExecer) ExecContext(_ context.Context, query string, _ []driv
 	e.queries = append(e.queries, query)
 	return nil, e.err
 }
+
+// A statement with no caller deadline is bounded by the client, and the error
+// names that bound. A caller deadline is left alone.
+func TestStatementDeadlineBoundsStatementsWithoutCallerDeadline(t *testing.T) {
+	db, err := stdsql.Open("duckdb", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = db.Close() })
+	client := &Client{db: db, statementTimeout: 100 * time.Millisecond}
+	const slow = "SELECT count(*) FROM range(100000000000) AS a(i) WHERE i % 7 = 3"
+
+	checks := map[string]func() error{
+		"Exec":          func() error { return client.Exec(context.Background(), slow) },
+		"ScalarString":  func() error { _, err := client.ScalarString(context.Background(), slow); return err },
+		"Exists":        func() error { _, err := client.Exists(context.Background(), slow); return err },
+		"QueryRowsJSON": func() error { _, err := client.QueryRowsJSON(context.Background(), slow); return err },
+		"QueryRow": func() error {
+			var count int64
+			return client.QueryRow(context.Background(), slow).Scan(&count)
+		},
+	}
+	for name, run := range checks {
+		started := time.Now()
+		err := run()
+		if err == nil || !strings.Contains(err.Error(), "did not finish within 100ms") {
+			t.Errorf("%s error = %v, want the statement deadline named", name, err)
+		}
+		if elapsed := time.Since(started); elapsed > 20*time.Second {
+			t.Errorf("%s took %s, want the statement canceled near its deadline", name, elapsed)
+		}
+	}
+
+	// The client stays usable, and a fast statement is unaffected.
+	if got, err := client.ScalarString(context.Background(), "SELECT 'ok'"); err != nil || got != "ok" {
+		t.Fatalf("statement after a timeout = %q, %v", got, err)
+	}
+
+	callerCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err = client.Exec(callerCtx, slow)
+	if err == nil || strings.Contains(err.Error(), "did not finish within") {
+		t.Fatalf("caller deadline error = %v, want the caller error without the client bound", err)
+	}
+}
