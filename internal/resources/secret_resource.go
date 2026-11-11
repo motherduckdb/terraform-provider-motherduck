@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/retry"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlbuild"
@@ -32,6 +33,11 @@ type secretModel struct {
 	Storage        types.String `tfsdk:"storage"`
 	Scope          types.String `tfsdk:"scope"`
 	SecretSQL      types.String `tfsdk:"secret_sql"`
+	// Write-only arguments are null in plan and state. Their values are read
+	// from the configuration when the secret is written.
+	ParamsWO        types.Map   `tfsdk:"params_wo"`
+	FlightParamsWO  types.Map   `tfsdk:"flight_params_wo"`
+	ParamsWOVersion types.Int64 `tfsdk:"params_wo_version"`
 }
 
 func NewSecretResource() resource.Resource { return &secretResource{} }
@@ -79,6 +85,24 @@ func (r *secretResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				ElementType:         types.StringType,
 				MarkdownDescription: "Sensitive key and value pairs of a `flights` secret, sent as `PARAMS MAP {...}`. Required when `type = \"flights\"` unless `secret_sql` supplies `PARAMS`, and only valid for that type. A Flight that attaches the secret receives each pair as the environment variables `<key>` and `<secret name>_<key>`. MotherDuck redacts the values on read, so import cannot recover them.",
 			},
+			"params_wo": schema.MapAttribute{
+				Optional:            true,
+				Sensitive:           true,
+				WriteOnly:           true,
+				ElementType:         types.StringType,
+				MarkdownDescription: "Write-only form of `params`. Terraform sends the values to MotherDuck and stores them in neither the plan nor the state. Requires Terraform 1.11 or later. Cannot be combined with `params`, and requires `params_wo_version`.",
+			},
+			"flight_params_wo": schema.MapAttribute{
+				Optional:            true,
+				Sensitive:           true,
+				WriteOnly:           true,
+				ElementType:         types.StringType,
+				MarkdownDescription: "Write-only form of `flight_params`. Terraform sends the values to MotherDuck and stores them in neither the plan nor the state. Requires Terraform 1.11 or later. Cannot be combined with `flight_params`, and requires `params_wo_version`.",
+			},
+			"params_wo_version": schema.Int64Attribute{
+				Optional:            true,
+				MarkdownDescription: "Version of the write-only values. Terraform cannot detect a change in `params_wo` or `flight_params_wo` because it does not store them, so change this number to write new values to MotherDuck.",
+			},
 			"storage": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Secret storage backend reported by DuckDB.",
@@ -106,7 +130,7 @@ func (r *secretResource) ValidateConfig(ctx context.Context, req resource.Valida
 }
 
 func (r *secretResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	r.createSecret(ctx, req.Plan, &resp.State, false, &resp.Diagnostics)
+	r.writeSecret(ctx, req.Plan, secretConfig(req.Config), &resp.State, false, &resp.Diagnostics)
 }
 
 func (r *secretResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -124,7 +148,7 @@ func (r *secretResource) Read(ctx context.Context, req resource.ReadRequest, res
 }
 
 func (r *secretResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	r.createSecret(ctx, req.Plan, &resp.State, true, &resp.Diagnostics)
+	r.writeSecret(ctx, req.Plan, secretConfig(req.Config), &resp.State, true, &resp.Diagnostics)
 }
 
 func (r *secretResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
@@ -139,6 +163,9 @@ func (r *secretResource) ModifyPlan(ctx context.Context, req resource.ModifyPlan
 		return
 	}
 	desiredScope, ok := desiredSecretScopeFromParams(config.Params)
+	if !ok {
+		desiredScope, ok = desiredSecretScopeFromParams(config.ParamsWO)
+	}
 	if !ok || state.Scope.IsNull() || state.Scope.IsUnknown() {
 		return
 	}
@@ -199,7 +226,28 @@ func (r *secretResource) ImportState(ctx context.Context, req resource.ImportSta
 	importSingleSQLIdentifier(ctx, req.ID, path.Root("name"), resp)
 }
 
+// configAttributeGetter matches *tfsdk.Config, the only place write-only
+// values exist.
+type configAttributeGetter interface {
+	GetAttribute(context.Context, path.Path, any) diag.Diagnostics
+}
+
+// secretConfig returns the configuration as a write-only value source, or
+// nil for a request built without one.
+func secretConfig(config tfsdk.Config) configAttributeGetter {
+	if config.Schema == nil {
+		return nil
+	}
+	return &config
+}
+
 func (r *secretResource) createSecret(ctx context.Context, getter stateGetter, setter stateSetter, replace bool, diags *diag.Diagnostics) {
+	r.writeSecret(ctx, getter, nil, setter, replace, diags)
+}
+
+// writeSecret creates or replaces the secret. config supplies the write-only
+// values, which the plan never carries. It is nil when the caller has none.
+func (r *secretResource) writeSecret(ctx context.Context, getter stateGetter, config configAttributeGetter, setter stateSetter, replace bool, diags *diag.Diagnostics) {
 	client := r.sql(ctx, diags)
 	if client == nil {
 		return
@@ -209,14 +257,35 @@ func (r *secretResource) createSecret(ctx context.Context, getter stateGetter, s
 	if diags.HasError() {
 		return
 	}
+	paramsValue, flightParamsValue := plan.Params, plan.FlightParams
+	if config != nil {
+		var paramsWO, flightParamsWO types.Map
+		diags.Append(config.GetAttribute(ctx, path.Root("params_wo"), &paramsWO)...)
+		diags.Append(config.GetAttribute(ctx, path.Root("flight_params_wo"), &flightParamsWO)...)
+		if diags.HasError() {
+			return
+		}
+		// Re-check on the resolved configuration, because values unknown at
+		// plan time skipped the plan-time checks.
+		validateSecretWriteOnly(plan.Params, paramsWO, plan.FlightParams, flightParamsWO, plan.ParamsWOVersion, diags)
+		if diags.HasError() {
+			return
+		}
+		if !paramsWO.IsNull() {
+			paramsValue = paramsWO
+		}
+		if !flightParamsWO.IsNull() {
+			flightParamsValue = flightParamsWO
+		}
+	}
 	params := map[string]string{}
-	if !plan.Params.IsNull() {
-		diags.Append(plan.Params.ElementsAs(ctx, &params, false)...)
+	if !paramsValue.IsNull() {
+		diags.Append(paramsValue.ElementsAs(ctx, &params, false)...)
 	}
 	var flightParams map[string]string
-	if !plan.FlightParams.IsNull() {
+	if !flightParamsValue.IsNull() {
 		flightParams = map[string]string{}
-		diags.Append(plan.FlightParams.ElementsAs(ctx, &flightParams, false)...)
+		diags.Append(flightParamsValue.ElementsAs(ctx, &flightParams, false)...)
 	}
 	if diags.HasError() {
 		return
@@ -323,6 +392,15 @@ func (r *secretResource) readSecret(ctx context.Context, model *secretModel, dia
 // plan time. `type` and `secret_provider` are covered by their attribute
 // validators at plan time, so only params and secret_sql are checked here.
 func validateSecretConfig(config secretModel, diags *diag.Diagnostics) {
+	validateSecretWriteOnly(config.Params, config.ParamsWO, config.FlightParams, config.FlightParamsWO, config.ParamsWOVersion, diags)
+	// The write-only arguments carry the same content as their stored
+	// forms, so the remaining checks read whichever one is set.
+	if config.Params.IsNull() {
+		config.Params = config.ParamsWO
+	}
+	if config.FlightParams.IsNull() {
+		config.FlightParams = config.FlightParamsWO
+	}
 	values := secretValidationValues{}
 	if !config.Params.IsNull() && !config.Params.IsUnknown() {
 		values.ParamKeys = slices.Sorted(maps.Keys(config.Params.Elements()))
@@ -332,6 +410,32 @@ func validateSecretConfig(config secretModel, diags *diag.Diagnostics) {
 	}
 	validateSecretValues(values, diags)
 	validateFlightSecretConfig(config, diags)
+}
+
+// validateSecretWriteOnly checks the write-only arguments against their
+// stored forms. A write-only value and its stored form cannot both be set,
+// and a write-only value needs params_wo_version, the only signal Terraform
+// has that the value changed.
+func validateSecretWriteOnly(params, paramsWO, flightParams, flightParamsWO types.Map, version types.Int64, diags *diag.Diagnostics) {
+	// A value that depends on a variable is unknown during validation and can
+	// still resolve to null, so only known values decide a conflict.
+	isSet := func(value types.Map) bool { return !value.IsNull() && !value.IsUnknown() }
+	if isSet(params) && isSet(paramsWO) {
+		diags.AddAttributeError(path.Root("params_wo"), "Conflicting MotherDuck secret parameters", "Set either `params` or `params_wo`, not both. `params_wo` keeps the values out of Terraform state.")
+	}
+	if isSet(flightParams) && isSet(flightParamsWO) {
+		diags.AddAttributeError(path.Root("flight_params_wo"), "Conflicting MotherDuck secret parameters", "Set either `flight_params` or `flight_params_wo`, not both. `flight_params_wo` keeps the values out of Terraform state.")
+	}
+	if paramsWO.IsUnknown() || flightParamsWO.IsUnknown() || version.IsUnknown() {
+		return
+	}
+	usesWriteOnly := isSet(paramsWO) || isSet(flightParamsWO)
+	if usesWriteOnly && version.IsNull() {
+		diags.AddAttributeError(path.Root("params_wo_version"), "Missing MotherDuck secret write-only version", "`params_wo` and `flight_params_wo` require `params_wo_version`. Terraform does not store write-only values, so it writes new values to MotherDuck only when this number changes.")
+	}
+	if !usesWriteOnly && !version.IsNull() {
+		diags.AddAttributeError(path.Root("params_wo_version"), "Unused MotherDuck secret write-only version", "`params_wo_version` has an effect only with `params_wo` or `flight_params_wo`. Remove it, or move the secret values to a write-only argument.")
+	}
 }
 
 // flightReservedParamNames are Flight run parameters that MotherDuck sets

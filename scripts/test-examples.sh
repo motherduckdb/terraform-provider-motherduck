@@ -30,6 +30,16 @@ terraform_supports_ephemeral_examples() {
   return 1
 }
 
+# Write-only arguments need Terraform 1.11 or OpenTofu 1.11.
+terraform_supports_write_only_examples() {
+  local version="$1"
+  local major
+  local minor
+
+  IFS=. read -r major minor _ <<<"${version}"
+  [[ "${major}" =~ ^[0-9]+$ && "${minor}" =~ ^[0-9]+$ ]] && ((major > 1 || (major == 1 && minor >= 11)))
+}
+
 TERRAFORM_CLI_VERSION="$(terraform_cli_version)"
 if terraform_supports_ephemeral_examples "${TERRAFORM_CLI_VERSION}"; then
   EPHEMERAL_EXAMPLES_SUPPORTED=1
@@ -108,7 +118,7 @@ tenants = {
 }
 HCL
       ;;
-    examples/resources/motherduck_secret)
+    examples/resources/motherduck_secret | examples/resources/motherduck_secret/write_only)
       cat > "${work_dir}/terraform.tfvars" <<'HCL'
 aws_access_key_id     = "dummy-access-key"
 aws_secret_access_key = "dummy-secret-key"
@@ -226,6 +236,11 @@ while IFS= read -r example_dir; do
   relative_dir="${example_dir#"${ROOT_DIR}/"}"
   if [[ "${relative_dir}" == examples/ephemeral-resources/* && "${EPHEMERAL_EXAMPLES_SUPPORTED}" != "1" ]]; then
     echo "==> Skipping ${relative_dir}. Terraform ${TERRAFORM_CLI_VERSION:-unknown} does not support ephemeral blocks"
+    continue
+  fi
+
+  if [[ "${relative_dir}" == */write_only ]] && ! terraform_supports_write_only_examples "${TERRAFORM_CLI_VERSION}"; then
+    echo "==> Skipping ${relative_dir}. Terraform ${TERRAFORM_CLI_VERSION:-unknown} does not support write-only arguments"
     continue
   fi
 
