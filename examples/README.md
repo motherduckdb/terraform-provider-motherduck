@@ -2,7 +2,8 @@
 
 Use a runnable root for a complete Terraform deployment, a module when composing
 your own root, or a reference snippet when looking up one provider surface.
-Terraform 1.5 or later is supported. Ephemeral resources require Terraform 1.10.
+Terraform 1.5 or later is supported. Ephemeral resources require Terraform 1.10,
+and write-only arguments require Terraform 1.11.
 
 | Goal | Start here | Credentials | Result and next step |
 | --- | --- | --- | --- |
@@ -11,6 +12,8 @@ Terraform 1.5 or later is supported. Ephemeral resources require Terraform 1.10.
 | Separate dev and prod | [Warehouse bootstrap](warehouses/bootstrap/README.md) and [layered warehouse](warehouses/layered/README.md) | Admin for identities, matching writer for data | Separate owners/states, then ingestion and modeling |
 | Run dlt and dbt over provisioned infrastructure | [Cookbook pipeline](cookbook-pipeline/README.md) | Existing SQL writer | Repeatable ingest and tested runtime-owned models |
 | Serve tenant usage analytics | [Customer-facing analytics](customer-facing-analytics/README.md) and [backend](customer-facing-analytics/backend/README.md) | Writer plus admin, reader tokens only in backend | Tenant-isolated data and authenticated queries |
+| Give BI tools and AI agents separate read-only access | [BI and agent readers](bi-and-agent-readers/README.md) | Writer plus admin, reader tokens only in each tool | One share, with an account, compute pool, and usage line per consumer |
+| Keep data files in your own bucket | [Data lake](data-lake/README.md) | SQL writer and a prefix-scoped AWS access key | DuckLake database with credentials kept out of state |
 | Compose reusable tenant infrastructure | [Writer bootstrap](blueprints/writer-bootstrap/README.md), then [read hypertenancy](blueprints/read-hypertenancy/README.md) | Admin bootstrap, writer plus admin for tenants | Explicit writer identity and reader attachment |
 | Move off the legacy tenant module | [Hypertenancy](blueprints/hypertenancy/README.md) | Writer plus admin | Switch steps to read hypertenancy, with no resource replacement |
 | Manage team access | [Access control](access-control/README.md) | SQL role administrator and share owner | Roles, memberships and share grants |

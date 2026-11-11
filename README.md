@@ -18,6 +18,8 @@ infrastructure you can review, reproduce, and manage in Terraform.
 | A warehouse with raw, transform, and marts layers | [Build a layered warehouse](docs/guides/warehouse-examples.md) |
 | Independent dev and production environments | [Separate identities, credentials, and state](docs/guides/environments.md) |
 | Usage dashboards for SaaS customers | [Provision tenant databases and readers](docs/guides/customer-facing-analytics.md) |
+| BI tools and AI agents on one warehouse | [Give each consumer its own read-only account](docs/guides/bi-and-agent-readers.md) |
+| A data lake in your own bucket | [Create a DuckLake database on an S3 prefix](docs/guides/data-lake.md) |
 | Python pipelines and interactive dashboards | [Combine Terraform with Blueprints](docs/guides/blueprints-deployment.md) |
 | Roles, membership, and share access | [Manage roles and share access](docs/guides/access-control.md) |
 | Row filters and column masking on shares | [Secure shared rows and columns](docs/guides/row-and-column-security.md) |
@@ -98,13 +100,17 @@ Flight-run resources are deprecated. See [resource scope](docs/guides/resource-s
 - [Troubleshooting](docs/guides/troubleshooting.md): common diagnostics, their
   causes, and how to resolve them.
 
-Changing a table column type or primary key replaces the table. Protect important data before adopting
-these examples. Token and secret values can be stored in state even when marked
-sensitive, so use an encrypted backend with restricted access and locking.
+Adding or dropping a table column updates the table in place. Changing a
+column type or the primary key replaces the table and its rows, so protect
+important data before adopting these examples. Token values are stored in state
+even when marked sensitive, so use an encrypted backend with restricted access
+and locking. Storage credentials can stay out of state through the write-only
+arguments of `motherduck_secret`.
 
 Terraform 1.5+ is supported, with packages for Linux (glibc 2.34 or newer) and
 macOS 13 or newer on amd64 and arm64.
-Ephemeral resources require Terraform 1.10+. See the
+Ephemeral resources require Terraform 1.10+, and write-only arguments require
+Terraform 1.11+. See the
 [tested Terraform and OpenTofu matrix](docs/guides/ci-and-release.md).
 
 ## Contribute

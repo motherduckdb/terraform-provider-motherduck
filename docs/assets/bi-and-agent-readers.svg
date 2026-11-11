@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="590" viewBox="0 0 1320 590" role="img" aria-labelledby="title desc">
+<title id="title">BI tools and AI agents as separate readers</title><desc id="desc">A pipeline loads a marts database owned by one writer account. One restricted share publishes it. Terraform grants the share to a separate reader account for dashboards, for notebooks, and for an AI agent. Each reader attaches the share once and its consumer queries on that reader&#x27;s own read pool with a read-scaling token.</desc>
+<rect width="1320" height="590" fill="#F8F8F7"/>
+<g transform="translate(32 30) scale(1.2)">
+<path d="M1.22059 15.1467C1.22059 15.1467 8.01485 19.8856 8.42868 20.1226C8.82772 20.3586 9.41175 20.4144 9.92426 20.2199C10.4373 20.0253 10.822 19.5805 10.9359 19.1357C11.0642 18.6909 12.617 10.6847 12.617 10.6847C12.6313 10.5736 12.6737 10.2542 12.5026 9.94812C12.2604 9.53144 11.7193 9.30927 11.2349 9.44753C10.9684 9.52492 10.7401 9.69835 10.5941 9.9343C10.5083 10.0869 10.3519 10.3376 10.0668 10.5598C9.85323 10.7267 9.63964 10.8239 9.54 10.8654C8.67087 11.2134 7.7021 10.9212 7.14668 10.2265C6.80484 9.79556 6.19221 9.62869 5.65061 9.83704C5.39458 9.93693 5.17744 10.1165 5.03124 10.3492C4.88505 10.5819 4.81755 10.8555 4.8387 11.1295C4.93882 11.9915 4.44013 12.853 3.5567 13.2006C3.10486 13.3735 2.60777 13.3883 2.14645 13.2425C2.04633 13.2144 1.69067 13.1314 1.33453 13.3259C0.893055 13.5481 0.665165 14.0764 0.77911 14.5488C0.864449 14.8683 1.12094 15.0771 1.22059 15.1467Z" fill="#FF9538"/>
+<path d="M12.5454 4.76395C12.5454 4.76395 14.9673 12.5751 15.138 12.9923C15.3092 13.4233 15.7363 13.8123 16.2632 13.9649C16.7905 14.1179 17.3745 13.993 17.7449 13.7151C18.1154 13.4371 24.369 8.03022 24.369 8.03022C24.563 7.86085 24.6937 7.63051 24.7394 7.37706C24.8109 6.90459 24.5115 6.404 24.0558 6.22331C23.7937 6.12714 23.5059 6.12714 23.2438 6.22331C23.087 6.29291 22.8019 6.39017 22.4458 6.404C22.1611 6.4183 21.9475 6.36252 21.8336 6.33439C20.9359 6.0841 20.3375 5.27838 20.3375 4.40257C20.3288 4.12912 20.2329 3.86562 20.0637 3.65058C19.8946 3.43554 19.6611 3.28023 19.3974 3.20734C18.8276 3.0543 18.2436 3.29077 17.9447 3.74942C17.4741 4.49983 16.5483 4.87504 15.6367 4.62474C15.1523 4.486 14.7533 4.19423 14.4973 3.81902C14.4257 3.73511 14.1979 3.45716 13.7993 3.38803C13.3149 3.3046 12.7876 3.58255 12.5883 4.01354C12.4315 4.34727 12.5168 4.65239 12.5454 4.76395Z" fill="#FF9538"/>
+</g>
+<text x="72" y="54" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="600">BI tools and AI agents</text>
+<text x="34" y="89" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="400">One share publishes the marts. Each consumer reads on its own account.</text>
+<polyline points="1187.0,45 1221.0,45" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="1221.0,45 1213.0,40 1213.0,50" fill="#383838"/>
+<text x="1229.0" y="49" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">Data flow</text>
+<rect x="36" y="310" width="132" height="60" rx="4" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="57,340 148,340" fill="none" stroke="#068475" stroke-width="2"/>
+<rect x="53" y="330" width="20" height="20" rx="3" fill="#FFFFFF" stroke="#068475"/>
+<rect x="94" y="330" width="20" height="20" rx="3" fill="#D0EEE8" stroke="#068475"/>
+<rect x="135" y="330" width="20" height="20" rx="3" fill="#50C7B7" stroke="#068475"/>
+<text x="68.0" y="400" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">Pipeline</text>
+<text x="50.5" y="422" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="400">loads the marts</text>
+<rect x="206" y="226" width="410" height="228" rx="5" fill="#F4EFEA" stroke="#C5BBB1"/>
+<ellipse cx="232.5" cy="251.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
+<polyline points="222,270 222,266 228,262 237,262 243,266 243,270" fill="none" stroke="#383838" stroke-width="2"/>
+<text x="254" y="266" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="600">Writer account</text>
+<ellipse cx="312.0" cy="375.0" rx="62.0" ry="13.0" fill="#FAF175" stroke="#383838"/>
+<rect x="250" y="305" width="124" height="70" rx="0" fill="#FAF175" stroke="#FAF175"/>
+<polyline points="250,305 250,375" fill="none" stroke="#383838" stroke-width="1"/>
+<polyline points="374,305 374,375" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="312.0" cy="305.0" rx="62.0" ry="13.0" fill="#FFF9BF" stroke="#383838"/>
+<polyline points="269,337 355,337" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<polyline points="269,356 355,356" fill="none" stroke="#B8A65C" stroke-width="1"/>
+<text x="247.5" y="421" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="600">Marts database</text>
+<rect x="470" y="312" width="108" height="58" rx="4" fill="#CEEBFF" stroke="#383838"/>
+<polyline points="498,341 552,329" fill="none" stroke="#383838" stroke-width="1"/>
+<polyline points="498,341 552,353" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="495.0" cy="341.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
+<ellipse cx="553.0" cy="329.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
+<ellipse cx="553.0" cy="353.0" rx="7.0" ry="7.0" fill="#FFFFFF" stroke="#383838"/>
+<text x="456.0" y="421" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="600">Restricted share</text>
+<polyline points="174,340 242,340" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="242,340 234,335 234,345" fill="#383838"/>
+<polyline points="382,340 462,340" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="462,340 454,335 454,345" fill="#383838"/>
+<rect x="387.75" y="312" width="68.5" height="21" rx="3" fill="#F4EFEA" stroke="none"/>
+<text x="392.75" y="327" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">publishes</text>
+<polyline points="586,340 690,340" fill="none" stroke="#383838" stroke-width="2"/>
+<polyline points="690,196 690,484" fill="none" stroke="#383838" stroke-width="2"/>
+<rect x="641.5" y="250" width="97.0" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="646.5" y="265" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">grant + attach</text>
+<rect x="780" y="138" width="300" height="116" rx="5" fill="#F0F8FD" stroke="#AACADD"/>
+<ellipse cx="806.5" cy="163.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
+<polyline points="796,182 796,178 802,174 811,174 817,178 817,182" fill="none" stroke="#383838" stroke-width="2"/>
+<text x="828" y="178" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="600">Dashboards reader</text>
+<rect x="828" y="192" width="72" height="46" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
+<rect x="848.16" y="203.96" width="31.68" height="22.08" rx="3" fill="#97D4FF" stroke="#6E9FBF"/>
+<text x="912" y="212" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600">Read pool</text>
+<text x="912" y="231" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">read-scaling token</text>
+<polyline points="690,196 772,196" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="772,196 764,191 764,201" fill="#383838"/>
+<rect x="1180" y="144" width="108" height="82" rx="4" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="1180,162 1288,162" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="1191.5" cy="152.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<ellipse cx="1200.5" cy="152.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<ellipse cx="1209.5" cy="152.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<rect x="1198" y="196" width="11" height="19" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1218" y="179" width="11" height="36" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1238" y="188" width="11" height="27" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1258" y="171" width="11" height="44" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<text x="1187.25" y="248" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="600">Dashboards</text>
+<polyline points="1172,196 1088,196" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="1088,196 1096,191 1096,201" fill="#383838"/>
+<rect x="1102.25" y="168" width="55.5" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="1107.25" y="183" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">queries</text>
+<rect x="780" y="282" width="300" height="116" rx="5" fill="#F0F8FD" stroke="#AACADD"/>
+<ellipse cx="806.5" cy="307.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
+<polyline points="796,326 796,322 802,318 811,318 817,322 817,326" fill="none" stroke="#383838" stroke-width="2"/>
+<text x="828" y="322" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="600">Notebooks reader</text>
+<rect x="828" y="336" width="72" height="46" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
+<rect x="848.16" y="347.96" width="31.68" height="22.08" rx="3" fill="#97D4FF" stroke="#6E9FBF"/>
+<text x="912" y="356" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600">Read pool</text>
+<text x="912" y="375" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">read-scaling token</text>
+<polyline points="690,340 772,340" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="772,340 764,335 764,345" fill="#383838"/>
+<rect x="1180" y="288" width="108" height="82" rx="4" fill="#FFFFFF" stroke="#383838"/>
+<polyline points="1180,306 1288,306" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="1191.5" cy="296.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<ellipse cx="1200.5" cy="296.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<ellipse cx="1209.5" cy="296.5" rx="1.5" ry="1.5" fill="#383838" stroke="#383838"/>
+<rect x="1198" y="340" width="11" height="19" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1218" y="323" width="11" height="36" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1238" y="332" width="11" height="27" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<rect x="1258" y="315" width="11" height="44" rx="2" fill="#97D4FF" stroke="#97D4FF"/>
+<text x="1192.25" y="392" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="600">Notebooks</text>
+<polyline points="1172,340 1088,340" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="1088,340 1096,335 1096,345" fill="#383838"/>
+<rect x="1102.25" y="312" width="55.5" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="1107.25" y="327" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">queries</text>
+<rect x="780" y="426" width="300" height="116" rx="5" fill="#F0F8FD" stroke="#AACADD"/>
+<ellipse cx="806.5" cy="451.5" rx="6.5" ry="6.5" fill="#383838" stroke="#383838"/>
+<polyline points="796,470 796,466 802,462 811,462 817,466 817,470" fill="none" stroke="#383838" stroke-width="2"/>
+<text x="828" y="466" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="600">Agent reader</text>
+<rect x="828" y="480" width="72" height="46" rx="6" fill="#CEEBFF" stroke="#6E9FBF"/>
+<rect x="848.16" y="491.96" width="31.68" height="22.08" rx="3" fill="#97D4FF" stroke="#6E9FBF"/>
+<text x="912" y="500" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600">Read pool</text>
+<text x="912" y="519" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">read-scaling token</text>
+<polyline points="690,484 772,484" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="772,484 764,479 764,489" fill="#383838"/>
+<polyline points="1234,432 1234,444" fill="none" stroke="#383838" stroke-width="1"/>
+<ellipse cx="1234.0" cy="429.0" rx="5.0" ry="5.0" fill="#97D4FF" stroke="#383838"/>
+<rect x="1180" y="444" width="108" height="70" rx="10" fill="#FFFFFF" stroke="#383838"/>
+<ellipse cx="1215.0" cy="473.0" rx="7.0" ry="7.0" fill="#97D4FF" stroke="#383838"/>
+<ellipse cx="1253.0" cy="473.0" rx="7.0" ry="7.0" fill="#97D4FF" stroke="#383838"/>
+<polyline points="1214,498 1254,498" fill="none" stroke="#383838" stroke-width="1"/>
+<text x="1202.0" y="536" fill="#383838" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="600">AI agent</text>
+<polyline points="1172,484 1088,484" fill="none" stroke="#383838" stroke-width="2"/>
+<polygon points="1088,484 1096,479 1096,489" fill="#383838"/>
+<rect x="1102.25" y="456" width="55.5" height="21" rx="3" fill="#F8F8F7" stroke="none"/>
+<text x="1107.25" y="471" fill="#666666" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400">queries</text>
+</svg>

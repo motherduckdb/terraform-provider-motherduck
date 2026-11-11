@@ -6,6 +6,7 @@ SVG is editable source alongside this file. PNG works in Registry Markdown witho
 requiring a Mermaid renderer. make docs copies both from templates/assets.
 """
 
+import os
 from html import escape
 from math import hypot
 from pathlib import Path
@@ -37,7 +38,14 @@ FONT_FAMILY = "Inter, Arial, sans-serif"
 
 
 def font(size, bold=False):
-    # Inter matches the MotherDuck site. Arial and DejaVu are fallbacks.
+    # Inter matches the MotherDuck site. Arial and DejaVu are fallbacks. Set
+    # DIAGRAM_FONT_DIR to a directory holding the Inter OTF files when Inter is
+    # not installed, so new diagrams match the checked-in ones.
+    override = os.environ.get("DIAGRAM_FONT_DIR")
+    if override:
+        candidate = Path(override) / ("Inter-SemiBold.otf" if bold else "Inter-Regular.otf")
+        if candidate.exists():
+            return ImageFont.truetype(str(candidate), size * 2)
     names = (
         ["/usr/share/fonts/opentype/inter/Inter-SemiBold.otf",
          str(Path.home() / "Library/Fonts/Inter-SemiBold.otf"),
@@ -525,9 +533,117 @@ def promotion():
     d.save("blueprints-promotion")
 
 
+def agent(d, x, y):
+    """AI agent icon: a head with two eyes and an antenna."""
+    d.line([(x+54, y), (x+54, y+12)], width=1)
+    d.ellipse(x+49, y-8, 10, 10, "#97D4FF")
+    d.rect(x, y+12, 108, 70, WHITE, radius=10)
+    for dx in [28, 66]:
+        d.ellipse(x+dx, y+34, 14, 14, "#97D4FF")
+    d.line([(x+34, y+66), (x+74, y+66)], width=1)
+
+
+def readers():
+    d = Diagram(1320, 590, "BI tools and AI agents as separate readers",
+                "A pipeline loads a marts database owned by one writer account. One restricted share "
+                "publishes it. Terraform grants the share to a separate reader account for dashboards, "
+                "for notebooks, and for an AI agent. Each reader attaches the share once and its "
+                "consumer queries on that reader's own read pool with a read-scaling token.")
+    brand(d, "BI tools and AI agents", "One share publishes the marts. Each consumer reads on its own account.")
+    legend(d, 1288-legend_width(d, terraform=False), 36, terraform=False)
+
+    pipeline(d, 36, 310)
+    caption(d, 102, 382, "Pipeline", "loads the marts")
+
+    account(d, 206, 226, 410, 228, "Writer account")
+    d.database(250, 292, 124, 96)
+    d.centered_text(312, 404, "Marts database", 17, True)
+    share(d, 470, 312)
+    d.centered_text(524, 404, "Restricted share", 17, True)
+    flow(d, 174, 242, 340)
+    flow(d, 382, 462, 340, "publishes", SAND)
+
+    rows = [(196, "Dashboards reader", "Dashboards", app),
+            (340, "Notebooks reader", "Notebooks", app),
+            (484, "Agent reader", "AI agent", agent)]
+    d.line([(586, 340), (690, 340)])
+    d.line([(690, 196), (690, 484)])
+    label(d, 690, 252, "grant + attach")
+    for cy, name, consumer, icon in rows:
+        account(d, 780, cy-58, 300, 116, name, True)
+        d.chip(828, cy-4, 72, 46, BLUE, pins=False)
+        d.text(912, cy+2, "Read pool", 14, True)
+        d.text(912, cy+22, "read-scaling token", 13, color=MUTED)
+        d.arrow([(690, cy), (772, cy)])
+        icon(d, 1180, cy-52)
+        d.centered_text(1234, cy+36, consumer, 16, True)
+        d.arrow([(1172, cy), (1088, cy)])
+        label(d, 1130, cy-26, "queries")
+    d.save("bi-and-agent-readers")
+
+
+def lake():
+    d = Diagram(1320, 520, "Data lake on your own bucket",
+                "Terraform provisions a scoped S3 secret, a DuckLake database, a schema, and a table "
+                "in the writer account. A pipeline loads data through the writer's Duckling. The "
+                "DuckLake catalog stays in MotherDuck and the data files are written to an S3 prefix "
+                "in your AWS account through the scoped secret.")
+    brand(d, "Data lake on your own bucket", "The catalog lives in MotherDuck. The data files live in your S3 prefix.")
+    legend(d, 1288-legend_width(d), 36)
+
+    code(d, 40, 130, "lake.tf")
+    caption(d, 100, 228, "Terraform", "writer token")
+    pipeline(d, 36, 354)
+    caption(d, 102, 426, "Pipeline")
+
+    account(d, 300, 150, 600, 330, "Writer account", note="owns the lake")
+    d.dashed([(164, 172), (250, 172), (250, 120), (600, 120)])
+    d.dashed([(600, 120), (600, 134)])
+    d.arrow([(600, 134), (600, 150)], PURPLE)
+    label(d, 430, 106, "secret, database, schema, table", PAPER, PURPLE_TEXT)
+
+    d.chip(344, 346, 98, 76, TEAL)
+    caption(d, 393, 438, "R/W Duckling")
+    d.database(560, 334, 120, 96)
+    caption(d, 620, 438, "DuckLake catalog")
+    d.rect(742, 356, 124, 56, WHITE, radius=4)
+    d.centered_text(804, 364, "S3 secret", 16, True)
+    d.centered_text(804, 386, "scoped to the prefix", 12, color=MUTED)
+    flow(d, 174, 336, 384, "loads")
+    flow(d, 450, 552, 384, "writes", SAND)
+
+    d.rect(1000, 150, 288, 330, READER_FILL, stroke=READER_STROKE, radius=5)
+    d.text(1020, 170, "Your AWS account", 20, bold=True)
+    d.rect(1054, 262, 180, 150, WHITE, radius=4)
+    d.centered_text(1144, 276, "S3 prefix", 18, True)
+    for row in range(3):
+        d.rect(1076, 312+row*30, 136, 20, GOLD, stroke="#B8A65C", radius=3)
+    caption(d, 1144, 430, "Data files")
+
+    flow(d, 688, 734, 384)
+    flow(d, 874, 1046, 384)
+    label(d, 936, 358, "reads + writes")
+    d.save("data-lake")
+
+
+DIAGRAMS = {
+    "deployment-model": deployment,
+    "layered-warehouse": warehouse,
+    "customer-facing-analytics": customers,
+    "blueprints-promotion": promotion,
+    "readme-architecture": readme,
+    "bi-and-agent-readers": readers,
+    "data-lake": lake,
+}
+
+
 if __name__ == "__main__":
-    deployment()
-    warehouse()
-    customers()
-    promotion()
-    readme()
+    import sys
+
+    # Pass diagram names to render a subset, for example after adding one.
+    names = sys.argv[1:] or list(DIAGRAMS)
+    unknown = [name for name in names if name not in DIAGRAMS]
+    if unknown:
+        raise SystemExit(f"Unknown diagram: {', '.join(unknown)}. Choose from {', '.join(DIAGRAMS)}")
+    for name in names:
+        DIAGRAMS[name]()

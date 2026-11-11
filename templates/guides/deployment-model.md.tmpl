@@ -40,12 +40,13 @@ See [MotherDuck resource management](https://motherduck.com/docs/concepts/resour
 | A team dashboard over orders | One writer, one database, raw and analytics schemas | Add separate databases when publication or model ownership needs a boundary |
 | A warehouse with several models | Raw, transform, and physical marts databases | Separate ingestion and transformation accounts when they need independent compute or ownership |
 | Many dashboard connections to the same data | Read-scaling pool on the account that can see that data | Use a separate reader account and curated share when readers must not see raw data |
+| Several BI tools or AI agents on one warehouse | One curated share, with a [separate reader account per consumer](bi-and-agent-readers.md) | Narrow the share or add secure views when a consumer must see less |
 | Analytics for several customers | Central writer, one database and restricted share per customer, separate readers | Move a customer's writes to a separate owner if writer compute also needs isolation |
 | Python pipelines and dashboards released together | Terraform platform plus Blueprints application packages | Add separate preview/staging credentials and release-based production promotion |
 
 The [warehouse examples](warehouse-examples.md) start with native MotherDuck
 storage. Choose DuckLake deliberately when an open storage format or object
-storage arrangement requires it. It is not a prerequisite for layering data or
+storage arrangement requires it, and see [data lake on your own bucket](data-lake.md). It is not a prerequisite for layering data or
 serving customer analytics. When the data already lives in an Iceberg REST
 catalog, register that catalog as a `database_type = "iceberg"` database
 instead of copying it.

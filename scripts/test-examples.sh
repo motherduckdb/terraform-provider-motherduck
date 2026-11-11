@@ -124,6 +124,14 @@ aws_access_key_id     = "dummy-access-key"
 aws_secret_access_key = "dummy-secret-key"
 HCL
       ;;
+    examples/data-lake)
+      cat > "${work_dir}/terraform.tfvars" <<'HCL'
+data_path             = "s3://example-lake-bucket/lake/"
+bucket_region         = "us-east-1"
+aws_access_key_id     = "dummy-access-key"
+aws_secret_access_key = "dummy-secret-key"
+HCL
+      ;;
     examples/resources/motherduck_secret/flights)
       cat > "${work_dir}/terraform.tfvars" <<'HCL'
 partner_api_key = "dummy-partner-key"
@@ -239,7 +247,7 @@ while IFS= read -r example_dir; do
     continue
   fi
 
-  if [[ "${relative_dir}" == */write_only ]] && ! terraform_supports_write_only_examples "${TERRAFORM_CLI_VERSION}"; then
+  if [[ "${relative_dir}" == */write_only || "${relative_dir}" == examples/data-lake ]] && ! terraform_supports_write_only_examples "${TERRAFORM_CLI_VERSION}"; then
     echo "==> Skipping ${relative_dir}. Terraform ${TERRAFORM_CLI_VERSION:-unknown} does not support write-only arguments"
     continue
   fi
@@ -374,6 +382,29 @@ HCL
             {username: "svc_example_dwh_dev_writer", fleet: 1},
             {username: "svc_example_dwh_prod_writer", fleet: 2}
           ]' >/dev/null
+      ;;
+    examples/bi-and-agent-readers)
+      # One share for every consumer, and no consumer credential that can write
+      # beyond the one-hour setup token.
+      TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan" > "${work_dir}/readers-plan.json"
+      jq -e '
+        ([.resource_changes[] | select(.mode == "managed" and .change.actions == ["create"])] | length == 19) and
+        ([.resource_changes[] | select(.type == "motherduck_share")] | length == 1) and
+        ([.resource_changes[] | select(.type == "motherduck_access_token") | .change.after | select(.token_type == "read_write") | .ttl] == [3600, 3600, 3600]) and
+        ([.resource_changes[] | select(.type == "motherduck_access_token") | .change.after | select(.token_type == "read_scaling")] | length == 3) and
+        (.planned_values.outputs.reader_tokens.sensitive == true) and
+        (.planned_values.outputs.setup_tokens.sensitive == true) and
+        (.planned_values.outputs.share_url.sensitive == true)
+      ' "${work_dir}/readers-plan.json" >/dev/null
+      ;;
+    examples/data-lake)
+      # The access key must never reach the plan.
+      TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" show -json "${work_dir}/example.tfplan" > "${work_dir}/lake-plan.json"
+      jq -e '[.resource_changes[] | select(.mode == "managed" and .change.actions == ["create"])] | length == 4' "${work_dir}/lake-plan.json" >/dev/null
+      if jq -e '[.resource_changes, .planned_values, .prior_state] | tostring | contains("dummy-secret-key")' "${work_dir}/lake-plan.json" >/dev/null; then
+        echo "The data-lake example plan contains the write-only access key" >&2
+        exit 1
+      fi
       ;;
     examples/warehouses/simple|examples/warehouses/layered)
       prod_vars=(-var=environment=prod)

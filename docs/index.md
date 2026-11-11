@@ -25,6 +25,8 @@ Shares let other accounts query published data on their own compute.
 | [Build a layered warehouse](guides/warehouse-examples.md) | Raw, transformation, and marts databases with a repeatable refresh |
 | [Separate development and production](guides/environments.md) | Independent writer identities, credentials, compute settings, and Terraform state |
 | [Serve customer-facing analytics](guides/customer-facing-analytics.md) | One database and restricted share per customer, queried through tenant-specific readers |
+| [Give BI tools and AI agents their own readers](guides/bi-and-agent-readers.md) | One curated share, with a separate read-only account, compute pool, and usage line per consumer |
+| [Build a data lake on your own bucket](guides/data-lake.md) | A DuckLake database whose data files stay in your S3 prefix |
 | [Deploy pipelines and dashboards](guides/blueprints-deployment.md) | Terraform infrastructure with Blueprints previews, staging, and production releases |
 | [Manage roles and share access](guides/access-control.md) | Create roles, assign members, and grant access to shares |
 | [Secure shared rows and columns](guides/row-and-column-security.md) | One share that filters rows per tenant and masks columns by role |
@@ -115,7 +117,9 @@ See [authentication and account ownership](guides/authentication.md).
   Changing a column type or the primary key replaces the table and its rows.
   Adding or dropping a column updates it in place.
 - Store state and saved plans in an encrypted, access-controlled backend.
-  `sensitive` masks output, but secrets can still be stored in state.
+  `sensitive` masks output, but tokens and share URLs are still stored in state.
+  With Terraform 1.11 or later, the write-only arguments of
+  [secret](resources/secret.md) keep storage credentials out of state.
 - Assign each object to one deployment tool. Terraform and dbt or Blueprints
   should not both manage the same definition.
 
@@ -126,7 +130,7 @@ See [state and imports](guides/state-and-lifecycle.md),
 ## Compatibility and support
 
 Terraform 1.5 or later is supported. Ephemeral resources require Terraform 1.10
-or later. Release packages support Linux with glibc 2.34 or newer (for example RHEL 9,
+or later, and write-only arguments require Terraform 1.11 or later. Release packages support Linux with glibc 2.34 or newer (for example RHEL 9,
 Amazon Linux 2023, Debian 12, and Ubuntu 22.04) and macOS 13 or newer, on amd64
 and arm64.
 Windows is not a supported release target.
@@ -154,4 +158,4 @@ a [GitHub issue](https://github.com/motherduckdb/terraform-provider-motherduck/i
 ## Choose a runnable example
 
 Use the [example chooser](guides/examples.md)
-to select a warehouse, tenant application, cookbook pipeline, access audit, or Pulumi root.
+to select a warehouse, tenant application, reader layout, data lake, cookbook pipeline, access audit, or Pulumi root.
