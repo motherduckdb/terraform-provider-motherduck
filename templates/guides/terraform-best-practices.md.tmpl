@@ -11,7 +11,7 @@ This guide covers module shape, state safety, credentials, and lifecycle behavio
 
 ## Provider requirements
 
-Every root module and reusable child module should declare the provider source and a version constraint. Root modules use a pessimistic constraint such as `~> 0.3.0`. Reusable modules declare a range and let the root module choose the exact version:
+Every root module and reusable child module should declare the provider source and a version constraint. Root modules use a pessimistic constraint such as `~> 0.4.0`. Reusable modules declare a range and let the root module choose the exact version:
 
 ```hcl
 terraform {

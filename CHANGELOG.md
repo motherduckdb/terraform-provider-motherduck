@@ -4,6 +4,10 @@ Each release has a versioned notes file under `release-notes/`, which is also th
 body of the matching [GitHub release](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
 This index lists the headline change for every release.
 
+## v0.4.0
+
+This release changes `motherduck_table` columns in place instead of replacing the table, adds write-only `motherduck_secret` arguments that keep secret values out of state, and cancels a SQL statement that MotherDuck does not answer within 30 minutes. Version constraints such as `~> 0.3.0` do not select it, so the constraint must change to `~> 0.4.0`. See the [v0.4.0 release notes](release-notes/v0.4.0.md).
+
 ## v0.3.12
 
 This release keeps SQL operations working after the database named by the provider `database` argument is dropped during a run, and makes the `name` filter of the `motherduck_secrets` data source return only the secret that MotherDuck resolves the name to. Version constraints such as `~> 0.3.0` select it. See the [v0.3.12 release notes](release-notes/v0.3.12.md).
