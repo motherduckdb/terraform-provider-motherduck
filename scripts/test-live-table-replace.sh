@@ -53,16 +53,39 @@ cleanup() {
 }
 trap live_cleanup_on_exit EXIT
 
-echo "==> Live table replacement smoke (${RUN_ID})"
+echo "==> Live table column change smoke (${RUN_ID})"
 write_vars false
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" init -backend=false -input=false
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" validate
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false
 
+# Adding or dropping a column must update the table in place. A replacement
+# would drop the table and its rows.
+expect_in_place_table_plan() {
+  local plan_output
+  plan_output="$(TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -no-color -input=false)"
+  if grep -q 'motherduck_table.facts must be replaced' <<<"${plan_output}"; then
+    echo "Expected an in-place update of motherduck_table.facts, but the plan replaces it" >&2
+    exit 1
+  fi
+  if ! grep -q 'motherduck_table.facts will be updated in-place' <<<"${plan_output}"; then
+    echo "Expected an in-place update of motherduck_table.facts, but the plan does not update it" >&2
+    exit 1
+  fi
+}
+
 write_vars true
+expect_in_place_table_plan
 TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false
 
-expect_noop_plan "Expected no-op plan after table replacement, but Terraform reported changes" \
+expect_noop_plan "Expected no-op plan after adding a table column, but Terraform reported changes" \
+  env TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
+
+write_vars false
+expect_in_place_table_plan
+TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" apply -auto-approve -input=false
+
+expect_noop_plan "Expected no-op plan after dropping a table column, but Terraform reported changes" \
   env TF_CLI_CONFIG_FILE="${cli_config}" "${TERRAFORM_BIN}" -chdir="${work_dir}" plan -detailed-exitcode -input=false
 
 if [[ "${KEEP_LIVE_FIXTURE}" == "1" ]]; then

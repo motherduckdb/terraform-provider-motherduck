@@ -2,7 +2,7 @@
 page_title: "motherduck_table Resource - motherduck"
 subcategory: "Data warehouse"
 description: |-
-  Manages a MotherDuck table definition. Column changes replace the table.
+  Manages a MotherDuck table definition. Adding or dropping a column updates the table in place. Changing a column type, the primary key, or the order of existing columns replaces the table.
 ---
 
 # motherduck_table (Resource)
@@ -12,16 +12,38 @@ for stable landing or serving tables whose schema belongs in Terraform.
 
 ## Usage and lifecycle
 
-**A column change replaces the table and its data.** Use a reviewed data
-migration for important tables, or transfer schema ownership to your modeling
-tool. Do not let Terraform and dbt manage the same table definition.
+Adding a column or dropping a column updates the table in place. The rows in
+the other columns are kept. Dropping a column deletes the data in that column,
+and renaming a key in `columns` drops the old column and adds an empty one.
 
-`columns` is a map from column name to DuckDB type. It does not define primary
-keys or `NOT NULL` constraints, and it does not preserve declaration order.
-Use explicit column lists in inserts. Equivalent type aliases, such as `INT`
-and `INTEGER`, are compared semantically. Respelling a type with an alias, for
-example after an import that recorded `INTEGER`, updates state in place and
-does not replace the table.
+**These changes replace the table and its data:** a different type for an
+existing column, a different `primary_key`, a different order of existing
+columns in `column_order`, and a column name that changes only in letter case.
+Use a reviewed data migration for important tables, or transfer schema
+ownership to your modeling tool. Do not let Terraform and dbt manage the same
+table definition.
+
+`columns` is a map from column name to DuckDB type, so it does not carry an
+order. Three optional arguments describe the rest of the table:
+
+- `column_order` lists every column in the order the table should have. When
+  it is omitted, a new table gets its columns in alphabetical order. A column
+  added later is always appended, so add its name at the end of the list.
+- `primary_key` lists the key columns. It is set when the table is created.
+  DuckLake databases do not support primary keys.
+- `not_null` lists the columns that reject `NULL`. It can change in place.
+  MotherDuck rejects `SET NOT NULL` when the column already holds a `NULL`.
+
+When one of these arguments is omitted, Terraform records what MotherDuck
+reports and does not change it, so an imported table keeps its constraints.
+Use explicit column lists in inserts unless `column_order` is set. Equivalent
+type aliases, such as `INT` and `INTEGER`, are compared semantically.
+Respelling a type with an alias, for example after an import that recorded
+`INTEGER`, updates state in place and does not replace the table.
+
+An update that fails part way, for example on a `SET NOT NULL`, keeps the
+statements that already ran. Terraform records the live table, and the next
+plan shows the remaining changes.
 
 Refresh detects case changes inside ENUM labels, including nested ENUM types.
 These changes affect the values the column accepts. Review any replacement plan
@@ -43,7 +65,7 @@ and schema, such as `analytics.main.mood`, or write out its definition, such as
 `ENUM('ok', 'sad')`.
 
 Destroy drops the table. Import uses `<database>.<schema>.<table>` and reads its existing
-column definitions.
+column definitions, column order, primary key, and `NOT NULL` constraints.
 
 See [the layered warehouse](../guides/warehouse-examples.md) for a table whose
 rows are refreshed without recreating its definition.
@@ -70,6 +92,12 @@ resource "motherduck_table" "events" {
     occurred_at = "TIMESTAMP"
     payload     = "JSON"
   }
+
+  # Optional. Without column_order, a new table has its columns in
+  # alphabetical order.
+  column_order = ["event_id", "occurred_at", "payload"]
+  primary_key  = ["event_id"]
+  not_null     = ["occurred_at"]
 }
 ```
 
@@ -78,10 +106,16 @@ resource "motherduck_table" "events" {
 
 ### Required
 
-- `columns` (Map of String) Map of column name to DuckDB SQL type. Column changes replace the table. Type aliases such as `INT` and `INTEGER` are compared semantically, so a change that only respells a type updates state in place without replacing the table.
+- `columns` (Map of String) Map of column name to DuckDB SQL type. Adding a column runs `ALTER TABLE ... ADD COLUMN`, and removing one runs `ALTER TABLE ... DROP COLUMN`, which deletes the data in that column only. Renaming a key drops the old column and adds a new one. Changing the type of an existing column replaces the table. Type aliases such as `INT` and `INTEGER` are compared semantically, so a change that only respells a type updates state in place.
 - `database` (String) Database that contains the table. Changing only the letter case updates state in place.
 - `name` (String) Table name. Changing only the case of ASCII letters updates state in place. Any other change, including the case of a non-ASCII letter such as `Ä`, names a different table and replaces it.
 - `schema` (String) Schema that contains the table. Changing only the case of ASCII letters updates state in place. Any other change replaces the table.
+
+### Optional
+
+- `column_order` (List of String) Order of the columns in the table. When set, it must list every key of `columns` exactly once. When omitted, a new table gets its columns in alphabetical order and Terraform records the order MotherDuck reports. A column added later is appended after the existing columns. Any other change to the order of existing columns replaces the table.
+- `not_null` (Set of String) Columns that reject `NULL`. Each entry must be a key of `columns`. Changes run `ALTER TABLE ... ALTER COLUMN ... SET NOT NULL` or `DROP NOT NULL` in place. MotherDuck rejects `SET NOT NULL` when the column already holds a `NULL`. Primary key columns always reject `NULL` and do not need to be listed. When omitted, Terraform records the constraints MotherDuck reports and does not change them.
+- `primary_key` (List of String) Columns of the table's primary key, in key order. Each entry must be a key of `columns`. Changing a configured value replaces the table. When omitted, Terraform records the primary key MotherDuck reports and does not change it. DuckLake databases do not support primary keys.
 
 ### Read-Only
 
