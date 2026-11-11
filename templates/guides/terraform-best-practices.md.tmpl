@@ -59,6 +59,10 @@ The provider validates `api_base_url` and `attach_mode` during `terraform valida
 
 Access token resources expose the newly created token once. Treat the resulting Terraform state as sensitive infrastructure data. Store state only in an encrypted backend with tightly scoped access.
 
+Keep storage credentials out of state where Terraform allows it. With Terraform 1.11 or later, set `motherduck_secret` values in `params_wo` or `flight_params_wo` and change `params_wo_version` to rotate them. Scope each storage secret to the narrowest path it needs.
+
+Give each BI tool, application, and AI agent its own service account and a `read_scaling` token. MotherDuck rejects writes on that token type, and compute usage is recorded per account. See [BI tools and AI agents](bi-and-agent-readers.md).
+
 ## State boundaries
 
 Keep durable desired state in Terraform and keep operational actions out unless their state behavior is explicit.
@@ -137,7 +141,7 @@ Dive and Flight SQL function availability can vary by account, plan, region, and
 
 ## Lifecycle behavior
 
-Treat identity and create-only arguments as replacements. For example, changing a service account username, an access token name, token type, TTL, a database name, DuckLake path, or Iceberg catalog endpoint or warehouse, a table column map, or a share definition should create a replacement resource instead of mutating the existing object. A username change that only alters letter case is the exception, because MotherDuck compares usernames case-insensitively, so it updates in place. New service account usernames must start with a letter and contain only letters, ASCII digits, and underscores. Existing accounts whose usernames contain hyphens, at signs, or periods can be imported and managed. A service account `description` is create-only, and changing it fails the plan rather than replacing the account. A new access token is `read_write` when `token_type` is omitted, and an omitted `token_type` keeps the type of an existing or imported token.
+Treat identity and create-only arguments as replacements. For example, changing a service account username, an access token name, token type, TTL, a database name, DuckLake path, or Iceberg catalog endpoint or warehouse, a table column type or primary key, or a share definition should create a replacement resource instead of mutating the existing object. A username change that only alters letter case is the exception, because MotherDuck compares usernames case-insensitively, so it updates in place. New service account usernames must start with a letter and contain only letters, ASCII digits, and underscores. Existing accounts whose usernames contain hyphens, at signs, or periods can be imported and managed. A service account `description` is create-only, and changing it fails the plan rather than replacing the account. A new access token is `read_write` when `token_type` is omitted, and an omitted `token_type` keeps the type of an existing or imported token.
 
 Mutable configuration should update in place. `motherduck_duckling_config` updates instance sizes, read-scaling flock size, and cooldown settings for the same username. Public REST limits are validated locally: username fields must be non-blank and 1-255 characters. Instance sizes accept `pulse`, `standard`, `jumbo`, `mega`, or `giga`. Read-scaling flock size must be 0-64. Cooldown values must be 60-86400 seconds. Dive/Flight SQL data-source IDs, Dive/Flight import IDs, and Dive embed-session IDs must be UUIDs with no leading or trailing whitespace. `motherduck_database.snapshot_retention_days`, `motherduck_view.query`, `motherduck_secret` parameters, and snapshot names also update in place.
 

@@ -123,7 +123,9 @@ Apply the same reviewed configuration in a separate production state with the
 production writer token and `prod.tfvars`. Promote code and validate data under
 the destination account. Do not copy Terraform state between environments.
 
-Review table replacement plans before changing columns. Protect important
+Adding or dropping a column updates a table in place. Changing a column type
+or the primary key replaces the table and its rows, so review those plans
+before applying. Protect important
 databases and tables with an appropriate lifecycle policy and a recovery plan.
 For disposable cleanup, destroy the warehouse with its original writer token
 before deleting bootstrap accounts.

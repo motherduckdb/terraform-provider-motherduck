@@ -24,6 +24,11 @@ Access-token secrets are returned only at creation. Refresh preserves the
 existing secret, while import cannot recover it. Importing a secret resource
 also cannot recover its original credential-bearing creation SQL.
 
+A `motherduck_secret` can keep its values out of state. With Terraform 1.11 or
+later, set them in the write-only arguments `params_wo` or `flight_params_wo`,
+and change `params_wo_version` to write new values. See
+[secret](../resources/secret.md).
+
 The Dive embed-session data source persists its credential in state and is
 deprecated. For Terraform 1.10 or later, use the ephemeral resource where the
 configuration accepts ephemeral values.
@@ -41,8 +46,9 @@ grant IDs use slash-separated components. Dives, Flights, and Guides use UUIDs.
 Flight runs intentionally do not support import.
 
 Imported table types use canonical server spellings. A configured equivalent
-type such as `INT` is preserved during normal refresh. Review structural column
-changes carefully because table changes use replacement.
+type such as `INT` is preserved during normal refresh. Adding or dropping a
+column updates the table in place. Changing a column type or the primary key
+replaces the table and its rows, so review those plans carefully.
 
 ## Databases owned by another deployment
 
