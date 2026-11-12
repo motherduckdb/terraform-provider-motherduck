@@ -466,7 +466,7 @@ func (d *diveEmbedSessionDataSource) Metadata(ctx context.Context, req datasourc
 
 func (d *diveEmbedSessionDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Creates a short-lived Dive embed session for a service account. The session is valid for 24 hours. Embedding needs a Business plan or an active free trial, and `username` must be a service account in the same organization that can read the Dive. Share the Dive with the service account, or with a role it belongs to, before creating a session. MotherDuck rejects a session for a service account that cannot read the Dive with a 403 error.",
+		MarkdownDescription: "Creates a short-lived Dive embed session for a service account. The session is valid for 24 hours. Embedding needs a Business plan or an active free trial, and `username` must be a service account in the same organization that can read the Dive. Share the Dive with the service account, or with a role it belongs to, before creating a session, for example with `motherduck_dive_grant`. MotherDuck rejects a session for a service account that cannot read the Dive with a 403 error.",
 		DeprecationMessage:  "Use the motherduck_dive_embed_session ephemeral resource instead. The data source creates a credential and persists it in Terraform state.",
 		Attributes: map[string]schema.Attribute{
 			"dive_id": schema.StringAttribute{

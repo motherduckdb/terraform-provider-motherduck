@@ -23,6 +23,7 @@ membership through MotherDuck's supported organization administration workflow.
 | Databases, schemas, tables/views, shares, secure views, roles/grants, secrets, service accounts, tokens, Duckling configuration, snapshots | Core infrastructure. Consult each resource's lifecycle constraints |
 | Flight definitions and schedules | Prefer CLI/code deployment. Terraform remains available when it is the sole owner |
 | Dive and Guide resources | Experimental, outside the stable provider support commitment |
+| Dive and Flight grants | Access control for objects that either workflow deploys. Availability depends on the service |
 | Flight-run resource | Deprecated. Use CLI/SQL or a deployment pipeline to execute runs |
 | Catalog data sources | Read-only integration with objects managed by either workflow. Availability depends on the service |
 

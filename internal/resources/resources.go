@@ -19,8 +19,10 @@ func All() []func() resource.Resource {
 		NewShareSecureViewResource,
 		NewSnapshotResource,
 		NewDiveResource,
+		NewDiveGrantResource,
 		NewGuideResource,
 		NewFlightResource,
+		NewFlightGrantResource,
 		NewFlightRunResource,
 	}
 }

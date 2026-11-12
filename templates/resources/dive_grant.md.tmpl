@@ -1,0 +1,59 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Access control"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Use this resource when Terraform owns who can open a Dive. Each resource owns
+one grant: to one user or service account, to one role, or to the whole
+organization. The owner of a Dive and organization admins can grant and revoke
+access to it, so configure the provider `token` (or `MOTHERDUCK_TOKEN`) with
+one of those principals. To any other principal MotherDuck reports the Dive as
+not found.
+
+During refresh, the provider reads the grants from `MD_LIST_DIVE_GRANTEES`. If
+the grant is revoked outside Terraform, the next plan recreates it. If the Dive
+is deleted, the grant is removed from state. MotherDuck resolves principal
+names case-insensitively, so a change in the letter case of `grantee_name` only
+updates state and does not revoke the grant.
+
+## The organization grant on new Dives
+
+MotherDuck can create a Dive with a `read` grant for the whole organization
+already in place. Whether it does depends on the organization. Read
+[motherduck_dive_grantees](../data-sources/dive_grantees.md) to see the grants
+a Dive has.
+
+- To keep a Dive readable by the whole organization, declare a grant with
+  `grantee_type = "organization"`. Granting again is harmless when the grant
+  already exists.
+- To make a Dive private, import the existing organization grant as
+  `<dive_id>/organization`, then remove the resource from the configuration.
+  The next apply revokes it. Destroying an organization grant always revokes
+  it, including one that MotherDuck created with the Dive.
+
+## Embedding
+
+[motherduck_dive_embed_session](../ephemeral-resources/dive_embed_session.md)
+needs a service account that can read the Dive. Grant `read` to that service
+account, or to a role it holds, instead of relying on the organization grant.
+A read grant opens the Dive only. The data it shows still depends on the
+databases and shares the reader can query.
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_dive_grant/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import a grant with `<dive_id>/<grantee_type>/<grantee_name>`, or with
+`<dive_id>/organization` for the organization grant:
+
+{{codefile "shell" "examples/resources/motherduck_dive_grant/import.sh" | trimspace}}

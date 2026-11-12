@@ -3,12 +3,12 @@
 page_title: "motherduck_dive_embed_session Ephemeral Resource - motherduck"
 subcategory: ""
 description: |-
-  Creates a short-lived MotherDuck Dive embed session without writing the session credential to Terraform state. The session is valid for 24 hours. Embedding needs a Business plan or an active free trial, and username must be a service account in the same organization that can read the Dive. Share the Dive with the service account, or with a role it belongs to, before creating a session. MotherDuck rejects a session for a service account that cannot read the Dive with a 403 error.
+  Creates a short-lived MotherDuck Dive embed session without writing the session credential to Terraform state. The session is valid for 24 hours. Embedding needs a Business plan or an active free trial, and username must be a service account in the same organization that can read the Dive. Share the Dive with the service account, or with a role it belongs to, before creating a session, for example with motherduck_dive_grant. MotherDuck rejects a session for a service account that cannot read the Dive with a 403 error.
 ---
 
 # motherduck_dive_embed_session (Ephemeral Resource)
 
-Creates a short-lived MotherDuck Dive embed session without writing the session credential to Terraform state. The session is valid for 24 hours. Embedding needs a Business plan or an active free trial, and `username` must be a service account in the same organization that can read the Dive. Share the Dive with the service account, or with a role it belongs to, before creating a session. MotherDuck rejects a session for a service account that cannot read the Dive with a 403 error.
+Creates a short-lived MotherDuck Dive embed session without writing the session credential to Terraform state. The session is valid for 24 hours. Embedding needs a Business plan or an active free trial, and `username` must be a service account in the same organization that can read the Dive. Share the Dive with the service account, or with a role it belongs to, before creating a session, for example with `motherduck_dive_grant`. MotherDuck rejects a session for a service account that cannot read the Dive with a 403 error.
 
 ## Example Usage
 

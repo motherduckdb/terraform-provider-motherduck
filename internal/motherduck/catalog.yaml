@@ -46,8 +46,10 @@ sql:
     - motherduck_share_secure_view
     - motherduck_snapshot
     - motherduck_dive
+    - motherduck_dive_grant
     - motherduck_guide
     - motherduck_flight
+    - motherduck_flight_grant
     - motherduck_flight_run
   data_sources:
     - motherduck_database
@@ -68,6 +70,7 @@ sql:
     - motherduck_live_duckling_size
     - motherduck_storage_info
     - motherduck_compute_usage
+    - motherduck_agent_usage
     - motherduck_buckets_for_secret
     - motherduck_files
     - motherduck_roles
@@ -77,9 +80,11 @@ sql:
     - motherduck_dives
     - motherduck_dive
     - motherduck_dive_versions
+    - motherduck_dive_grantees
     - motherduck_flights
     - motherduck_flight
     - motherduck_flight_versions
+    - motherduck_flight_grantees
     - motherduck_flight_runs
     - motherduck_flight_logs
     - motherduck_guides

@@ -1,0 +1,46 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Access control"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Use this resource when Terraform owns who can run a Flight besides its owner.
+Each resource owns one grant: to one user or service account, to one role, or
+to the whole organization. Only the owner of a Flight can grant access to it,
+so configure the provider `token` (or `MOTHERDUCK_TOKEN`) with the owner's
+token. Organization admins can revoke grants on other users' Flights but cannot
+add them.
+
+A new Flight has no grants, so only its owner can run it. A run started through
+a grant uses the access token and secrets of the Flight owner. The grant does
+not let the grantee see, edit, or delete the Flight, and MotherDuck reports the
+Flight as not found to a grantee who cannot otherwise see it. See
+[motherduck_flight_run](flight_run.md#access-to-the-flight) for how a run
+started by such a principal behaves in Terraform.
+
+During refresh, the provider reads the grants from `MD_LIST_FLIGHT_GRANTEES`.
+If the grant is revoked outside Terraform, the next plan recreates it. If the
+Flight is deleted, the grant is removed from state. MotherDuck resolves
+principal names case-insensitively, so a change in the letter case of
+`grantee_name` only updates state and does not revoke the grant.
+
+To review everyone who can run a Flight, read
+[motherduck_flight_grantees](../data-sources/flight_grantees.md).
+
+## Example Usage
+
+{{tffile "examples/resources/motherduck_flight_grant/resource.tf"}}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import a grant with `<flight_id>/<grantee_type>/<grantee_name>`, or with
+`<flight_id>/organization` for the organization grant:
+
+{{codefile "shell" "examples/resources/motherduck_flight_grant/import.sh" | trimspace}}

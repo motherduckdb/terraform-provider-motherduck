@@ -57,7 +57,7 @@ func TestComputeUsageWindowValidation(t *testing.T) {
 		// The same instant in another offset is still an empty window.
 		{"2026-11-01T02:00:00+02:00", "2026-11-01T00:00:00Z", true},
 	} {
-		err := validateComputeUsageWindow(rowsModel{StartTime: types.StringValue(tc.start), EndTime: types.StringValue(tc.end)})
+		err := validateUsageWindow("Invalid MotherDuck compute usage window")(rowsModel{StartTime: types.StringValue(tc.start), EndTime: types.StringValue(tc.end)})
 		if (err != nil) != tc.wantErr {
 			t.Fatalf("window %s to %s: err = %v, want error %t", tc.start, tc.end, err, tc.wantErr)
 		}
@@ -67,7 +67,7 @@ func TestComputeUsageWindowValidation(t *testing.T) {
 		}
 	}
 	// One bound alone, or an unknown bound, is checked later or not at all.
-	if err := validateComputeUsageWindow(rowsModel{StartTime: types.StringValue("2026-11-01T00:00:00Z"), EndTime: types.StringUnknown()}); err != nil {
+	if err := validateUsageWindow("Invalid MotherDuck compute usage window")(rowsModel{StartTime: types.StringValue("2026-11-01T00:00:00Z"), EndTime: types.StringUnknown()}); err != nil {
 		t.Fatalf("unknown end_time must not fail validation: %v", err)
 	}
 }
