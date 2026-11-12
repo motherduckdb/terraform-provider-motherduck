@@ -86,6 +86,12 @@ func (d *rowsDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 	}
 	for _, attr := range d.spec.attrs {
 		attrs[attr] = rowAttribute(attr, d.spec.attrRequired(attr))
+		if description, ok := d.spec.attrDescriptions[attr]; ok {
+			if text, isString := attrs[attr].(schema.StringAttribute); isString {
+				text.MarkdownDescription = description
+				attrs[attr] = text
+			}
+		}
 		if d.spec.pagingMax > 0 && (attr == "limit" || attr == "offset") {
 			attrs[attr] = cappedPagingAttribute(attr, d.spec.attrRequired(attr), d.spec.pagingMax)
 		}

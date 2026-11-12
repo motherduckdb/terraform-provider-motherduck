@@ -20,7 +20,10 @@ type rowSpec struct {
 	requiredParameter string
 	attrs             []string
 	requiredAttrs     []string
-	typedRows         []typedRowAttribute
+	// attrDescriptions replaces the shared description of an attribute
+	// whose meaning depends on the data source.
+	attrDescriptions map[string]string
+	typedRows        []typedRowAttribute
 	// permissionHint, when set, replaces the generic read error for
 	// MotherDuck functions that only some principals can call.
 	permissionHint string
@@ -434,24 +437,11 @@ func rowSpecs() []rowSpec {
 				{name: "duckling_size_multiplier", description: "Billing multiplier of the Duckling size, for example `0.25` for Pulse and `1` for Standard."},
 				{name: "queries", description: "Number of queries the Duckling ran in the window."},
 			},
-			validate: validateComputeUsageWindow,
+			validate: validateUsageWindow("Invalid MotherDuck compute usage window"),
 			build: func(m rowsModel) (string, error) {
-				var filters []string
-				if !m.Username.IsNull() && !m.Username.IsUnknown() {
-					filters = append(filters, "lower(user_name) = lower("+sqlbuild.StringLiteral(m.Username.ValueString())+")")
-				}
-				for _, bound := range []struct {
-					value types.String
-					sql   string
-				}{{m.StartTime, "start_time >= "}, {m.EndTime, "end_time <= "}} {
-					if bound.value.IsNull() || bound.value.IsUnknown() {
-						continue
-					}
-					at, err := time.Parse(time.RFC3339, bound.value.ValueString())
-					if err != nil {
-						return "", err
-					}
-					filters = append(filters, bound.sql+sqlbuild.StringLiteral(at.UTC().Format(time.RFC3339Nano))+"::TIMESTAMPTZ")
+				filters, err := usageFilters(m, "start_time >= ", "end_time <= ")
+				if err != nil {
+					return "", err
 				}
 				query := "SELECT * FROM MD_INFORMATION_SCHEMA.COMPUTE_USAGE"
 				if len(filters) > 0 {
@@ -459,23 +449,107 @@ func rowSpecs() []rowSpec {
 				}
 				return appendRowLimitOffset(query+" ORDER BY start_time, user_name, duckling_id, is_read_scaling", m), nil
 			}},
+		{name: "agent_usage", description: "Reads agent usage for the organization from `MD_INFORMATION_SCHEMA.AGENT_USAGE`. Each row covers one agent run, which is one turn of a MotherDuck agent chat, and reports the AI units it used. Requires a Business plan and query history access, which organization admins have. Rows are sorted by run finish time, session ID, and run sequence. Set `start_time` to bound long histories.", requiredFunction: "md_agent_usage", attrs: []string{"username", "start_time", "end_time", "limit", "offset"},
+			attrDescriptions: map[string]string{
+				"username":   "Optional MotherDuck user name. Returns only runs that the user started.",
+				"start_time": "Optional RFC 3339 timestamp, for example `2026-11-01T00:00:00Z`. Returns only runs that finished at or after it.",
+				"end_time":   "Optional RFC 3339 timestamp, for example `2026-11-02T00:00:00Z`. Returns only runs that finished before it. Must be later than `start_time` when both are set.",
+			},
+			permissionSummary: "MotherDuck query history access required",
+			permissionMarkers: []string{"missing permission for query history", "query history is not available on your plan"},
+			permissionHint:    "motherduck_agent_usage reads the organization usage database, which needs a Business plan and query history access. Organization admins have that access. Use a MotherDuck token for a principal with query history access.",
+			typedRows: []typedRowAttribute{
+				{name: "run_finished_ts", description: "Timestamp of the last model usage recorded for the run, which is approximately when the run finished."},
+				{name: "user_id", description: "UUID of the user who started the run."},
+				{name: "user_name", description: "Name of the user who started the run."},
+				{name: "surface", description: "Product surface the run came from, for example `chat`. Null for runs recorded before MotherDuck stored it."},
+				{name: "session_id", description: "UUID of the agent session. For the `chat` surface it is the chat ID."},
+				{name: "run_seq", description: "Sequence number of the run within its session."},
+				{name: "ai_units", description: "AI units the run used, as a decimal string."},
+			},
+			validate: validateUsageWindow("Invalid MotherDuck agent usage window"),
+			build: func(m rowsModel) (string, error) {
+				filters, err := usageFilters(m, "run_finished_ts >= ", "run_finished_ts < ")
+				if err != nil {
+					return "", err
+				}
+				query := "SELECT * FROM MD_INFORMATION_SCHEMA.AGENT_USAGE"
+				if len(filters) > 0 {
+					query += " WHERE " + strings.Join(filters, " AND ")
+				}
+				return appendRowLimitOffset(query+" ORDER BY run_finished_ts, session_id, run_seq", m), nil
+			}},
+		objectGranteesSpec("dive", "Dive", "read", "md_list_dive_grantees"),
+		objectGranteesSpec("flight", "Flight", "run", "md_list_flight_grantees"),
 	}
 }
 
-// validateComputeUsageWindow rejects an empty time window at plan time.
-func validateComputeUsageWindow(m rowsModel) error {
-	if m.StartTime.IsNull() || m.StartTime.IsUnknown() || m.EndTime.IsNull() || m.EndTime.IsUnknown() {
-		return nil
+// objectGranteesSpec lists who holds a grant on one Dive or Flight.
+func objectGranteesSpec(object, label, privilege, function string) rowSpec {
+	idAttr := object + "_id"
+	return rowSpec{
+		name:             object + "_grantees",
+		description:      fmt.Sprintf("Lists the users, roles, and organization that hold a grant on one MotherDuck %s, read from `%s`. The owner always has access and is not listed. The %s must be visible to the current principal. Rows are sorted by grantee type and grantee name.", label, strings.ToUpper(function), label),
+		requiredFunction: function,
+		attrs:            []string{idAttr},
+		requiredAttrs:    []string{idAttr},
+		typedRows: []typedRowAttribute{
+			{name: "grantee_name", description: "User name, role name, or organization name."},
+			{name: "grantee_type", description: "Grantee type: `user`, `role`, or `organization`."},
+			{name: "privilege", description: fmt.Sprintf("Granted %s privilege. Currently always `%s`.", label, privilege)},
+		},
+		build: func(m rowsModel) (string, error) {
+			id := m.DiveID
+			if object == "flight" {
+				id = m.FlightID
+			}
+			if id.IsNull() || id.IsUnknown() {
+				return "", fmt.Errorf("%s is required", idAttr)
+			}
+			return "SELECT grantee_name, grantee_type, privilege FROM " + strings.ToUpper(function) + "(" + sqlbuild.StringLiteral(id.ValueString()) + "::UUID) ORDER BY lower(grantee_type), lower(grantee_name), grantee_name, lower(privilege)", nil
+		},
 	}
-	start, startErr := time.Parse(time.RFC3339, m.StartTime.ValueString())
-	end, endErr := time.Parse(time.RFC3339, m.EndTime.ValueString())
-	if startErr != nil || endErr != nil || end.After(start) {
-		return nil
+}
+
+// usageFilters builds the user and time window filters shared by the usage
+// data sources. Time bounds are sent in UTC.
+func usageFilters(m rowsModel, startSQL, endSQL string) ([]string, error) {
+	var filters []string
+	if !m.Username.IsNull() && !m.Username.IsUnknown() {
+		filters = append(filters, "lower(user_name) = lower("+sqlbuild.StringLiteral(m.Username.ValueString())+")")
 	}
-	return attributeConfigError{
-		attribute: "end_time",
-		summary:   "Invalid MotherDuck compute usage window",
-		detail:    fmt.Sprintf("end_time %s must be later than start_time %s.", m.EndTime.ValueString(), m.StartTime.ValueString()),
+	for _, bound := range []struct {
+		value types.String
+		sql   string
+	}{{m.StartTime, startSQL}, {m.EndTime, endSQL}} {
+		if bound.value.IsNull() || bound.value.IsUnknown() {
+			continue
+		}
+		at, err := time.Parse(time.RFC3339, bound.value.ValueString())
+		if err != nil {
+			return nil, err
+		}
+		filters = append(filters, bound.sql+sqlbuild.StringLiteral(at.UTC().Format(time.RFC3339Nano))+"::TIMESTAMPTZ")
+	}
+	return filters, nil
+}
+
+// validateUsageWindow rejects an empty time window at plan time.
+func validateUsageWindow(summary string) func(rowsModel) error {
+	return func(m rowsModel) error {
+		if m.StartTime.IsNull() || m.StartTime.IsUnknown() || m.EndTime.IsNull() || m.EndTime.IsUnknown() {
+			return nil
+		}
+		start, startErr := time.Parse(time.RFC3339, m.StartTime.ValueString())
+		end, endErr := time.Parse(time.RFC3339, m.EndTime.ValueString())
+		if startErr != nil || endErr != nil || end.After(start) {
+			return nil
+		}
+		return attributeConfigError{
+			attribute: "end_time",
+			summary:   summary,
+			detail:    fmt.Sprintf("end_time %s must be later than start_time %s.", m.EndTime.ValueString(), m.StartTime.ValueString()),
+		}
 	}
 }
 

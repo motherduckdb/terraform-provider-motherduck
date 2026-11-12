@@ -97,6 +97,11 @@ Destroy deletes the Flight definition. Verify its schedules, dependencies, and
 data-retention requirements before removing it. Function availability depends
 on the MotherDuck account and client.
 
+Only the owner can run, update, or delete a new Flight. To let other users,
+roles, or the whole organization start runs, grant `run` with
+[motherduck_flight_grant](flight_grant.md). Review who can run a Flight with
+[motherduck_flight_grantees](../data-sources/flight_grantees.md).
+
 See [resource scope](../guides/resource-scope.md).
 
 ## Example Usage

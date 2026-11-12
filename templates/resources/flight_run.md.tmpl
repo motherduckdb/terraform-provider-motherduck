@@ -50,7 +50,8 @@ apply refreshes `status` and applies the dependent resource.
 ## Access to the Flight
 
 Run Terraform as the Flight owner, or as a principal that can see the Flight.
-A Flight run grant lets a principal start a Flight without seeing it, but
+A Flight run grant, managed with [motherduck_flight_grant](flight_grant.md),
+lets a principal start a Flight without seeing it, but
 MotherDuck then reports the Flight and its runs as not found to that principal.
 Refresh cannot tell that apart from a deleted Flight, so the provider keeps the
 run in state with a warning instead of removing it and starting a new run on

@@ -1,0 +1,38 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: "Identity and compute"
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{.Name}} ({{.Type}})
+
+{{ .Description | trimspace }}
+
+Agent usage is stored with query history, so MotherDuck returns it only on the
+Business plan and only to principals with query history access. Organization
+admins have that access. Configure the provider `token` (or `MOTHERDUCK_TOKEN`)
+with such a principal. Other tokens fail the read with a query history access
+error.
+
+MotherDuck records one row per agent run. Set `start_time` and `end_time` to
+read a bounded window, and use `limit` and `offset` to page through it. Both
+bounds must be RFC 3339 timestamps with a time zone offset, such as
+`2026-11-01T00:00:00Z`. A run is returned when it finished at or after
+`start_time` and before `end_time`. AI units are reported as a decimal string.
+Use `tonumber()` to add them up.
+
+This data source requires a MotherDuck client that exposes `md_agent_usage`.
+When the connected client does not, the read fails with a
+`MotherDuck SQL function unavailable` error instead of returning no rows.
+For Duckling compute usage, see [motherduck_compute_usage](compute_usage.md).
+
+This data source inspects existing objects without taking lifecycle ownership.
+Use it with credentials that can read them. See
+[authentication](../guides/authentication.md).
+
+## Example Usage
+
+{{ tffile "examples/data-sources/motherduck_agent_usage/data-source.tf" }}
+
+{{ .SchemaMarkdown | trimspace }}

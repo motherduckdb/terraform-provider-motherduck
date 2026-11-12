@@ -45,6 +45,9 @@ func TestRowSpecsCoverPlannedSQLDataSources(t *testing.T) {
 		"current_user_tokens": true,
 		"storage_info":        true,
 		"compute_usage":       true,
+		"agent_usage":         true,
+		"dive_grantees":       true,
+		"flight_grantees":     true,
 	}
 	got := map[string]bool{}
 	for _, spec := range rowSpecs() {
@@ -159,6 +162,8 @@ func TestRowsSpecsDeclareRequiredFunctions(t *testing.T) {
 		"guides":              "md_list_guides",
 		"guide":               "md_get_guide",
 		"guide_grantees":      "md_set_guide_access",
+		"dive_grantees":       "md_list_dive_grantees",
+		"flight_grantees":     "md_list_flight_grantees",
 		"guide_versions":      "md_list_guide_versions",
 		"share_grants":        "md_list_share_grantees",
 		"current_user_tokens": "md_access_tokens",
@@ -187,6 +192,8 @@ func TestRowsSpecsDeclareRequiredAttributes(t *testing.T) {
 		"flight_logs":        {"flight_id", "run_number"},
 		"guide":              {"guide_id"},
 		"guide_grantees":     {"guide_id"},
+		"dive_grantees":      {"dive_id"},
+		"flight_grantees":    {"flight_id"},
 		"guide_versions":     {"guide_id"},
 	}
 	for name, requiredAttrs := range tests {
@@ -540,6 +547,9 @@ func TestRowsSpecSchemasExposeOnlyRelevantAttributes(t *testing.T) {
 		"current_user_tokens": {"rows", "rows_json"},
 		"storage_info":        {"database_name", "include_history", "limit", "offset", "rows", "rows_json"},
 		"compute_usage":       {"username", "start_time", "end_time", "limit", "offset", "rows", "rows_json"},
+		"agent_usage":         {"username", "start_time", "end_time", "limit", "offset", "rows", "rows_json"},
+		"dive_grantees":       {"dive_id", "rows", "rows_json"},
+		"flight_grantees":     {"flight_id", "rows", "rows_json"},
 	}
 	for name, want := range tests {
 		t.Run(name, func(t *testing.T) {

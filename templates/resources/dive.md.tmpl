@@ -25,6 +25,12 @@ The example's unrestricted share is suitable only for data intended to be
 accessible to anyone with its URL. For private or tenant data, design restricted
 sharing and embedding access explicitly.
 
+The owner of a Dive can always open it. Everyone else needs a `read` grant.
+Depending on the organization, MotherDuck creates a Dive readable by the whole
+organization or by its owner only. Manage the grants with
+[motherduck_dive_grant](dive_grant.md) and review them with
+[motherduck_dive_grantees](../data-sources/dive_grantees.md).
+
 Import by Dive UUID. Refresh and import read `api_version` and the mounted
 `required_resources` of the current Dive version from `MD_GET_DIVE`, so a mount
 added, removed, or retargeted outside Terraform plans an update. MotherDuck
