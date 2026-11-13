@@ -26,11 +26,42 @@ Dive presents it. The Blueprints starter already includes this workload.
 | Flight definitions, Dive content, Guide content | Blueprints |
 | Package-specific databases and shares | Blueprints or its pipeline when the package creates them |
 | Data ingestion and refresh | Flight or modeling runtime |
+| `run` grants on Flights that Blueprints deploys | Blueprints |
+| `read` grants on Dives that Blueprints deploys | Blueprints or Terraform, but only one per Dive |
 
 The stock Wikipedia Flight creates its own database and share. Do not also
 declare those objects as Terraform resources. If you adapt a package to use a
 Terraform-owned database, make its existence a deployment prerequisite and
 remove conflicting create/drop operations from the package.
+
+### Dive and Flight grants
+
+[motherduck_dive_grant](../resources/dive_grant.md) and
+[motherduck_flight_grant](../resources/flight_grant.md) manage the same `read`
+and `run` grants as the `grants` field of a Blueprints Dive or Flight. Use one
+tool for the grants of each Dive or Flight. Otherwise each tool revokes or
+re-adds the other's grants.
+
+- Keep Flight `run` grants in Blueprints. Only the owner of a Flight can grant
+  `run` on it, and a Flight that Blueprints deploys is owned by its deployment
+  service account. Terraform could add those grants only with that account's
+  token.
+- Dive `read` grants can live in either tool, because organization admins can
+  grant `read` on any Dive. To manage them in Terraform, leave `grants` out of
+  that Dive in Blueprints. Read the Dive ID from
+  [motherduck_dives](../data-sources/dives.md), or bind the Blueprints package
+  to a fixed ID.
+- Leave the grants of branch previews to Blueprints. Every preview is a
+  separate Dive with its own ID, and preview cleanup deletes it.
+- Do not combine Terraform grants with Blueprints `grants` in authoritative
+  mode. Authoritative mode revokes every grant the package does not declare,
+  and Terraform adds it back on the next apply.
+
+Use [motherduck_dive_grantees](../data-sources/dive_grantees.md) and
+[motherduck_flight_grantees](../data-sources/flight_grantees.md) to check who
+can open a Dive or run a Flight, whichever tool granted it. See
+[Use Blueprints with the MotherDuck Terraform provider](https://github.com/motherduckdb/motherduck-blueprints/blob/main/docs/use-with-terraform.md)
+for the Blueprints side.
 
 ## 1. Provision deployment identities
 
