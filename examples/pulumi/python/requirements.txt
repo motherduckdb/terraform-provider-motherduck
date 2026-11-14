@@ -6,7 +6,7 @@ debugpy==1.8.22
 dill==0.4.1
 googleapis-common-protos==1.75.5
 grpcio==1.84.0
-opentelemetry-api==1.45.1
+opentelemetry-api==1.45.2
 opentelemetry-exporter-otlp-common==0.66b1
 opentelemetry-exporter-otlp-proto-common==1.45.1
 opentelemetry-exporter-otlp-proto-grpc==1.45.1
