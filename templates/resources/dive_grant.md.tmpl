@@ -24,8 +24,9 @@ updates state and does not revoke the grant.
 
 ## The organization grant on new Dives
 
-MotherDuck can create a Dive with a `read` grant for the whole organization
-already in place. Whether it does depends on the organization. Read
+MotherDuck creates new Dives readable by their owner only. An organization
+that is exempt from private Dives by default still gets a `read` grant for the
+whole organization on each new Dive. Read
 [motherduck_dive_grantees](../data-sources/dive_grantees.md) to see the grants
 a Dive has.
 
