@@ -459,25 +459,28 @@ func rowSpecs() []rowSpec {
 			permissionMarkers: []string{"missing permission for query history", "query history is not available on your plan"},
 			permissionHint:    "motherduck_agent_usage reads the organization usage database, which needs a Business plan and query history access. Organization admins have that access. Use a MotherDuck token for a principal with query history access.",
 			typedRows: []typedRowAttribute{
-				{name: "run_finished_ts", description: "Timestamp of the last model usage recorded for the run, which is approximately when the run finished."},
+				{name: "start_time", description: "Start of the first billed step of the run, excluding agent setup time. For runs recorded before MotherDuck stored step times, it is the same as `end_time`. Null when the MotherDuck client reports only `run_finished_ts`."},
+				{name: "end_time", description: "End of the last billed step of the run, which is when the run finished."},
+				{name: "run_finished_ts", description: "When the run finished. The same value as `end_time`.", deprecation: "MotherDuck replaced run_finished_ts with start_time and end_time. Use end_time, which holds the same value."},
 				{name: "user_id", description: "UUID of the user who started the run."},
 				{name: "user_name", description: "Name of the user who started the run."},
 				{name: "surface", description: "Product surface the run came from, for example `chat`. Null for runs recorded before MotherDuck stored it."},
 				{name: "session_id", description: "UUID of the agent session. For the `chat` surface it is the chat ID."},
 				{name: "run_seq", description: "Sequence number of the run within its session."},
-				{name: "ai_units", description: "AI units the run used, as a decimal string."},
+				{name: "ai_units", description: "AI units the run used, as a decimal string. Current MotherDuck clients report nine decimal places."},
 			},
-			validate: validateUsageWindow("Invalid MotherDuck agent usage window"),
+			validate:    validateUsageWindow("Invalid MotherDuck agent usage window"),
+			postProcess: fillAgentUsageFinishTime,
 			build: func(m rowsModel) (string, error) {
-				filters, err := usageFilters(m, "run_finished_ts >= ", "run_finished_ts < ")
+				filters, err := usageFilters(m, agentUsageFinishedAt+" >= ", agentUsageFinishedAt+" < ")
 				if err != nil {
 					return "", err
 				}
-				query := "SELECT * FROM MD_INFORMATION_SCHEMA.AGENT_USAGE"
+				query := "SELECT * EXCLUDE (" + agentUsageFinishedAt + ") FROM (SELECT *, COLUMNS('^(end_time|run_finished_ts)$') AS " + agentUsageFinishedAt + " FROM MD_INFORMATION_SCHEMA.AGENT_USAGE)"
 				if len(filters) > 0 {
 					query += " WHERE " + strings.Join(filters, " AND ")
 				}
-				return appendRowLimitOffset(query+" ORDER BY run_finished_ts, session_id, run_seq", m), nil
+				return appendRowLimitOffset(query+" ORDER BY "+agentUsageFinishedAt+", session_id, run_seq", m), nil
 			}},
 		objectGranteesSpec("dive", "Dive", "read", "md_list_dive_grantees"),
 		objectGranteesSpec("flight", "Flight", "run", "md_list_flight_grantees"),
@@ -532,6 +535,30 @@ func usageFilters(m rowsModel, startSQL, endSQL string) ([]string, error) {
 		filters = append(filters, bound.sql+sqlbuild.StringLiteral(at.UTC().Format(time.RFC3339Nano))+"::TIMESTAMPTZ")
 	}
 	return filters, nil
+}
+
+// agentUsageFinishedAt names the run finish time in agent usage queries.
+// MotherDuck clients that negotiate the updated agent usage schema report
+// start_time and end_time. Older clients report run_finished_ts instead.
+// COLUMNS() picks whichever of the two the connected client returns, so one
+// query filters and orders by finish time with either schema.
+const agentUsageFinishedAt = "__md_run_finished_at"
+
+// fillAgentUsageFinishTime copies the run finish time between end_time and the
+// deprecated run_finished_ts, so both attributes hold it whichever schema the
+// connected MotherDuck client reports.
+func fillAgentUsageFinishTime(rows []map[string]any) []map[string]any {
+	for _, row := range rows {
+		end, hasEnd := row["end_time"]
+		finished, hasFinished := row["run_finished_ts"]
+		switch {
+		case hasEnd && !hasFinished:
+			row["run_finished_ts"] = end
+		case hasFinished && !hasEnd:
+			row["end_time"] = finished
+		}
+	}
+	return rows
 }
 
 // validateUsageWindow rejects an empty time window at plan time.

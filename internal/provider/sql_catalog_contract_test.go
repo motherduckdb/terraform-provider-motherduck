@@ -252,17 +252,46 @@ output "uptime" {
 	})
 }
 
-const agentUsageContractQuery = "SELECT * FROM MD_INFORMATION_SCHEMA.AGENT_USAGE WHERE lower(user_name) = lower('Analyst') AND run_finished_ts >= '2026-11-01T00:00:00Z'::TIMESTAMPTZ AND run_finished_ts < '2026-12-01T00:00:00Z'::TIMESTAMPTZ ORDER BY run_finished_ts, session_id, run_seq"
+const agentUsageContractFrom = "SELECT * EXCLUDE (__md_run_finished_at) FROM (SELECT *, COLUMNS('^(end_time|run_finished_ts)$') AS __md_run_finished_at FROM MD_INFORMATION_SCHEMA.AGENT_USAGE)"
 
+const agentUsageContractQuery = agentUsageContractFrom + " WHERE lower(user_name) = lower('Analyst') AND __md_run_finished_at >= '2026-11-01T00:00:00Z'::TIMESTAMPTZ AND __md_run_finished_at < '2026-12-01T00:00:00Z'::TIMESTAMPTZ ORDER BY __md_run_finished_at, session_id, run_seq"
+
+// MotherDuck clients that negotiate the updated agent usage schema report
+// start_time, end_time and DECIMAL(18,9) AI units. Older clients report
+// run_finished_ts and DOUBLE AI units. The same configuration reads both.
 func TestContractAgentUsageReadsTypedRows(t *testing.T) {
-	client := newCatalogSQL()
-	client.functions["md_agent_usage"] = true
-	// Rows recorded before MotherDuck stored the surface report it as null.
-	client.rows[agentUsageContractQuery] = `[{"run_finished_ts":"2026-11-03T10:00:00Z","user_id":"ea8f3b1d-892f-4519-b479-9683360691db","user_name":"analyst","surface":null,"session_id":"0b6f0a3e-4a55-4c0f-9d0e-3f0a4a0d1c11","run_seq":1,"ai_units":1.25},{"run_finished_ts":"2026-11-03T10:05:00Z","user_id":"ea8f3b1d-892f-4519-b479-9683360691db","user_name":"analyst","surface":"chat","session_id":"0b6f0a3e-4a55-4c0f-9d0e-3f0a4a0d1c11","run_seq":2,"ai_units":0.5}]`
-	resource.UnitTest(t, resource.TestCase{
-		ProtoV6ProviderFactories: contractProviderFactories(client),
-		Steps: []resource.TestStep{{
-			Config: contractProviderConfig("http://127.0.0.1") + `
+	const user = `"user_id":"ea8f3b1d-892f-4519-b479-9683360691db","user_name":"analyst"`
+	const session = `"session_id":"0b6f0a3e-4a55-4c0f-9d0e-3f0a4a0d1c11"`
+	for name, tc := range map[string]struct {
+		rows      string
+		startTime string
+		aiUnits   string
+	}{
+		"legacy schema": {
+			// Rows recorded before MotherDuck stored the surface report it as null.
+			rows: `[{"run_finished_ts":"2026-11-03T10:00:00Z",` + user + `,"surface":null,` + session + `,"run_seq":1,"ai_units":1.25},` +
+				`{"run_finished_ts":"2026-11-03T10:05:00Z",` + user + `,"surface":"chat",` + session + `,"run_seq":2,"ai_units":0.5}]`,
+			aiUnits: "1.25",
+		},
+		"updated schema": {
+			rows: `[{"start_time":"2026-11-03T09:59:00Z","end_time":"2026-11-03T10:00:00Z",` + user + `,"surface":null,` + session + `,"run_seq":1,"ai_units":1.250000000},` +
+				`{"start_time":"2026-11-03T10:04:00Z","end_time":"2026-11-03T10:05:00Z",` + user + `,"surface":"chat",` + session + `,"run_seq":2,"ai_units":0.500000000}]`,
+			startTime: "2026-11-03T09:59:00Z",
+			aiUnits:   "1.250000000",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			client := newCatalogSQL()
+			client.functions["md_agent_usage"] = true
+			client.rows[agentUsageContractQuery] = tc.rows
+			startTimeCheck := resource.TestCheckNoResourceAttr("data.motherduck_agent_usage.test", "rows.0.start_time")
+			if tc.startTime != "" {
+				startTimeCheck = resource.TestCheckResourceAttr("data.motherduck_agent_usage.test", "rows.0.start_time", tc.startTime)
+			}
+			resource.UnitTest(t, resource.TestCase{
+				ProtoV6ProviderFactories: contractProviderFactories(client),
+				Steps: []resource.TestStep{{
+					Config: contractProviderConfig("http://127.0.0.1") + `
 data "motherduck_agent_usage" "test" {
   username   = "Analyst"
   start_time = "2026-11-01T01:00:00+01:00"
@@ -273,16 +302,23 @@ output "ai_units" {
   value = sum([for row in data.motherduck_agent_usage.test.rows : tonumber(row.ai_units)])
 }
 `,
-			Check: resource.ComposeAggregateTestCheckFunc(
-				resource.TestCheckResourceAttr("data.motherduck_agent_usage.test", "rows.#", "2"),
-				resource.TestCheckNoResourceAttr("data.motherduck_agent_usage.test", "rows.0.surface"),
-				resource.TestCheckResourceAttr("data.motherduck_agent_usage.test", "rows.1.surface", "chat"),
-				resource.TestCheckResourceAttr("data.motherduck_agent_usage.test", "rows.1.run_seq", "2"),
-				resource.TestCheckResourceAttr("data.motherduck_agent_usage.test", "rows.0.session_id", "0b6f0a3e-4a55-4c0f-9d0e-3f0a4a0d1c11"),
-				resource.TestCheckOutput("ai_units", "1.75"),
-			),
-		}},
-	})
+					Check: resource.ComposeAggregateTestCheckFunc(
+						resource.TestCheckResourceAttr("data.motherduck_agent_usage.test", "rows.#", "2"),
+						resource.TestCheckNoResourceAttr("data.motherduck_agent_usage.test", "rows.0.surface"),
+						resource.TestCheckResourceAttr("data.motherduck_agent_usage.test", "rows.1.surface", "chat"),
+						resource.TestCheckResourceAttr("data.motherduck_agent_usage.test", "rows.1.run_seq", "2"),
+						resource.TestCheckResourceAttr("data.motherduck_agent_usage.test", "rows.0.session_id", "0b6f0a3e-4a55-4c0f-9d0e-3f0a4a0d1c11"),
+						resource.TestCheckResourceAttr("data.motherduck_agent_usage.test", "rows.0.ai_units", tc.aiUnits),
+						resource.TestCheckResourceAttr("data.motherduck_agent_usage.test", "rows.0.end_time", "2026-11-03T10:00:00Z"),
+						resource.TestCheckResourceAttr("data.motherduck_agent_usage.test", "rows.0.run_finished_ts", "2026-11-03T10:00:00Z"),
+						resource.TestCheckResourceAttr("data.motherduck_agent_usage.test", "rows.1.end_time", "2026-11-03T10:05:00Z"),
+						startTimeCheck,
+						resource.TestCheckOutput("ai_units", "1.75"),
+					),
+				}},
+			})
+		})
+	}
 }
 
 func TestContractCatalogDataSourceErrors(t *testing.T) {
@@ -318,7 +354,7 @@ func TestContractCatalogDataSourceErrors(t *testing.T) {
 		"agent usage needs query history access": {
 			configure: func(c *catalogSQL) {
 				c.functions["md_agent_usage"] = true
-				c.rowsErr["SELECT * FROM MD_INFORMATION_SCHEMA.AGENT_USAGE ORDER BY run_finished_ts, session_id, run_seq"] = errors.New("Invalid Error: MDExternalException: Missing permission for query history. Ask an organization admin to grant you access.")
+				c.rowsErr[agentUsageContractFrom+" ORDER BY __md_run_finished_at, session_id, run_seq"] = errors.New("Invalid Error: MDExternalException: Missing permission for query history. Ask an organization admin to grant you access.")
 			},
 			config:    `data "motherduck_agent_usage" "test" {}`,
 			wantError: "MotherDuck query history access required",

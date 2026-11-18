@@ -26,8 +26,9 @@ accessible to anyone with its URL. For private or tenant data, design restricted
 sharing and embedding access explicitly.
 
 The owner of a Dive can always open it. Everyone else needs a `read` grant.
-Depending on the organization, MotherDuck creates a Dive readable by the whole
-organization or by its owner only. Manage the grants with
+MotherDuck creates new Dives readable by their owner only, unless an
+organization is exempt from private Dives by default. Service accounts that
+embed a Dive also need a `read` grant. Manage the grants with
 [motherduck_dive_grant](dive_grant.md) and review them with
 [motherduck_dive_grantees](../data-sources/dive_grantees.md).
 

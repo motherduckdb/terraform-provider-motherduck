@@ -22,6 +22,11 @@ bounds must be RFC 3339 timestamps with a time zone offset, such as
 `start_time` and before `end_time`. AI units are reported as a decimal string.
 Use `tonumber()` to add them up.
 
+Each row reports when the run started and finished in `start_time` and
+`end_time`. Older MotherDuck clients report only the finish time, so
+`start_time` is null for them. The deprecated `run_finished_ts` attribute holds
+the same value as `end_time`.
+
 This data source requires a MotherDuck client that exposes `md_agent_usage`.
 When the connected client does not, the read fails with a
 `MotherDuck SQL function unavailable` error instead of returning no rows.
@@ -70,10 +75,12 @@ output "ai_units_by_user" {
 
 Read-Only:
 
-- `ai_units` (String) AI units the run used, as a decimal string.
-- `run_finished_ts` (String) Timestamp of the last model usage recorded for the run, which is approximately when the run finished.
+- `ai_units` (String) AI units the run used, as a decimal string. Current MotherDuck clients report nine decimal places.
+- `end_time` (String) End of the last billed step of the run, which is when the run finished.
+- `run_finished_ts` (String, Deprecated) When the run finished. The same value as `end_time`.
 - `run_seq` (String) Sequence number of the run within its session.
 - `session_id` (String) UUID of the agent session. For the `chat` surface it is the chat ID.
+- `start_time` (String) Start of the first billed step of the run, excluding agent setup time. For runs recorded before MotherDuck stored step times, it is the same as `end_time`. Null when the MotherDuck client reports only `run_finished_ts`.
 - `surface` (String) Product surface the run came from, for example `chat`. Null for runs recorded before MotherDuck stored it.
 - `user_id` (String) UUID of the user who started the run.
 - `user_name` (String) Name of the user who started the run.

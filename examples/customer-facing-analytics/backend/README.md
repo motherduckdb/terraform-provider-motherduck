@@ -34,7 +34,9 @@ exposing the service. Never trust a browser-supplied tenant header.
 npm ci
 npm run build
 npm test
-# Inject file paths and the host for your organization's region.
+# Inject file paths and the host for your organization's region, for example
+# pg.eu-central-1-aws.motherduck.com, pg.uksouth-azure.motherduck.com, or
+# pg.eastus-azure.motherduck.com.
 export MOTHERDUCK_PG_HOST=pg.us-east-1-aws.motherduck.com
 npm start
 ```
