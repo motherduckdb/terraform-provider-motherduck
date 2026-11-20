@@ -36,6 +36,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 2
+    ignore:
+      # The cookbook connects to MotherDuck, which accepts only the DuckDB
+      # versions it serves an extension for. DuckDB 2.0.0 is rejected with
+      # "not yet supported by MotherDuck". Bump this pin by hand, together
+      # with duckdb-go, after `make test-live-cookbook-pipeline` passes.
+      - dependency-name: "duckdb"
     groups:
       cookbook-pipeline:
         patterns:
