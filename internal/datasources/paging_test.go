@@ -230,8 +230,9 @@ func TestTypedRowsMatchLiveColumns(t *testing.T) {
 		"storage_info":        "database_name,database_id,created_ts,deleted_ts,user_name,active_bytes,historical_bytes,retained_for_clone_bytes,failsafe_bytes,transient,historical_snapshot_retention,computed_ts",
 		"compute_usage":       "start_time,end_time,user_id,user_name,duckling_size,duckling_id,is_read_scaling,uptime_seconds,duckling_size_multiplier,queries",
 		// The updated agent usage schema of v1.5.6-2026-11-503 (protocol
-		// DDB_1_5_6_V6). Older clients report run_finished_ts instead of
-		// start_time and end_time, which the deprecated attribute covers.
+		// DDB_1_5_6_V6), confirmed live on 2026-11-20. Older clients report
+		// run_finished_ts instead of start_time and end_time, which the
+		// deprecated attribute covers.
 		"agent_usage":        "start_time,end_time,user_id,user_name,surface,session_id,run_seq,ai_units",
 		"dive_grantees":      "grantee_name,grantee_type,privilege",
 		"flight_grantees":    "grantee_name,grantee_type,privilege",
