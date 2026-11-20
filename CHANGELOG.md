@@ -4,6 +4,10 @@ Each release has a versioned notes file under `release-notes/`, which is also th
 body of the matching [GitHub release](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
 This index lists the headline change for every release.
 
+## v0.4.3
+
+This release updates the guides and examples to v0.4.2 and documents that `motherduck_agent_usage` requires provider version 0.4.2 or later, because MotherDuck now serves the updated agent usage schema. Version constraints such as `~> 0.4.0` select it. See the [v0.4.3 release notes](release-notes/v0.4.3.md).
+
 ## v0.4.2
 
 This release supports MotherDuck organizations in the Azure regions, adds `start_time` and `end_time` to `motherduck_agent_usage` and reads its updated schema, and deprecates `run_finished_ts`. Version constraints such as `~> 0.4.0` select it. See the [v0.4.2 release notes](release-notes/v0.4.2.md).
