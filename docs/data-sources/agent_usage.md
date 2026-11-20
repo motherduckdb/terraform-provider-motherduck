@@ -27,6 +27,11 @@ Each row reports when the run started and finished in `start_time` and
 `start_time` is null for them. The deprecated `run_finished_ts` attribute holds
 the same value as `end_time`.
 
+The current MotherDuck client reports `start_time` and `end_time` and no longer
+reports `run_finished_ts`. Provider versions earlier than 0.4.2 filter on
+`run_finished_ts`, so they fail to read this data source with a binder error.
+Configurations that read it need provider version 0.4.2 or later.
+
 This data source requires a MotherDuck client that exposes `md_agent_usage`.
 When the connected client does not, the read fails with a
 `MotherDuck SQL function unavailable` error instead of returning no rows.

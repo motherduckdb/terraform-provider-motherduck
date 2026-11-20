@@ -44,7 +44,7 @@ terraform {
 provider "motherduck" {}
 
 module "read_hypertenancy" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.4.0"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/read-hypertenancy?ref=v0.4.2"
 
   expected_writer_username = "svc_writer_prod"
 
