@@ -22,6 +22,11 @@ bounds must be RFC 3339 timestamps with a time zone offset, such as
 `start_time` and before `end_time`. AI units are reported as a decimal string.
 Use `tonumber()` to add them up.
 
+Each row reports when the run started and finished in `start_time` and
+`end_time`. Older MotherDuck clients report only the finish time, so
+`start_time` is null for them. The deprecated `run_finished_ts` attribute holds
+the same value as `end_time`.
+
 This data source requires a MotherDuck client that exposes `md_agent_usage`.
 When the connected client does not, the read fails with a
 `MotherDuck SQL function unavailable` error instead of returning no rows.

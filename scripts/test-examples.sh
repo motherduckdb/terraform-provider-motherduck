@@ -137,6 +137,11 @@ HCL
 partner_api_key = "dummy-partner-key"
 HCL
       ;;
+    examples/resources/motherduck_secret/azure)
+      cat > "${work_dir}/terraform.tfvars" <<'HCL'
+azure_storage_connection_string = "DefaultEndpointsProtocol=https;AccountName=example;AccountKey=dummy;EndpointSuffix=core.windows.net"
+HCL
+      ;;
   esac
 }
 

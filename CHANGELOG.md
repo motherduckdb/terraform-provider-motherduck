@@ -4,6 +4,10 @@ Each release has a versioned notes file under `release-notes/`, which is also th
 body of the matching [GitHub release](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
 This index lists the headline change for every release.
 
+## v0.4.2
+
+This release supports MotherDuck organizations in the Azure regions, adds `start_time` and `end_time` to `motherduck_agent_usage` and reads its updated schema, and deprecates `run_finished_ts`. Version constraints such as `~> 0.4.0` select it. See the [v0.4.2 release notes](release-notes/v0.4.2.md).
+
 ## v0.4.1
 
 This release adds the `motherduck_dive_grant` and `motherduck_flight_grant` resources, which manage who can open a Dive and who can run a Flight, the matching grantee data sources, and the `motherduck_agent_usage` data source for agent usage. Version constraints such as `~> 0.4.0` select it. See the [v0.4.1 release notes](release-notes/v0.4.1.md).

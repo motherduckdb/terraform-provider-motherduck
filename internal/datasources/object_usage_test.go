@@ -11,21 +11,22 @@ import (
 
 func TestAgentUsageQueries(t *testing.T) {
 	spec := findSpec(t, "agent_usage")
-	const order = " ORDER BY run_finished_ts, session_id, run_seq"
+	const from = "SELECT * EXCLUDE (__md_run_finished_at) FROM (SELECT *, COLUMNS('^(end_time|run_finished_ts)$') AS __md_run_finished_at FROM MD_INFORMATION_SCHEMA.AGENT_USAGE)"
+	const order = " ORDER BY __md_run_finished_at, session_id, run_seq"
 	cases := []struct {
 		model rowsModel
 		want  string
 	}{
-		{rowsModel{}, "SELECT * FROM MD_INFORMATION_SCHEMA.AGENT_USAGE" + order},
+		{rowsModel{}, from + order},
 		{
 			rowsModel{Username: types.StringValue("O'Brien")},
-			"SELECT * FROM MD_INFORMATION_SCHEMA.AGENT_USAGE WHERE lower(user_name) = lower('O''Brien')" + order,
+			from + " WHERE lower(user_name) = lower('O''Brien')" + order,
 		},
 		{
 			// Bounds are sent in UTC, and the end bound is exclusive so
 			// consecutive windows never count a run twice.
 			rowsModel{StartTime: types.StringValue("2026-11-01T02:00:00+02:00"), EndTime: types.StringValue("2026-12-01T00:00:00Z"), Limit: types.Int64Value(10), Offset: types.Int64Value(20)},
-			"SELECT * FROM MD_INFORMATION_SCHEMA.AGENT_USAGE WHERE run_finished_ts >= '2026-11-01T00:00:00Z'::TIMESTAMPTZ AND run_finished_ts < '2026-12-01T00:00:00Z'::TIMESTAMPTZ" + order + " LIMIT 10 OFFSET 20",
+			from + " WHERE __md_run_finished_at >= '2026-11-01T00:00:00Z'::TIMESTAMPTZ AND __md_run_finished_at < '2026-12-01T00:00:00Z'::TIMESTAMPTZ" + order + " LIMIT 10 OFFSET 20",
 		},
 	}
 	for _, tc := range cases {
@@ -82,5 +83,21 @@ func TestObjectGranteesQueries(t *testing.T) {
 		if _, err := spec.build(rowsModel{GuideID: types.StringValue(testUUID)}); err == nil {
 			t.Fatalf("%s built a query without its object ID", name)
 		}
+	}
+}
+
+// MotherDuck clients that negotiate the updated agent usage schema report
+// start_time and end_time instead of run_finished_ts. Both attributes carry the
+// finish time with either schema.
+func TestAgentUsageFillsFinishTimeForBothSchemas(t *testing.T) {
+	rows := fillAgentUsageFinishTime([]map[string]any{
+		{"run_finished_ts": "2026-11-03T10:00:00Z"},
+		{"start_time": "2026-11-03T09:59:00Z", "end_time": "2026-11-03T10:05:00Z"},
+	})
+	if rows[0]["end_time"] != "2026-11-03T10:00:00Z" || rows[0]["start_time"] != nil {
+		t.Fatalf("legacy row = %#v, want end_time copied from run_finished_ts and no start_time", rows[0])
+	}
+	if rows[1]["run_finished_ts"] != "2026-11-03T10:05:00Z" || rows[1]["start_time"] != "2026-11-03T09:59:00Z" {
+		t.Fatalf("updated row = %#v, want run_finished_ts copied from end_time", rows[1])
 	}
 }
