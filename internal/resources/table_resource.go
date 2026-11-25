@@ -197,6 +197,7 @@ func (r *tableResource) Create(ctx context.Context, req resource.CreateRequest, 
 	}
 	columns := map[string]string{}
 	resp.Diagnostics.Append(plan.Columns.ElementsAs(ctx, &columns, false)...)
+	validateTableColumns(ctx, plan.Columns, &resp.Diagnostics)
 	validateTableShape(plan, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -476,6 +477,7 @@ func (r *tableResource) Update(ctx context.Context, req resource.UpdateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	validateTableColumns(ctx, plan.Columns, &resp.Diagnostics)
 	validateTableShape(plan, &resp.Diagnostics)
 	planned := map[string]string{}
 	resp.Diagnostics.Append(plan.Columns.ElementsAs(ctx, &planned, false)...)

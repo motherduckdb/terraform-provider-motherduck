@@ -55,7 +55,7 @@ to match another resource does not create a dependency.
 | `Unable to compare MotherDuck table column types` | The provider could not resolve a column type during planning, so it refused to plan a replacement. | Check connectivity. Qualify a user-defined type with its database and schema, such as `analytics.main.mood`, or write out its definition. |
 | `Service account description cannot change` | MotherDuck sets the description only when it creates the account. Replacing the account would delete its data. | Restore the previous description, or follow the steps in the message to record a new description without changing the account. |
 | `Unsupported MotherDuck database name spelling` | The new name differs from the existing one only in the case of a non-ASCII letter, which MotherDuck cannot attach. | Keep the existing spelling. |
-| `Table updates are not supported`, `Role updates are not supported`, or a similar update error | An argument that cannot change in place changed without a planned replacement. | Replace the resource, for example with `terraform apply -replace=<address>`, after confirming that losing the object is acceptable. |
+| `Role updates are not supported`, `Service account updates are not supported`, or a similar update error | An argument that cannot change in place changed without a planned replacement. | Replace the resource, for example with `terraform apply -replace=<address>`, after confirming that losing the object is acceptable. |
 
 ## Features that depend on the account
 

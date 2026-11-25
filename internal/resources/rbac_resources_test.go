@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -13,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 )
 
 func TestRoleNameValidator(t *testing.T) {
@@ -247,5 +249,47 @@ func TestRoleAssignmentErrorDetail(t *testing.T) {
 	}
 	if revoke := roleAssignmentErrorDetail(refused, true); !strings.Contains(revoke, "terraform state rm") {
 		t.Fatalf("revoke detail = %q, want the state removal hint", revoke)
+	}
+}
+
+func TestRoleGrantRejectsInvalidResolvedGranteeType(t *testing.T) {
+	ctx := context.Background()
+	client := &recordingSQLClient{}
+	r := &roleGrantResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+
+	model := roleGrantModel{
+		ID:          types.StringUnknown(),
+		RoleName:    types.StringValue("analytics_readers"),
+		GranteeType: types.StringValue("GROUP"),
+		GranteeName: types.StringValue("alice"),
+	}
+	plan := tfsdk.Plan{Schema: schemaResp.Schema}
+	if diags := plan.Set(ctx, model); diags.HasError() {
+		t.Fatal(diags)
+	}
+	var createResp resource.CreateResponse
+	r.Create(ctx, resource.CreateRequest{Plan: plan}, &createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid resolved grantee_type to fail Create")
+	}
+
+	var readDiags diag.Diagnostics
+	if found := r.readRoleGrant(ctx, &model, &readDiags); found || !readDiags.HasError() {
+		t.Fatalf("readRoleGrant found = %t, diags = %v, want false with error", found, readDiags)
+	}
+
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(ctx, model); diags.HasError() {
+		t.Fatal(diags)
+	}
+	var deleteResp resource.DeleteResponse
+	r.Delete(ctx, resource.DeleteRequest{State: state}, &deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid grantee_type to fail Delete")
+	}
+	if len(client.execs) != 0 {
+		t.Fatalf("executed SQL queries %v on invalid grantee_type", client.execs)
 	}
 }

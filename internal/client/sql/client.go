@@ -305,11 +305,11 @@ func bootQueries(token string, cfg Config) []string {
 		"LOAD motherduck",
 		"SET motherduck_token = " + sqlbuild.StringLiteral(token),
 	}
-	if cfg.AttachMode != "" {
-		queries = append(queries, "SET motherduck_attach_mode = "+sqlbuild.StringLiteral(cfg.AttachMode))
+	if attachMode := strings.TrimSpace(cfg.AttachMode); attachMode != "" {
+		queries = append(queries, "SET motherduck_attach_mode = "+sqlbuild.StringLiteral(attachMode))
 	}
-	if cfg.Database != "" {
-		queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"+cfg.Database))
+	if database := strings.TrimSpace(cfg.Database); database != "" {
+		queries = append(queries, "ATTACH "+sqlbuild.StringLiteral("md:"+database))
 	} else {
 		// Initialize the default workspace explicitly. Without this attach,
 		// the first md_user() query can be answered by local DuckDB as

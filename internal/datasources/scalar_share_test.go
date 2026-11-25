@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	mdsql "github.com/motherduckdb/terraform-provider-motherduck/internal/client/sql"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 )
 
 type fakeDetailsClient struct {
@@ -295,5 +296,27 @@ func TestShareErrorsNeverEchoTheURL(t *testing.T) {
 	}
 	if !shareNotFound(errors.New("Catalog Error: Share: 'tenant' not found.")) || shareNotFound(errors.New("permission denied")) || shareNotFound(nil) {
 		t.Fatal("shareNotFound misclassified an error")
+	}
+}
+
+func TestShareDataSourceReadValidatesResolvedLookup(t *testing.T) {
+	str := func(value string) tftypes.Value { return tftypes.NewValue(tftypes.String, value) }
+	null := tftypes.NewValue(tftypes.String, nil)
+	for name, tc := range map[string]struct {
+		name, url tftypes.Value
+	}{
+		"neither":    {null, null},
+		"both":       {str("analytics"), str("md:_share/analytics/abc")},
+		"blank name": {str("   "), null},
+		"blank url":  {null, str(" \t ")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ds := &shareDataSource{baseDataSource: baseDataSource{provider: &providerctx.Context{SQL: &admissionSQLClient{available: true}}}}
+			var resp datasource.ReadResponse
+			ds.Read(t.Context(), datasource.ReadRequest{Config: shareConfig(t, tc.name, tc.url)}, &resp)
+			if !resp.Diagnostics.HasError() {
+				t.Fatalf("expected invalid %s lookup to fail Read before querying SQL", name)
+			}
+		})
 	}
 }

@@ -168,6 +168,18 @@ func TestBootQueriesUseTrimmedToken(t *testing.T) {
 	}
 }
 
+func TestBootQueriesTrimBlankDatabaseAndAttachMode(t *testing.T) {
+	queries := bootQueries("token-value", Config{Database: "  \t", AttachMode: " \n "})
+	for _, query := range queries {
+		if strings.HasPrefix(query, "SET motherduck_attach_mode") {
+			t.Fatalf("unexpected attach mode query %q for blank attach_mode", query)
+		}
+	}
+	if got, want := queries[len(queries)-1], "ATTACH 'md:'"; got != want {
+		t.Fatalf("last boot query = %q, want %q", got, want)
+	}
+}
+
 func TestNULQueryIsRejectedWithoutEchoingStatement(t *testing.T) {
 	client := newEmbeddedClient(t)
 	query := "SELECT 'secret-prefix\x00suffix'"

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	mdrest "github.com/motherduckdb/terraform-provider-motherduck/internal/client/rest"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
@@ -69,6 +70,8 @@ func Create(ctx context.Context, client Client, model *Model) error {
 func request(ctx context.Context, model *Model) (mdrest.EmbedSessionRequest, error) {
 	req := mdrest.EmbedSessionRequest{Username: model.Username.ValueString()}
 	switch {
+	case !model.SessionName.IsNull() && !model.SessionHint.IsNull():
+		return req, errors.New("set session_name or session_hint, not both")
 	case !model.SessionName.IsNull():
 		req.SessionName = model.SessionName.ValueString()
 	case !model.SessionHint.IsNull():
@@ -83,9 +86,19 @@ func request(ctx context.Context, model *Model) (mdrest.EmbedSessionRequest, err
 		if err != nil {
 			return req, err
 		}
+		size, err := encodedSize(resources)
+		if err != nil {
+			return req, err
+		}
+		if size > RequiredResourcesMaxBytes {
+			return req, fmt.Errorf("required_resources encodes to %d bytes of JSON, which exceeds the MotherDuck limit of %d bytes", size, RequiredResourcesMaxBytes)
+		}
 		req.RequiredResources = &resources
 	}
 	if !model.InitialState.IsNull() {
+		if detail, ok := ValidateInitialStateValue(model.InitialState.ValueString()); !ok {
+			return req, errors.New(strings.TrimSuffix(detail, "."))
+		}
 		var compact bytes.Buffer
 		if err := json.Compact(&compact, []byte(model.InitialState.ValueString())); err != nil {
 			return req, fmt.Errorf("initial_state must be a JSON object: %w", err)

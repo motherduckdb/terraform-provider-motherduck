@@ -155,6 +155,10 @@ func (r *shareResource) Create(ctx context.Context, req resource.CreateRequest, 
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	validateShareOptions(plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	options := []string{}
 	if !plan.Access.IsNull() && plan.Access.ValueString() != "" {
 		options = append(options, "ACCESS "+strings.ToUpper(plan.Access.ValueString()))
@@ -308,6 +312,31 @@ func prepareShareCreateState(model *shareModel) {
 }
 
 // hasUnquotedComma reports whether value contains a comma outside a
+func validateShareOptions(model shareModel, diags *diag.Diagnostics) {
+	checks := []struct {
+		attribute string
+		value     types.String
+		allowed   []string
+	}{
+		{attribute: "access", value: model.Access, allowed: []string{"organization", "restricted", "unrestricted"}},
+		{attribute: "visibility", value: model.Visibility, allowed: []string{"hidden", "discoverable"}},
+		{attribute: "update_mode", value: model.UpdateMode, allowed: []string{"automatic", "manual"}},
+	}
+	for _, check := range checks {
+		if check.value.IsNull() || check.value.IsUnknown() {
+			continue
+		}
+		if !validateStringEnumValue(check.value.ValueString(), check.allowed) {
+			diags.AddAttributeError(
+				path.Root(check.attribute),
+				"Invalid "+check.attribute,
+				"Value must be a lowercase canonical value, one of: "+strings.Join(check.allowed, ", ")+".",
+			)
+		}
+	}
+}
+
+// hasUnquotedComma reports whether a share include pattern contains a comma outside a
 // double-quoted identifier. Quoted identifiers may contain commas, and a
 // doubled quote inside them is an escaped quote.
 func hasUnquotedComma(value string) bool {

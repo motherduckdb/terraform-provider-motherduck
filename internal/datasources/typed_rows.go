@@ -59,17 +59,17 @@ func (s rowSpec) typedRowsValue(rowsJSON string) (types.List, diag.Diagnostics) 
 }
 
 func typedRowStringValue(value json.RawMessage) types.String {
-	if len(value) == 0 || string(value) == "null" {
+	trimmed := bytes.TrimSpace(value)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
 		return types.StringNull()
 	}
 	// Raw row values have already passed JSON validation. Only strings need
 	// unescaping. Keep null handling and the fallback representation unchanged.
-	trimmed := bytes.TrimSpace(value)
-	if len(trimmed) > 0 && trimmed[0] != '"' && trimmed[0] != 'n' {
+	if trimmed[0] != '"' {
 		return types.StringValue(string(value))
 	}
 	var text string
-	if json.Unmarshal(value, &text) == nil {
+	if json.Unmarshal(trimmed, &text) == nil {
 		return types.StringValue(text)
 	}
 	return types.StringValue(string(value))

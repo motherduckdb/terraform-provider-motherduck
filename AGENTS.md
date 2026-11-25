@@ -12,11 +12,11 @@ Repository-specific guidance for coding agents working on the MotherDuck Terrafo
 ## Where Things Are
 
 - `internal/provider`: provider configuration, registration, and the hermetic `TestContract*` lifecycle tests (build tag `contract`).
-- `internal/resources` and `internal/datasources`: one file per resource, and `catalog_specs.go` for catalog data sources.
+- `internal/resources`, `internal/datasources`, and `internal/ephemeral`: one file per resource or ephemeral resource, and `catalog_specs.go` for catalog data sources.
 - `internal/client/sql` and `internal/client/rest`: the only packages that talk to MotherDuck. SQL runs on one serialized connection.
 - `internal/motherduck/catalog.yaml`: the inventory of REST paths and SQL surfaces the provider covers. Update it with every new resource or data source.
 - `templates/` and `examples/`: sources for everything under `docs/`. Never edit `docs/` by hand.
-- `docs/guides/troubleshooting.md`: user-facing diagnostics and fixes. Add a row when a change adds or rewords a diagnostic users act on.
+- `templates/guides/troubleshooting.md.tmpl` (generated into `docs/guides/troubleshooting.md`): user-facing diagnostics and fixes. Edit the template and run `make docs` when a change adds or rewords a diagnostic users act on.
 
 ## Fast Feedback
 

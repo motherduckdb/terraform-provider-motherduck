@@ -195,6 +195,10 @@ func (r *databaseResource) Create(ctx context.Context, req resource.CreateReques
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	validateDatabaseConfig(ctx, plan, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	ctx, cancel := timeoutContext(ctx, plan.Timeouts, "create", 30*time.Minute, &resp.Diagnostics)
 	defer cancel()
 	if resp.Diagnostics.HasError() {
@@ -310,8 +314,10 @@ func (r *databaseResource) Update(ctx context.Context, req resource.UpdateReques
 	if knownInt64(plan.SnapshotRetentionDays) && !plan.SnapshotRetentionDays.Equal(state.SnapshotRetentionDays) {
 		statements = append(statements, fmt.Sprintf("ALTER DATABASE %s SET SNAPSHOT_RETENTION_DAYS = %d", sqlbuild.QuoteIdentifier(plan.Name.ValueString()), plan.SnapshotRetentionDays.ValueInt64()))
 	}
+	plannedIceberg := databaseIcebergOptions(ctx, plan.Iceberg, &resp.Diagnostics)
+	validateDatabaseIcebergOptions(plannedIceberg, &resp.Diagnostics)
 	icebergAssignments := databaseIcebergAlterAssignments(
-		databaseIcebergOptions(ctx, plan.Iceberg, &resp.Diagnostics),
+		plannedIceberg,
 		databaseIcebergOptions(ctx, state.Iceberg, &resp.Diagnostics),
 	)
 	if resp.Diagnostics.HasError() {

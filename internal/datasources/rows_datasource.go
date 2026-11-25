@@ -114,6 +114,10 @@ func (d *rowsDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	d.validateModel(config, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 	query, err := d.spec.build(config)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid MotherDuck data source configuration", err.Error())
@@ -260,9 +264,14 @@ type rowSortKey struct {
 func sortRowsByKeys(keys ...rowSortKey) func([]map[string]any) []map[string]any {
 	return func(rows []map[string]any) []map[string]any {
 		canonical := make([]string, len(rows))
-		for i, row := range rows {
-			data, _ := json.Marshal(row)
-			canonical[i] = string(data)
+		canonicalKnown := make([]bool, len(rows))
+		canonicalJSON := func(index int) string {
+			if !canonicalKnown[index] {
+				data, _ := json.Marshal(rows[index])
+				canonical[index] = string(data)
+				canonicalKnown[index] = true
+			}
+			return canonical[index]
 		}
 		order := make([]int, len(rows))
 		for i := range order {
@@ -283,7 +292,7 @@ func sortRowsByKeys(keys ...rowSortKey) func([]map[string]any) []map[string]any 
 					return cmp < 0
 				}
 			}
-			return canonical[order[i]] < canonical[order[j]]
+			return canonicalJSON(order[i]) < canonicalJSON(order[j])
 		})
 		sorted := make([]map[string]any, len(rows))
 		for i, index := range order {
@@ -586,13 +595,20 @@ func (d *rowsDataSource) ValidateConfig(ctx context.Context, req datasource.Vali
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	d.validateModel(model, &resp.Diagnostics)
+}
+
+func (d *rowsDataSource) validateModel(model rowsModel, diags *diag.Diagnostics) {
+	if d.spec.validate == nil {
+		return
+	}
 	if err := d.spec.validate(model); err != nil {
 		var attrErr attributeConfigError
 		if errors.As(err, &attrErr) {
-			resp.Diagnostics.AddAttributeError(path.Root(attrErr.attribute), attrErr.summary, attrErr.Error())
+			diags.AddAttributeError(path.Root(attrErr.attribute), attrErr.summary, attrErr.Error())
 			return
 		}
-		resp.Diagnostics.AddAttributeError(path.Root("offset"), "Invalid MotherDuck data source paging", err.Error())
+		diags.AddAttributeError(path.Root("offset"), "Invalid MotherDuck data source paging", err.Error())
 	}
 }
 

@@ -19,18 +19,25 @@ type stringLengthValidator struct {
 	max  int
 }
 
+func characterUnit(n int) string {
+	if n == 1 {
+		return "character"
+	}
+	return "characters"
+}
+
 func (v stringLengthValidator) Description(context.Context) string {
 	if v.max > 0 {
 		return fmt.Sprintf("must be between %d and %d characters", v.min, v.max)
 	}
-	return fmt.Sprintf("must be at least %d character", v.min)
+	return fmt.Sprintf("must be at least %d %s", v.min, characterUnit(v.min))
 }
 
 func (v stringLengthValidator) MarkdownDescription(context.Context) string {
 	if v.max > 0 {
 		return fmt.Sprintf("must be between `%d` and `%d` characters", v.min, v.max)
 	}
-	return fmt.Sprintf("must be at least `%d` character", v.min)
+	return fmt.Sprintf("must be at least `%d` %s", v.min, characterUnit(v.min))
 }
 
 func (v stringLengthValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
@@ -46,7 +53,7 @@ func (v stringLengthValidator) ValidateString(ctx context.Context, req validator
 		resp.Diagnostics.AddAttributeError(req.Path, "Invalid "+v.name, fmt.Sprintf("Value must be non-blank and between %d and %d characters.", v.min, v.max))
 		return
 	}
-	resp.Diagnostics.AddAttributeError(req.Path, "Invalid "+v.name, fmt.Sprintf("Value must be non-blank and at least %d character.", v.min))
+	resp.Diagnostics.AddAttributeError(req.Path, "Invalid "+v.name, fmt.Sprintf("Value must be non-blank and at least %d %s.", v.min, characterUnit(v.min)))
 }
 
 // StringMaxUTF16Units limits a string to max UTF-16 code units, the length a

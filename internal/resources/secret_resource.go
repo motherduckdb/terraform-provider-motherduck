@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -298,12 +297,13 @@ func (r *secretResource) writeSecret(ctx context.Context, getter stateGetter, co
 		FlightParamsKnown: flightParams != nil,
 		FlightParamKeys:   slices.Sorted(maps.Keys(flightParams)),
 	}, diags)
+	paramKeys := slices.Sorted(maps.Keys(params))
 	// Re-validate on the resolved plan: values unknown at plan time skipped the
 	// plan-time checks, and everything below is spliced into raw SQL.
 	validateSecretValues(secretValidationValues{
 		Type:      plan.Type.ValueString(),
 		Provider:  plan.SecretProvider.ValueString(),
-		ParamKeys: slices.Sorted(maps.Keys(params)),
+		ParamKeys: paramKeys,
 		RawSQL:    plan.SecretSQL.ValueString(),
 	}, diags)
 	if diags.HasError() {
@@ -313,12 +313,7 @@ func (r *secretResource) writeSecret(ctx context.Context, getter stateGetter, co
 	if !plan.SecretProvider.IsNull() && plan.SecretProvider.ValueString() != "" {
 		entries = append(entries, "PROVIDER "+strings.ToUpper(plan.SecretProvider.ValueString()))
 	}
-	keys := make([]string, 0, len(params))
-	for key := range params {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
+	for _, key := range paramKeys {
 		entries = append(entries, strings.ToUpper(key)+" "+sqlbuild.StringLiteral(params[key]))
 	}
 	if flightParams != nil {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -110,12 +111,29 @@ func (d *shareDataSource) ValidateConfig(ctx context.Context, req datasource.Val
 	var name, url types.String
 	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("name"), &name)...)
 	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("url"), &url)...)
-	if resp.Diagnostics.HasError() || name.IsUnknown() || url.IsUnknown() {
+	if resp.Diagnostics.HasError() {
 		return
 	}
-	if name.IsNull() == url.IsNull() {
-		resp.Diagnostics.AddAttributeError(path.Root("name"), "Invalid MotherDuck share lookup", "Set exactly one of name or url.")
+	validateShareLookup(name, url, &resp.Diagnostics)
+}
+
+func validateShareLookup(name, url types.String, diags *diag.Diagnostics) bool {
+	if name.IsUnknown() || url.IsUnknown() {
+		return true
 	}
+	if name.IsNull() == url.IsNull() {
+		diags.AddAttributeError(path.Root("name"), "Invalid MotherDuck share lookup", "Set exactly one of name or url.")
+		return false
+	}
+	if !name.IsNull() && strings.TrimSpace(name.ValueString()) == "" {
+		diags.AddAttributeError(path.Root("name"), "Invalid MotherDuck share name", "Value must be non-blank and at least 1 character.")
+		return false
+	}
+	if !url.IsNull() && strings.TrimSpace(url.ValueString()) == "" {
+		diags.AddAttributeError(path.Root("url"), "Invalid MotherDuck share url", "Value must be non-blank and at least 1 character.")
+		return false
+	}
+	return true
 }
 
 func (d *shareDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -126,6 +144,9 @@ func (d *shareDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 	}
 	client := d.sql(ctx, &resp.Diagnostics)
 	if client == nil {
+		return
+	}
+	if !validateShareLookup(config.Name, config.URL, &resp.Diagnostics) {
 		return
 	}
 	available, err := sqlfunc.Exists(ctx, client, describeShareFunction)

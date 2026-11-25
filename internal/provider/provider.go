@@ -115,8 +115,8 @@ func (p *motherduckProvider) Configure(ctx context.Context, req provider.Configu
 	if strings.TrimSpace(apiBaseURL) == "" {
 		apiBaseURL = mdrest.DefaultBaseURL
 	}
-	database := stringValue(cfg.Database, "")
-	attachMode := stringValue(cfg.AttachMode, "")
+	database := strings.TrimSpace(stringValue(cfg.Database, ""))
+	attachMode := strings.TrimSpace(stringValue(cfg.AttachMode, ""))
 	customUserAgent := userAgent(p.version, stringValue(cfg.CustomUserAgent, ""))
 	requestTimeout := int64Value(cfg.RequestTimeout, 30)
 

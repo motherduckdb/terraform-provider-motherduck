@@ -110,9 +110,12 @@ func sortActiveAccounts(accounts []mdrest.ActiveAccount) []mdrest.ActiveAccount 
 }
 
 func activeAccountsListValue(accounts []mdrest.ActiveAccount, diags *diag.Diagnostics) types.List {
+	return activeAccountsListValueFromSorted(sortActiveAccounts(accounts), diags)
+}
+
+func activeAccountsListValueFromSorted(sorted []mdrest.ActiveAccount, diags *diag.Diagnostics) types.List {
 	accountType := activeAccountsAttribute().NestedObject.Type().(types.ObjectType)
 	ducklingType := accountType.AttrTypes["ducklings"].(types.ListType).ElemType.(types.ObjectType)
-	sorted := sortActiveAccounts(accounts)
 	values := make([]attr.Value, 0, len(sorted))
 	for _, account := range sorted {
 		ducklingValues := make([]attr.Value, 0, len(account.Ducklings))
@@ -152,14 +155,15 @@ func (d *activeAccountsDataSource) Read(ctx context.Context, req datasource.Read
 		resp.Diagnostics.AddError("Unable to read MotherDuck active accounts", err.Error())
 		return
 	}
-	payload, err := json.Marshal(sortActiveAccounts(accounts.Accounts))
+	sortedAccounts := sortActiveAccounts(accounts.Accounts)
+	payload, err := json.Marshal(sortedAccounts)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to encode active accounts", err.Error())
 		return
 	}
 	state := activeAccountsModel{
 		AccountsJSON: types.StringValue(string(payload)),
-		Accounts:     activeAccountsListValue(accounts.Accounts, &resp.Diagnostics),
+		Accounts:     activeAccountsListValueFromSorted(sortedAccounts, &resp.Diagnostics),
 	}
 	if resp.Diagnostics.HasError() {
 		return
@@ -408,7 +412,7 @@ func (d *usersDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		resp.Diagnostics.AddError("Unable to list MotherDuck users", err.Error())
 		return
 	}
-	config.Users = usersListValue(users, &resp.Diagnostics)
+	config.Users = usersListValueWithContext(ctx, users, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -418,6 +422,10 @@ func (d *usersDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 // usersListValue sorts by username and ID so the listing does not depend on
 // the collation MotherDuck sorts with.
 func usersListValue(users []mdrest.User, diags *diag.Diagnostics) types.List {
+	return usersListValueWithContext(context.Background(), users, diags)
+}
+
+func usersListValueWithContext(ctx context.Context, users []mdrest.User, diags *diag.Diagnostics) types.List {
 	objectType := usersAttribute().NestedObject.Type().(types.ObjectType)
 	attrTypes := objectType.AttrTypes
 	sorted := make([]mdrest.User, len(users))
@@ -433,7 +441,7 @@ func usersListValue(users []mdrest.User, diags *diag.Diagnostics) types.List {
 		roleNames := make([]string, len(user.Roles))
 		copy(roleNames, user.Roles)
 		sort.Strings(roleNames)
-		roles, roleDiags := types.ListValueFrom(context.Background(), types.StringType, roleNames)
+		roles, roleDiags := types.ListValueFrom(ctx, types.StringType, roleNames)
 		diags.Append(roleDiags...)
 		objectValue, objectDiags := types.ObjectValue(attrTypes, map[string]attr.Value{
 			"id":                 types.StringValue(user.ID),

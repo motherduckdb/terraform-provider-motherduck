@@ -7,9 +7,12 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/sqlcatalog"
 )
 
@@ -244,5 +247,42 @@ func TestValidateShareIncludePatternLength(t *testing.T) {
 	validateShareIncludePattern(tooLong, &invalidDiags)
 	if !invalidDiags.HasError() {
 		t.Fatal("expected oversized include pattern diagnostics")
+	}
+}
+
+func TestShareCreateValidatesResolvedOptions(t *testing.T) {
+	ctx := context.Background()
+	client := &recordingSQLClient{}
+	r := &shareResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+
+	plan := tfsdk.Plan{Schema: schemaResp.Schema}
+	diags := plan.Set(ctx, shareModel{
+		ID:             types.StringUnknown(),
+		Name:           types.StringValue("analytics_share"),
+		SourceDatabase: types.StringValue("analytics"),
+		Access:         types.StringValue("PUBLIC"),
+		Visibility:     types.StringValue("discoverable"),
+		UpdateMode:     types.StringValue("automatic"),
+		IncludePattern: types.ListNull(types.StringType),
+		URL:            types.StringUnknown(),
+		CreatedTS:      types.StringUnknown(),
+	})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+
+	var resp resource.CreateResponse
+	r.Create(ctx, resource.CreateRequest{Plan: plan}, &resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected invalid resolved access to fail Create")
+	}
+	withPath, ok := resp.Diagnostics.Errors()[0].(diag.DiagnosticWithPath)
+	if !ok || !withPath.Path().Equal(path.Root("access")) {
+		t.Fatalf("error path = %v, want access", resp.Diagnostics.Errors()[0])
+	}
+	if len(client.execs) != 0 {
+		t.Fatalf("executed SQL queries %v on invalid plan", client.execs)
 	}
 }
