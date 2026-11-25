@@ -14,8 +14,8 @@ provider and no Pulumi Registry page. The generated SDK carries the same
 descriptions as these docs, so use the resource and data source pages here as
 the reference.
 
-Every resource and every data source maps to Pulumi. One ephemeral resource
-does not, and a few behaviors differ from Terraform. Both are described below.
+Every resource and every data source maps to Pulumi. The ephemeral resources
+do not, and a few behaviors differ from Terraform. Both are described below.
 
 ## Install
 
@@ -135,10 +135,17 @@ them or pass them to a resource. Resource attributes such as an access token's
 ### Ephemeral resources
 
 The bridge does not implement ephemeral resources, so the
-`motherduck_dive_embed_session` ephemeral resource is not available. Use the
-`getDiveEmbedSession` function instead. It creates a short-lived session each
-time the program runs, and its `session` is a plain value, as described above.
-It is stored in Pulumi state only if you export it or pass it to a resource.
+`motherduck_dive_embed_session` and `motherduck_short_lived_token` ephemeral
+resources are not available.
+
+For a Dive embed session, use the `getDiveEmbedSession` function instead. It
+creates a short-lived session each time the program runs, and its `session` is
+a plain value, as described above. It is stored in Pulumi state only if you
+export it or pass it to a resource.
+
+For a short-lived token there is no Pulumi function. Mint read scaling tokens
+in the application that uses them, with `POST /v1/tokens/short-lived` of the
+[MotherDuck REST API](https://api.motherduck.com/docs/specs).
 
 ### Timeouts
 

@@ -66,6 +66,14 @@ to match another resource does not create a dependency.
 | A role grant fails mentioning `role assignment source of truth` | The organization manages user roles through its identity provider. MotherDuck accepts role grants only for service accounts and roles. | Manage that user in the identity provider. |
 | `MotherDuck did not store the access token description` | The MotherDuck region does not support token descriptions yet. | Remove `description` from the configuration, or retry after the region is updated. |
 
+## Dive embed sessions and short-lived tokens
+
+| Diagnostic | Cause | Resolution |
+| --- | --- | --- |
+| `Invalid MotherDuck token context` | A `context` key or value breaks a MotherDuck rule. MotherDuck lowercases keys, so `Tenant` and `tenant` are the same key. | Use keys of letters, digits, `_` and `.`, each in one spelling, with at most 64 keys and 4096 bytes in total. A `name` value must be 1 to 64 characters of letters, digits, `.`, `_` and `-`, starting with a letter or digit. |
+| `Conflicting MotherDuck Dive embed session arguments` | More than one of `session_name`, `session_hint`, and the `name` key of `context` sets the session name. MotherDuck would use only one of them. | Set the session name in one place. Prefer the `name` key of `context` when the session also carries a context. |
+| `Unable to create MotherDuck short-lived token` with a 403 error | The provider `admin_token` is a read scaling token, which cannot mint tokens. | Use a read-write access token for `admin_token`. |
+
 ## Collect diagnostics
 
 1. Run the failing command with `TF_LOG=DEBUG` and save the output to a file.

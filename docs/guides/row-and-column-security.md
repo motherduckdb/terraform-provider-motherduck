@@ -163,6 +163,42 @@ queries through its own Duckling and read pool. Pooling the data does not pool
 reader compute. See [choose a tenancy model](customer-facing-analytics.md#choose-a-tenancy-model)
 before moving tenants out of dedicated databases.
 
+## Filter by the context of a short-lived token
+
+A short-lived token can carry a key/value context, and a secure view reads one
+value with `session_context('key')`. This lets one reader identity serve many
+viewers, each with its own filter:
+
+- A Dive embed session takes the context in the `context` argument of
+  [motherduck_dive_embed_session](../ephemeral-resources/dive_embed_session.md).
+- [motherduck_short_lived_token](../ephemeral-resources/short_lived_token.md)
+  mints a read scaling token with a context for the identity behind
+  `admin_token`.
+- An application backend mints both per viewer with the same REST API. Use
+  Terraform for fixed contexts, such as smoke tests or one internal dashboard
+  per tenant.
+
+```sql
+SELECT u.tenant_id, u.usage_date, u.event_count
+FROM app.daily_usage AS u
+WHERE current_user = 'svc_dive_embed'
+  AND u.tenant_id = session_context('tenant')
+```
+
+Keep such a policy fail closed:
+
+- `session_context` returns NULL for a key the context does not set, so a
+  token without `tenant` receives no rows.
+- A client can set its own connection context, for example with
+  `session_context.tenant=acme` in its connection string. A token's value takes
+  precedence only for the keys that the token sets. Set every key that a policy
+  reads in the token context, and check the reader identity in the same policy
+  as above, so that other consumers of the share cannot pick a tenant.
+- The context is fixed when the token is minted, and the token expires after a
+  day. A different filter needs a new token.
+- The key `name` also sets the session name, which routes the token's requests
+  to a read scaling replica. Use another key for the filter.
+
 ## Keep policies and the share together
 
 Run the Terraform root that manages secure views with the share owner's

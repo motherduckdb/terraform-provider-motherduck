@@ -244,6 +244,7 @@ type EmbedSessionRequest struct {
 	Version           *int64                  `json:"version,omitempty"`
 	RequiredResources *[]EmbedSessionResource `json:"required_resources,omitempty"`
 	InitialState      json.RawMessage         `json:"initial_state,omitempty"`
+	Context           map[string]string       `json:"context,omitempty"`
 }
 
 // EmbedSessionResource overrides one database or share the Dive renders
@@ -256,4 +257,16 @@ type EmbedSessionResource struct {
 
 type EmbedSessionResponse struct {
 	Session string `json:"session"`
+}
+
+// ShortLivedTokenRequest is the body of POST /v1/tokens/short-lived, which
+// mints a token for the identity behind the request's credential.
+type ShortLivedTokenRequest struct {
+	TokenType string            `json:"token_type"`
+	Context   map[string]string `json:"context,omitempty"`
+}
+
+type ShortLivedTokenResponse struct {
+	Token    string `json:"token"`
+	ExpireAt string `json:"expire_at"`
 }

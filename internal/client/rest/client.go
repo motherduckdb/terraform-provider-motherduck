@@ -339,6 +339,14 @@ func (c *Client) CreateDiveEmbedSession(ctx context.Context, diveID string, req 
 	return &out, err
 }
 
+// CreateShortLivedToken mints a short-lived token for the identity behind the
+// admin token. It cannot mint a token for another user.
+func (c *Client) CreateShortLivedToken(ctx context.Context, req ShortLivedTokenRequest) (*ShortLivedTokenResponse, error) {
+	var out ShortLivedTokenResponse
+	err := c.do(ctx, http.MethodPost, "/v1/tokens/short-lived", req, &out)
+	return &out, err
+}
+
 func (c *Client) do(ctx context.Context, method, path string, body any, out any) (err error) {
 	if !c.Available() {
 		return ErrMissingAdminToken

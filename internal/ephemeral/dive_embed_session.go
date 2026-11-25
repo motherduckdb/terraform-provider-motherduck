@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	tfephemeral "github.com/hashicorp/terraform-plugin-framework/ephemeral"
 	ephschema "github.com/hashicorp/terraform-plugin-framework/ephemeral/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 var (
@@ -25,6 +26,7 @@ type diveEmbedSessionEphemeralResource struct {
 func All() []func() tfephemeral.EphemeralResource {
 	return []func() tfephemeral.EphemeralResource{
 		NewDiveEmbedSessionEphemeralResource,
+		NewShortLivedTokenEphemeralResource,
 	}
 }
 
@@ -64,7 +66,7 @@ func (r *diveEmbedSessionEphemeralResource) Schema(ctx context.Context, req tfep
 			},
 			"session_name": ephschema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional name used to reuse the same read-scaling session across embed requests. Must be non-blank when set. Conflicts with `session_hint`.",
+				MarkdownDescription: "Optional name used to reuse the same read-scaling session across embed requests. Must be non-blank when set. Conflicts with `session_hint` and with the `name` key of `context`.",
 				Validators:          diveembed.SessionNameValidators(),
 			},
 			"session_hint": ephschema.StringAttribute{
@@ -101,6 +103,12 @@ func (r *diveEmbedSessionEphemeralResource) Schema(ctx context.Context, req tfep
 				Optional:            true,
 				MarkdownDescription: "Optional JSON object that seeds the embedded Dive's UI state. Each key is read by the matching `useDiveState` call in the Dive. Build it with `jsonencode()`. The JSON encoding must be at most 64 KiB.",
 				Validators:          diveembed.InitialStateValidators(),
+			},
+			"context": ephschema.MapAttribute{
+				Optional:            true,
+				ElementType:         types.StringType,
+				MarkdownDescription: diveembed.ContextDescription,
+				Validators:          diveembed.ContextValidators(),
 			},
 			"session": ephschema.StringAttribute{
 				Computed:            true,
