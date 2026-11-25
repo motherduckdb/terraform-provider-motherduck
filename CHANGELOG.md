@@ -4,6 +4,10 @@ Each release has a versioned notes file under `release-notes/`, which is also th
 body of the matching [GitHub release](https://github.com/motherduckdb/terraform-provider-motherduck/releases).
 This index lists the headline change for every release.
 
+## v0.4.4
+
+This release adds a `context` argument to `motherduck_dive_embed_session`, which secure view policies read with `session_context('key')`, and the `motherduck_short_lived_token` ephemeral resource. Version constraints such as `~> 0.4.0` select it. See the [v0.4.4 release notes](release-notes/v0.4.4.md).
+
 ## v0.4.3
 
 This release updates the guides and examples to v0.4.2 and documents that `motherduck_agent_usage` requires provider version 0.4.2 or later, because MotherDuck now serves the updated agent usage schema. Version constraints such as `~> 0.4.0` select it. See the [v0.4.3 release notes](release-notes/v0.4.3.md).
