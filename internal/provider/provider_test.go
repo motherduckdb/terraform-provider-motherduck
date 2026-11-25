@@ -103,6 +103,7 @@ func TestProviderRegistersResourcesAndDataSources(t *testing.T) {
 	gotEphemeralResources := registeredEphemeralResourceTypeNames(t, p)
 	wantEphemeralResources := []string{
 		"motherduck_dive_embed_session",
+		"motherduck_short_lived_token",
 	}
 	if !reflect.DeepEqual(gotEphemeralResources, wantEphemeralResources) {
 		t.Fatalf("registered ephemeral resources = %#v, want %#v", gotEphemeralResources, wantEphemeralResources)

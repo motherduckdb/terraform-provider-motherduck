@@ -168,6 +168,9 @@ use the same `reporting` alias because their account attachments differ.
 The long-lived reader tokens stay in the backend. For a browser-embedded Dive,
 use the separate [Dive embedding mechanism](../ephemeral-resources/dive_embed_session.md)
 and its session lifecycle. Terraform is not a per-request session issuer.
+An embed session can carry a `context`, such as the viewer's tenant, that
+secure views read with `session_context('key')`. See
+[filter by the context of a short-lived token](row-and-column-security.md#filter-by-the-context-of-a-short-lived-token).
 
 ## 6. Verify the access boundary
 

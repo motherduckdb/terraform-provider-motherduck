@@ -481,7 +481,7 @@ func (d *diveEmbedSessionDataSource) Schema(ctx context.Context, req datasource.
 			},
 			"session_name": schema.StringAttribute{
 				Optional:            true,
-				MarkdownDescription: "Optional name used to reuse the same read-scaling session across embed requests. Must be non-blank when set. Conflicts with `session_hint`.",
+				MarkdownDescription: "Optional name used to reuse the same read-scaling session across embed requests. Must be non-blank when set. Conflicts with `session_hint` and with the `name` key of `context`.",
 				Validators:          diveembed.SessionNameValidators(),
 			},
 			"session_hint": schema.StringAttribute{
@@ -518,6 +518,12 @@ func (d *diveEmbedSessionDataSource) Schema(ctx context.Context, req datasource.
 				Optional:            true,
 				MarkdownDescription: "Optional JSON object that seeds the embedded Dive's UI state. Each key is read by the matching `useDiveState` call in the Dive. Build it with `jsonencode()`. The JSON encoding must be at most 64 KiB.",
 				Validators:          diveembed.InitialStateValidators(),
+			},
+			"context": schema.MapAttribute{
+				Optional:            true,
+				ElementType:         types.StringType,
+				MarkdownDescription: diveembed.ContextDescription,
+				Validators:          diveembed.ContextValidators(),
 			},
 			"session": schema.StringAttribute{
 				Computed:            true,

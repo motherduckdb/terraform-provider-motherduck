@@ -35,6 +35,11 @@ ephemeral "motherduck_dive_embed_session" "reader" {
   initial_state = jsonencode({
     region = "emea"
   })
+
+  # Secure view policies read these values with session_context('tenant').
+  context = {
+    tenant = "acme"
+  }
 }
 ```
 
@@ -60,10 +65,11 @@ data "motherduck_dive_embed_session" "reader" {
 
 ### Optional
 
+- `context` (Map of String) Optional key/value context that the session's token carries. Secure view policies read a value with `session_context('key')`, which returns NULL for a key the context does not set. Keys may contain letters, digits, `_` and `.`. MotherDuck lowercases them, so two keys that differ only in letter case are rejected. At most 64 keys and 4096 bytes of keys and values in total. Values must not contain a NUL character. The key `name` sets the session name and routes the session's requests, so it conflicts with `session_name` and `session_hint`. Its value must be 1 to 64 characters of letters, digits, `.`, `_` and `-`, starting with a letter or digit.
 - `initial_state` (String) Optional JSON object that seeds the embedded Dive's UI state. Each key is read by the matching `useDiveState` call in the Dive. Build it with `jsonencode()`. The JSON encoding must be at most 64 KiB.
 - `required_resources` (Attributes List) Optional override for the databases and shares the Dive renders against. When set, it replaces the Dive's declared required resources for this session. An empty list declares no resources, so the Dive attaches the whole workspace of the session user. The JSON encoding of the list must be at most 8192 bytes. (see [below for nested schema](#nestedatt--required_resources))
 - `session_hint` (String, Deprecated) Deprecated alias for `session_name`. Must be non-blank when set.
-- `session_name` (String) Optional name used to reuse the same read-scaling session across embed requests. Must be non-blank when set. Conflicts with `session_hint`.
+- `session_name` (String) Optional name used to reuse the same read-scaling session across embed requests. Must be non-blank when set. Conflicts with `session_hint` and with the `name` key of `context`.
 - `version` (Number) Optional Dive version to embed. Must be a positive integer. Omit it to embed the current version.
 
 ### Read-Only

@@ -103,6 +103,7 @@ func embedSessionConfigWith(schema ephschema.Schema, overrides map[string]tftype
 		"version":            tftypes.Number,
 		"required_resources": tftypes.List{ElementType: embedResourceType},
 		"initial_state":      tftypes.String,
+		"context":            tftypes.Map{ElementType: tftypes.String},
 		"session":            tftypes.String,
 	}
 	values := map[string]tftypes.Value{
@@ -146,6 +147,9 @@ func TestDiveEmbedSessionEphemeralSendsAllArguments(t *testing.T) {
 			}),
 		}),
 		"initial_state": tftypes.NewValue(tftypes.String, `{"region": "emea"}`),
+		"context": tftypes.NewValue(tftypes.Map{ElementType: tftypes.String}, map[string]tftypes.Value{
+			"Tenant": tftypes.NewValue(tftypes.String, "acme"),
+		}),
 	})
 	resp := tfephemeral.OpenResponse{Result: tfsdk.EphemeralResultData{Raw: config.Raw, Schema: schemaResp.Schema}}
 	res.Open(ctx, tfephemeral.OpenRequest{Config: config}, &resp)
@@ -157,7 +161,7 @@ func TestDiveEmbedSessionEphemeralSendsAllArguments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"username":"contract_reader","session_name":"legacy-reader","version":7,"required_resources":[{"url":"md:_share/sales/abc","alias":"sales"}],"initial_state":{"region":"emea"}}`
+	want := `{"username":"contract_reader","session_name":"legacy-reader","version":7,"required_resources":[{"url":"md:_share/sales/abc","alias":"sales"}],"initial_state":{"region":"emea"},"context":{"Tenant":"acme"}}`
 	if string(body) != want {
 		t.Fatalf("embed request = %s\nwant %s", body, want)
 	}
@@ -213,6 +217,90 @@ func TestDiveEmbedSessionEphemeralSessionNameConflictsWithHint(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDiveEmbedSessionEphemeralContextName(t *testing.T) {
+	ctx := context.Background()
+	backend := &embedSessionREST{}
+	server := httptest.NewServer(http.HandlerFunc(backend.serveHTTP))
+	t.Cleanup(server.Close)
+	client, err := mdrest.New(server.URL, "contract-admin-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := &diveEmbedSessionEphemeralResource{provider: &providerctx.Context{REST: client}}
+	var schemaResp tfephemeral.SchemaResponse
+	res.Schema(ctx, tfephemeral.SchemaRequest{}, &schemaResp)
+	contextType := tftypes.Map{ElementType: tftypes.String}
+	nameContext := tftypes.NewValue(contextType, map[string]tftypes.Value{
+		"NAME":   tftypes.NewValue(tftypes.String, "viewer-42"),
+		"tenant": tftypes.NewValue(tftypes.String, "acme"),
+	})
+
+	for name, tc := range map[string]struct {
+		overrides map[string]tftypes.Value
+		wantErr   bool
+	}{
+		"context name alone": {overrides: map[string]tftypes.Value{"session_name": tftypes.NewValue(tftypes.String, nil), "context": nameContext}},
+		"with session_name":  {overrides: map[string]tftypes.Value{"context": nameContext}, wantErr: true},
+		"with session_hint": {overrides: map[string]tftypes.Value{
+			"session_name": tftypes.NewValue(tftypes.String, nil),
+			"session_hint": tftypes.NewValue(tftypes.String, "legacy"),
+			"context":      nameContext,
+		}, wantErr: true},
+		"bad session name": {overrides: map[string]tftypes.Value{
+			"session_name": tftypes.NewValue(tftypes.String, nil),
+			"context": tftypes.NewValue(contextType, map[string]tftypes.Value{
+				"name": tftypes.NewValue(tftypes.String, "-viewer"),
+			}),
+		}, wantErr: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			config := embedSessionConfigWith(schemaResp.Schema, mergeValues(map[string]tftypes.Value{"session_name": tftypes.NewValue(tftypes.String, "stable-reader")}, tc.overrides))
+			var contextValue types.Map
+			if diags := config.GetAttribute(ctx, path.Root("context"), &contextValue); diags.HasError() {
+				t.Fatal(diags)
+			}
+			var planDiags diag.Diagnostics
+			for _, v := range diveembed.ContextValidators() {
+				var resp validator.MapResponse
+				v.ValidateMap(ctx, validator.MapRequest{Path: path.Root("context"), ConfigValue: contextValue, Config: config}, &resp)
+				planDiags.Append(resp.Diagnostics...)
+			}
+			if planDiags.HasError() != tc.wantErr {
+				t.Fatalf("plan diagnostics = %v, want error %v", planDiags, tc.wantErr)
+			}
+
+			// Apply checks the same rules, for values unknown during planning.
+			backend.request = mdrest.EmbedSessionRequest{}
+			resp := tfephemeral.OpenResponse{Result: tfsdk.EphemeralResultData{Raw: config.Raw, Schema: schemaResp.Schema}}
+			res.Open(ctx, tfephemeral.OpenRequest{Config: config}, &resp)
+			if resp.Diagnostics.HasError() != tc.wantErr {
+				t.Fatalf("open diagnostics = %v, want error %v", resp.Diagnostics, tc.wantErr)
+			}
+			_, request := backend.requestSnapshot()
+			if tc.wantErr {
+				if request.Username != "" {
+					t.Fatalf("a rejected context reached MotherDuck: %#v", request)
+				}
+				return
+			}
+			if request.SessionName != "" || request.Context["NAME"] != "viewer-42" || request.Context["tenant"] != "acme" {
+				t.Fatalf("embed request = %#v, want the context and no session_name", request)
+			}
+		})
+	}
+}
+
+func mergeValues(base, overrides map[string]tftypes.Value) map[string]tftypes.Value {
+	merged := make(map[string]tftypes.Value, len(base)+len(overrides))
+	for k, v := range base {
+		merged[k] = v
+	}
+	for k, v := range overrides {
+		merged[k] = v
+	}
+	return merged
 }
 
 type embedSessionREST struct {
