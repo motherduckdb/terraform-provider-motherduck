@@ -308,6 +308,37 @@ func TestOneTimeInitializerExplainsRejectedToken(t *testing.T) {
 	}
 }
 
+// A revoked access token fails the token exchange with PERMISSION_DENIED. The
+// MotherDuck client words it as a connection failure, so without this
+// classification the provider told users that replacing the token would not
+// help. The message is the one MotherDuck returned on 2026-11-25.
+func TestOneTimeInitializerExplainsRevokedToken(t *testing.T) {
+	initializer := &oneTimeInitializer{queries: []string{"ATTACH 'md:'"}, token: "test-token"}
+	execer := &recordingExecer{attachFailures: 1, attachError: "Invalid Error: Request failed: Could not connect to MotherDuck. Please try again later or contact support@motherduck.com for help. (PERMISSION_DENIED, RPC 'CREATE_SLT', request id: '81a21356-0d52-4c80-9b02-25281de87466')"}
+	err := initializer.run(context.Background(), execer)
+	if err == nil {
+		t.Fatal("expected an authentication error")
+	}
+	got := err.Error()
+	if !strings.Contains(got, "MotherDuck rejected the SQL token") || !strings.Contains(got, "PERMISSION_DENIED") {
+		t.Fatalf("error %q does not explain the rejected token", got)
+	}
+	if strings.Contains(got, "network") || strings.Contains(got, "replacing the token does not help") {
+		t.Fatalf("revoked token error reads like a network failure: %q", got)
+	}
+
+	for _, msg := range []string{
+		// A network failure on the same RPC stays a connection failure.
+		"Invalid Error: Request failed: Could not connect to MotherDuck. Please try again later or contact support@motherduck.com for help. (UNAVAILABLE, RPC 'CREATE_SLT', request id: 'x', msg: 'DNS resolution failed')",
+		// PERMISSION_DENIED on another RPC is not a token exchange.
+		"Invalid Error: Request failed: Could not connect to MotherDuck. Please try again later or contact support@motherduck.com for help. (PERMISSION_DENIED, RPC 'ATTACH', request id: 'x')",
+	} {
+		if isAuthenticationFailure(errors.New(msg)) {
+			t.Fatalf("isAuthenticationFailure(%q) = true, want false", msg)
+		}
+	}
+}
+
 // A default database that was dropped after boot must not break every later
 // connection. The reconnect keeps the DuckDB default and stops selecting it.
 func TestOneTimeInitializerSkipsDroppedDefaultDatabaseOnReconnect(t *testing.T) {
