@@ -5,7 +5,7 @@
 debugpy==1.8.22
 dill==0.4.1
 googleapis-common-protos==1.76.0
-grpcio==1.85.1
+grpcio==1.85.3
 opentelemetry-api==1.45.2
 opentelemetry-exporter-otlp-common==0.66b2
 opentelemetry-exporter-otlp-proto-common==1.45.2
@@ -18,7 +18,7 @@ opentelemetry-semantic-conventions==0.66b2
 packaging==26.3
 protobuf==6.33.6
 pulumi==3.271.0
-pyyaml==6.0.3
+pyyaml==6.0.4
 semver==3.1.2
 typing-extensions==4.16.0
 wrapt==2.5.2
