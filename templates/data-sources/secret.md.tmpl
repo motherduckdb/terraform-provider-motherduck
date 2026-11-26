@@ -10,7 +10,7 @@ description: |-
 Look up a secret by name when another Terraform root or operator owns it.
 When the name is known at plan time, a missing or inaccessible secret fails
 planning. An unknown name defers the lookup until apply. The data source returns
-metadata only. Neither the secret value nor its parameters enter its state.
+metadata only. Neither the secret value nor its parameters enter the data source state.
 
 The name match is case-insensitive because DuckDB stores secret names in
 lowercase. Only MotherDuck-managed secrets are visible. A local DuckDB secret
@@ -20,7 +20,7 @@ The scope is DuckDB's string representation of the scope list. Finding metadata
 does not prove that the stored credentials can access an external service. See
 the public [LIST SECRETS reference](https://motherduck.com/docs/sql-reference/motherduck-sql-reference/list-secrets/).
 
-For an Iceberg catalog, create the secret in the owning workflow first, then
+For an Iceberg catalog, create the secret in the owning workflow first, and then
 reference `data.motherduck_secret.catalog.name` in the database's `iceberg.secret`
 setting. Terraform still cannot verify the external catalog or namespace until
 the database is created. Protect an important database against replacement and

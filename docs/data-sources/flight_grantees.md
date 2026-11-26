@@ -16,8 +16,7 @@ A Flight that only its owner can run returns no rows.
 The Flight must be visible to the current principal. MotherDuck reports a
 Flight the principal cannot see as not found, and the read fails. MotherDuck
 names the grantees for the owner of the Flight and for organization admins. To
-manage the
-grants, use [motherduck_flight_grant](../resources/flight_grant.md).
+manage the grants, use [motherduck_flight_grant](../resources/flight_grant.md).
 
 This data source inspects existing objects without taking lifecycle ownership.
 Use it with credentials that can read them. See

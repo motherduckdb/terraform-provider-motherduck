@@ -46,8 +46,8 @@ See [MotherDuck resource management](https://motherduck.com/docs/concepts/resour
 
 The [warehouse examples](warehouse-examples.md) start with native MotherDuck
 storage. Choose DuckLake deliberately when an open storage format or object
-storage arrangement requires it, and see [data lake on your own bucket](data-lake.md). It is not a prerequisite for layering data or
-serving customer analytics. When the data already lives in an Iceberg REST
+storage arrangement requires it. See [data lake on your own bucket](data-lake.md).
+DuckLake is not a prerequisite for layering data or serving customer analytics. When the data already lives in an Iceberg REST
 catalog, register that catalog as a `database_type = "iceberg"` database
 instead of copying it.
 

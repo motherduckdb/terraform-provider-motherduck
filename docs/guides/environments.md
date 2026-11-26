@@ -43,7 +43,7 @@ to their writer, including raw data. For narrower access, use
 
 The example uses Standard compute, 60-second cooldowns, and read-pool limits of
 one for dev and two for prod. These are illustrative starting values, not
-workload measurements. Size for your account and test expected concurrency.
+workload measurements. Size these settings for your account and test expected concurrency.
 
 ## 2. Distribute credentials securely
 
@@ -72,7 +72,7 @@ Both environment roots call the same warehouse module. Keep provider
 configuration in the roots. Their CI jobs receive the corresponding writer
 token as `MOTHERDUCK_TOKEN` and use distinct backend keys and access controls.
 
-For the standalone examples, copy the whole selected root for each environment.
+For the standalone examples, copy the entire selected root for each environment.
 In dev, apply `dev.tfvars` with the dev token. In production, apply `prod.tfvars`
 with the production token. Add the
 [writer-identity precondition](authentication.md#check-the-sql-identity-before-creation)

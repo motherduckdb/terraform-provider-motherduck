@@ -8,17 +8,17 @@ description: |-
 # motherduck_share_secure_view (Resource)
 
 Manages one secure view on a MotherDuck share. Consumers of the share query the
-secure view instead of the source table, so it can filter rows, leave columns
-out, or replace values. The body can check the consumer with `current_user`,
+secure view instead of the source table, so it can filter rows, omit columns,
+or replace values. The body can check the consumer with `current_user`,
 `current_email()`, `session_roles()`, and `is_role_in_session()`. MotherDuck
-enforces it on its servers. It does not restrict the owner of the source
-database.
+enforces the view on its servers. The view does not restrict the owner of the
+source database.
 
 This resource requires provider v0.3.9 or later. A lock file that selects an
 earlier 0.3.x release reports an unsupported resource type, so run
 `terraform init -upgrade` after adding it.
 
-Secure views need a Business or Enterprise plan, or an active free trial. They
+Secure views require a Business or Enterprise plan, or an active free trial. They
 work on native MotherDuck databases and MotherDuck-hosted DuckLake databases.
 Run this resource with the share owner's read-write token. Only the share's
 creator can change its secure views, and read-scaling tokens cannot alter
@@ -38,13 +38,13 @@ for what the body may contain.
 - Changing `query` updates the secure view in place with `ADD OR REPLACE`.
   Consumers switch to the new policy within a minute or two and never see the
   source table without a policy in between.
-- Create uses plain `ADD`. A secure view that already exists on the share fails
-  the apply with its import ID instead of being overwritten.
+- Create uses plain `ADD`. If a secure view already exists on the share, the
+  apply fails and returns its import ID instead of overwriting it.
 - MotherDuck trims the body, so surrounding whitespace in `query`, such as the
   trailing newline of a heredoc, does not show as drift on refresh. Any other
   change made outside Terraform plans an update. A secure view dropped outside
   Terraform plans a create.
-- When the secure view could be written but not read back, the apply succeeds
+- When the secure view is written but cannot be read back, the apply succeeds
   with a warning and the next refresh reads it. The resource is not tainted, so
   no later apply drops and re-adds it.
 - Replacing or dropping the share drops its secure views. Add
@@ -163,7 +163,7 @@ terraform import motherduck_share_secure_view.daily_usage usage_share.app.daily_
 ```
 
 The imported `query` is the body MotherDuck stores, without surrounding
-whitespace. When the configuration spells it with surrounding whitespace, such
+whitespace. When the configuration includes surrounding whitespace, such
 as a heredoc's trailing newline, the first plan after import shows an in-place
 update. Applying it rewrites the same body with `ADD OR REPLACE`, which does not
 change what consumers see. To list every secure view on a share, including ones Terraform does

@@ -75,8 +75,8 @@ configuration. It does not prevent manual deletion or protect an object after
 its configuration is removed.
 
 Schema destruction is restrictive by default. Set `cascade_on_delete = true` only when
-Terraform is intended to own destruction of all contained objects. Snapshot
-destruction removes the name from the snapshot. It does not promise immediate
+Terraform should destroy all contained objects. Snapshot
+destruction removes the name from the snapshot. It does not guarantee immediate
 physical deletion of retained historical data.
 
 Flight definitions are durable configuration. Flight runs are explicit
@@ -85,8 +85,7 @@ them for recurring schedules. Configure the Flight's schedule instead.
 
 ## Dives and missing data dependencies
 
-Dive source is stored by the service without JSX compilation during Terraform
-apply. Invalid JSX can therefore deploy successfully and fail when opened.
+The service stores Dive source without JSX compilation during Terraform apply. Invalid JSX can therefore deploy successfully and fail when opened.
 Compile or preview Dive content in the application deployment workflow, and open
 the saved Dive to verify rendering before treating the deployment as healthy.
 
@@ -94,7 +93,7 @@ A successful plan checks managed objects, not whether every SQL query inside a
 Dive or Flight will run. If a Dive references an existing database only through
 its source code, dropping that database can leave a no-op Terraform plan while
 the Dive query and the next Flight run fail. Manage the database and table as
-resources, or validate externally managed dependencies in your deployment
+resources, or validate externally managed dependencies in the deployment
 pipeline before publishing application changes.
 
 Recreating a managed database or table restores its configured structure. It

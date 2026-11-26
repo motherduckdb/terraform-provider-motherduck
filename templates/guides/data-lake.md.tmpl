@@ -39,7 +39,7 @@ Three choices in this configuration matter in production:
 | Choice | Reason |
 | --- | --- |
 | `scope` equals `data_path` | MotherDuck uses the credentials only for paths under the lake prefix |
-| `params_wo` and `params_wo_version` | The access key is stored in neither the plan nor the state. See [secret](../resources/secret.md) |
+| `params_wo` and `params_wo_version` | The access key is not stored in the plan or state. See [secret](../resources/secret.md) |
 | `prevent_destroy` on the database | `data_path` is fixed at creation, and a changed path would otherwise plan a replacement |
 
 ## Apply
@@ -56,7 +56,7 @@ The plan creates four resources. Terraform creates structure only. Load
 ## Rotate the access key
 
 Terraform cannot see a change in a value it does not store. Supply the new key
-and raise `credentials_version`. The plan updates the secret in place.
+and increment `credentials_version`. The plan updates the secret in place.
 Deactivate the old key in AWS only after the apply succeeds.
 
 ## Lifecycle
@@ -68,5 +68,5 @@ Deactivate the old key in AWS only after the apply succeeds.
 - Dropping the database does not prove that the bucket is empty. Review the
   prefix and your retention rules before deleting objects.
 
-The complete root, with inputs, outputs, and teardown, is in
+The complete root module, with inputs, outputs, and teardown, is in
 [examples/data-lake](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/data-lake).

@@ -24,10 +24,10 @@ Refresh reads the run's status, timing, and `exit_code`. `started_at`,
 
 When `wait_for_status` is set, the provider polls the run until it succeeds.
 A run that reaches a failure status fails the apply. If `timeout_seconds`
-passes, or the apply is interrupted, before the run succeeds, the provider
+passes or the apply is interrupted before the run succeeds, the provider
 stops waiting with a warning and the apply succeeds:
 
-- The run keeps running in MotherDuck and stays in state, so the next apply
+- The run continues in MotherDuck and remains in state, so the next apply
   does not start a second run.
 - `status` holds the last value the provider observed, such as `RUNNING`. The
   next refresh reads the current value. A successful run reports `SUCCEEDED`.
@@ -38,12 +38,12 @@ stops waiting with a warning and the apply succeeds:
 To check the run after a warning, refresh state with
 `terraform apply -refresh-only` and read `status` with `terraform state show`.
 
-To keep a dependent resource from changing until the run succeeds, add a
+To prevent a dependent resource from changing until the run succeeds, add a
 `lifecycle` `precondition` to the dependent resource that checks the run's
 `status`. When the wait stops early, the precondition fails the dependent
 resource instead of applying it. Until the run succeeds, plans that include the
-dependent resource fail with the precondition error. Once it succeeds, the next
-apply refreshes `status` and applies the dependent resource.
+dependent resource fail with the precondition error. Once the run succeeds, the
+next apply refreshes `status` and applies the dependent resource.
 
 ```terraform
 resource "motherduck_flight" "load_orders" {
@@ -86,11 +86,11 @@ resource "motherduck_view" "recent_orders" {
 
 Run Terraform as the Flight owner, or as a principal that can see the Flight.
 A Flight run grant, managed with [motherduck_flight_grant](flight_grant.md),
-lets a principal start a Flight without seeing it, but
-MotherDuck then reports the Flight and its runs as not found to that principal.
-Refresh cannot tell that apart from a deleted Flight, so the provider keeps the
-run in state with a warning instead of removing it and starting a new run on
-the next apply. Its status and timing stay at the values seen at creation.
+allows a principal to start a Flight without seeing it, but MotherDuck then
+reports the Flight and its runs as not found to that principal. Refresh cannot
+distinguish this from a deleted Flight, so the provider keeps the run in state
+with a warning instead of removing it and starting a new run on the next apply.
+The run's status and timing remain at the values recorded at creation.
 `wait_for_status` stops waiting with a warning as soon as the Flight is not
 visible and keeps the run in state, so the apply succeeds without starting a
 second run. `cancel_on_destroy` cannot cancel the run, so destroy removes it

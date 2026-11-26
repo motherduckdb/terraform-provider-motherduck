@@ -27,9 +27,9 @@ consumer its own service account, read-scaling pool, and read-only token.
 | Exposure | The share is the only path to the data |
 
 A read-scaling token on the writer account is simpler and is enough for one BI
-tool. See [build a layered warehouse](warehouse-examples.md). It reads every
-database the writer owns and shares the writer's usage line, so move to separate
-readers when a second consumer or an agent arrives.
+tool. That token reads every database the writer owns and shares the writer's
+usage line, so move to separate readers when a second consumer or an agent
+arrives. See [build a layered warehouse](warehouse-examples.md).
 
 For one database and one reader per customer of your product, use
 [customer-facing analytics](customer-facing-analytics.md).

@@ -20,8 +20,8 @@ for new multi-tenant deployments.
 
 Only the identity that owns a database can write to it, and only the owner of
 a share can run `GRANT READ ON SHARE`. MotherDuck has no database-level grant
-and no write grant. The data plane must therefore be applied with the writer's
-token, so the writer owns every tenant database and share.
+and no write grant. Apply the data plane with the writer's token so the writer
+owns every tenant database and share.
 
 Deploy in two stages, each with its own state:
 
@@ -59,7 +59,7 @@ Use this model when:
 
 Tradeoffs:
 
-- the writer token can write every tenant database. Give it only to the
+- the writer token can write to every tenant database. Give it only to the
   ingestion runtime and the data-plane Terraform runtime, never to a
   tenant-facing service.
 - more MotherDuck objects and Terraform state entries per tenant.
@@ -132,7 +132,7 @@ module "writer_bootstrap" {
 }
 ```
 
-Stage two, in a separate root module and state. Key each tenant by a stable internal tenant id, not by an email or company name. Renaming a tenant key replaces every resource for that tenant. Pin the module source to a release tag when consuming this blueprint from another repository.
+Run stage two in a separate root module and state. Key each tenant by a stable internal tenant id, not by an email or company name. Renaming a tenant key replaces every resource for that tenant. Pin the module source to a release tag when consuming this blueprint from another repository.
 
 ```hcl
 module "read_hypertenancy" {

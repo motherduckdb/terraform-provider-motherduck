@@ -94,8 +94,9 @@ or a Flight as the writer, with one publisher per environment.
 
 The source contract requires unique `(order_id, source_revision)` pairs,
 required values, and a single currency. Enforce these conditions in ingestion.
-The provider's column-type map does not create primary keys or `NOT NULL`
-constraints.
+The example tables declare only column types. To have MotherDuck enforce keys
+and required values as well, set `primary_key` and `not_null` on
+`motherduck_table`.
 
 For a larger warehouse, use an incremental modeling tool such as dbt when
 appropriate. Transfer ownership of its tables and views deliberately. Keep
@@ -106,8 +107,8 @@ own its definitions. See [resource ownership](resource-scope.md).
 
 The bootstrap creates a `dev_bi` read-scaling token on the **dev writer account**.
 Configure BI with that token and query marts directly. This moves reads onto
-the writer's read-scaling pool, but it can also read raw and transform data
-visible to that account.
+the writer's read-scaling pool, but that token can also read raw and transform
+data visible to that account.
 
 Use a separate reader account and a restricted marts share when BI must only
 see curated data. Follow [sharing and read scaling](sharing-and-read-scaling.md),
