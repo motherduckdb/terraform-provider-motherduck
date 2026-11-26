@@ -122,4 +122,4 @@ Deactivate the old key in AWS only after the apply succeeds.
   prefix and your retention rules before deleting objects.
 
 The complete root module, with inputs, outputs, and teardown, is in
-[examples/data-lake](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/data-lake).
+[examples/data-lake](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/data-lake).

@@ -218,4 +218,4 @@ data "motherduck_compute_usage" "support_agent" {
   drops the marts database and its rows.
 
 The complete root, with inputs, outputs, and teardown, is in
-[examples/bi-and-agent-readers](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/bi-and-agent-readers).
+[examples/bi-and-agent-readers](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/bi-and-agent-readers).
