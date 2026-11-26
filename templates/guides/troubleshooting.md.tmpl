@@ -19,7 +19,7 @@ quoted from the provider so that it can be searched.
 | `MotherDuck admin token required`, or the plan warning `MotherDuck admin token not configured` | A service account, access token, or Duckling configuration ran without an organization admin token. | Set the provider `admin_token` argument or `MOTHERDUCK_ADMIN_TOKEN`. The SQL token does not authorize REST administration. |
 | `MotherDuck rejected the SQL token` | The token is expired, revoked, or copied incorrectly. | Create a new token for the same account and supply it through the secret manager. |
 | `Could not connect to MotherDuck` with the note that it is not a token problem | The machine cannot reach MotherDuck because of a network, proxy, DNS, or TLS failure. | Read the gRPC message at the end of the error. It names the step that failed. Replacing the token does not help. |
-| `MotherDuck SQL statement did not finish within 30m0s and was canceled` | A SQL statement got no answer from MotherDuck. The provider stops a statement after 30 minutes when the resource has no `timeouts` block. | Check connectivity and the MotherDuck status page, then run the operation again. For a long-running database or snapshot operation, raise the value in its `timeouts` block. |
+| `MotherDuck SQL statement did not finish within 30m0s and was canceled` | A SQL statement received no response from MotherDuck. The provider stops a statement after 30 minutes when the resource has no `timeouts` block. | Check connectivity and the MotherDuck status page, then run the operation again. For a long-running database or snapshot operation, raise the value in its `timeouts` block. |
 | `lacks platform authorization` on a role or role grant | The SQL identity cannot manage roles. | Use a SQL token for a user or service account whose role allows role management. The admin token does not authorize SQL role management. |
 | `Unknown MotherDuck token`, or another `Unknown MotherDuck ...` provider error | A provider argument depends on a value that is not known until apply. | Supply provider arguments from variables or the environment. Create identities in one Terraform root and use their tokens in another, as described in [authentication](authentication.md). |
 
@@ -65,6 +65,14 @@ to match another resource does not create a dependency.
 | `Unable to set MotherDuck Duckling config` with a note about plan limits | The requested instance size or flock size exceeds the limits of the organization plan. | Choose a smaller size, or ask MotherDuck to raise the limits. The message lists the default limits for each plan. |
 | A role grant fails mentioning `role assignment source of truth` | The organization manages user roles through its identity provider. MotherDuck accepts role grants only for service accounts and roles. | Manage that user in the identity provider. |
 | `MotherDuck did not store the access token description` | The MotherDuck region does not support token descriptions yet. | Remove `description` from the configuration, or retry after the region is updated. |
+
+## Dive embed sessions and short-lived tokens
+
+| Diagnostic | Cause | Resolution |
+| --- | --- | --- |
+| `Invalid MotherDuck token context` | A `context` key or value violates a MotherDuck rule. MotherDuck lowercases keys, so `Tenant` and `tenant` are the same key. | Use keys of letters, digits, `_`, and `.`, each in one spelling, with at most 64 keys and 4096 bytes in total. A `name` value must be 1 to 64 characters of letters, digits, `.`, `_`, and `-`, starting with a letter or digit. |
+| `Conflicting MotherDuck Dive embed session arguments` | More than one of `session_name`, `session_hint`, and the `name` key of `context` sets the session name. MotherDuck would use only one of them. | Set the session name in one place. Prefer the `name` key of `context` when the session also carries a context. |
+| `Unable to create MotherDuck short-lived token` with a 403 error | The provider `admin_token` is a read scaling token, which cannot mint tokens. | Use a read-write access token for `admin_token`. |
 
 ## Collect diagnostics
 

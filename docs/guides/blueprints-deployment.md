@@ -59,7 +59,7 @@ re-adds the other's grants.
 
 Use [motherduck_dive_grantees](../data-sources/dive_grantees.md) and
 [motherduck_flight_grantees](../data-sources/flight_grantees.md) to check who
-can open a Dive or run a Flight, whichever tool granted it. See
+can open a Dive or run a Flight, regardless of which tool granted access. See
 [Use Blueprints with the MotherDuck Terraform provider](https://github.com/motherduckdb/motherduck-blueprints/blob/main/docs/use-with-terraform.md)
 for the Blueprints side.
 
@@ -131,8 +131,8 @@ release path:
 | Pull request closes | Preview cleanup | Check that branch-owned preview resources were removed |
 
 Promotion applies the reviewed code under the production identity. It does not
-copy staging databases, state, or data. Terraform infrastructure must already be
-present before a package that depends on it is deployed.
+copy staging databases, state, or data. Provision Terraform infrastructure
+before deploying any package that depends on it.
 
 For custom automation, the [Blueprints action guide](https://github.com/motherduckdb/motherduck-blueprints/blob/main/docs/github-action.md)
 documents explicit deployment inputs and verification. Pin an action version

@@ -13,7 +13,7 @@ Use this resource when Terraform owns who can open a Dive. Each resource owns
 one grant: to one user or service account, to one role, or to the whole
 organization. The owner of a Dive and organization admins can grant and revoke
 access to it, so configure the provider `token` (or `MOTHERDUCK_TOKEN`) with
-one of those principals. To any other principal MotherDuck reports the Dive as
+one of those principals. To any other principal, MotherDuck reports the Dive as
 not found.
 
 During refresh, the provider reads the grants from `MD_LIST_DIVE_GRANTEES`. If
@@ -41,7 +41,7 @@ a Dive has.
 ## Embedding
 
 [motherduck_dive_embed_session](../ephemeral-resources/dive_embed_session.md)
-needs a service account that can read the Dive. Grant `read` to that service
+requires a service account that can read the Dive. Grant `read` to that service
 account, or to a role it holds, instead of relying on the organization grant.
 A read grant opens the Dive only. The data it shows still depends on the
 databases and shares the reader can query.

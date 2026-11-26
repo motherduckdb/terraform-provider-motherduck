@@ -13,9 +13,9 @@ Each row is one grant. The organization grant appears as one row with
 `grantee_type` `organization` and the organization name as `grantee_name`.
 A Dive that only its owner can open returns no rows.
 
-The Dive must be visible to the current principal. MotherDuck reports a Dive
-the principal cannot read as not found, and the read fails. MotherDuck names
-the grantees for the owner of the Dive and for organization admins. Other
+The Dive must be visible to the current principal. If the principal cannot read the Dive, MotherDuck reports it as not found and
+the read fails. MotherDuck returns
+grantee names for the Dive owner and organization admins. Other
 readers may see grants without grantee names. To manage the
 grants, use [motherduck_dive_grant](../resources/dive_grant.md).
 

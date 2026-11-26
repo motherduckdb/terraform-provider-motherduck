@@ -20,7 +20,7 @@ uses a separate REST credential.
 | Service accounts, tokens, Duckling settings | `MOTHERDUCK_ADMIN_TOKEN` | Organization admin credential accepted by the REST API |
 | Tenant databases plus reader provisioning | Both | Writer SQL token and organization admin credential |
 
-Use `provider "motherduck" {}` to read the environment. Explicit `token` and
+Use `provider "motherduck" {}` to read credentials from the environment. Explicit `token` and
 `admin_token` arguments override their respective environment defaults. Prefer
 secret-manager injection so credentials do not appear in source or shell history.
 See [MotherDuck authentication](https://motherduck.com/docs/key-tasks/authenticating-and-connecting-to-motherduck/authenticating-to-motherduck/)
@@ -33,7 +33,7 @@ warehouse, or attach a share for the first time.
 
 ## Bootstrap a writer
 
-Use the [writer-bootstrap example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.3/examples/blueprints/writer-bootstrap)
+Use the [writer-bootstrap example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/blueprints/writer-bootstrap)
 from an admin-only root with its own state. It creates a service account and a
 read-write token. Supply `writer_username`, review the plan, and apply.
 
@@ -42,7 +42,7 @@ approved automation. The next Terraform root receives that value as
 `MOTHERDUCK_TOKEN`. It does not need the admin credential unless it also manages
 REST resources.
 
-Do not feed a token resource from the same apply into the provider configuration.
+Do not pass a token resource created in the same apply into the provider configuration.
 Terraform configures its provider before creating resources, so that value would
 be unknown when the connection is needed.
 

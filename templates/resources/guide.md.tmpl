@@ -26,15 +26,15 @@ content, references, and audience. Referenced share URLs are sensitive and can
 appear in Terraform state even when normal output is masked.
 
 MotherDuck stores a catalog reference by database or share and reads it back as
-`md:<database>` or `md:_share/<share>/<token>`, and it returns reference UUIDs
-in lowercase. A configured URL that names the same database or share token, or a
+`md:<database>` or `md:_share/<share>/<token>`. It returns reference UUIDs in
+lowercase. A configured URL that names the same database or share token, or a
 UUID that differs only in case, keeps its configured spelling in state. After
 import, such references plan a single update that records the configured
 spelling without appending a Guide version.
 
 Import by Guide UUID. User/private and organization audiences are the documented
-public access modes. `access = "role"` with `role_names` is experimental and is
-not available in production MotherDuck yet. It requires a session whose
+public access modes. `access = "role"` with `role_names` is experimental and not yet available in
+production MotherDuck. It requires a session whose
 `MD_SET_GUIDE_ACCESS` accepts `role_names`. The provider checks for that
 parameter before it creates the Guide and reports an error during apply
 otherwise.

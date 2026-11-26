@@ -12,7 +12,7 @@ for stable landing or serving tables whose schema belongs in Terraform.
 
 ## Usage and lifecycle
 
-Adding a column or dropping a column updates the table in place. The rows in
+Adding or dropping a column updates the table in place. The rows in
 the other columns are kept. Dropping a column deletes the data in that column,
 and renaming a key in `columns` drops the old column and adds an empty one.
 
@@ -41,7 +41,7 @@ type aliases, such as `INT` and `INTEGER`, are compared semantically.
 Respelling a type with an alias, for example after an import that recorded
 `INTEGER`, updates state in place and does not replace the table.
 
-An update that fails part way, for example on a `SET NOT NULL`, keeps the
+An update that fails partway, for example on a `SET NOT NULL`, keeps the
 statements that already ran. Terraform records the live table, and the next
 plan shows the remaining changes.
 

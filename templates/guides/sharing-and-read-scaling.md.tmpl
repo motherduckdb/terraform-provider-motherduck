@@ -100,7 +100,7 @@ For a manual share, the writer runs:
 UPDATE SHARE orders_reporting_prod;
 ```
 
-An already connected reader may need `REFRESH DATABASES`. A no-change Terraform
+An already connected reader may need to run `REFRESH DATABASES`. A no-change Terraform
 apply does not publish new rows to a manual share. Automatic publication and read
 scaling are eventually consistent, so test freshness against your application
 requirements. See [updating shares](https://motherduck.com/docs/key-tasks/sharing-data/updating-shares/)

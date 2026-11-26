@@ -197,7 +197,17 @@ func isMissingUseTarget(err error) bool {
 func isAuthenticationFailure(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "request is not authenticated") ||
-		strings.Contains(msg, "check your motherduck token")
+		strings.Contains(msg, "check your motherduck token") ||
+		isRefusedTokenExchange(msg)
+}
+
+// isRefusedTokenExchange reports whether MotherDuck refused to exchange the
+// token for a session token. A revoked or expired access token fails this way,
+// and the MotherDuck client reports it as "Could not connect to MotherDuck"
+// with the gRPC status PERMISSION_DENIED.
+func isRefusedTokenExchange(lowerMsg string) bool {
+	return strings.Contains(lowerMsg, "rpc 'create_slt'") &&
+		(strings.Contains(lowerMsg, "(permission_denied,") || strings.Contains(lowerMsg, "(unauthenticated,"))
 }
 
 // connectionFailureHint explains a boot failure in which the MotherDuck

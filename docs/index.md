@@ -65,7 +65,7 @@ the provider from the [Registry](https://registry.terraform.io/providers/motherd
 and verifies its publisher signature. Commit `.terraform.lock.hcl` with your
 configuration.
 
-The database is owned by the account behind `MOTHERDUCK_TOKEN`. For automation,
+The account behind `MOTHERDUCK_TOKEN` owns the database. For automation,
 use a dedicated service account. Do not set the provider's `database` option to
 a database being created in the same apply.
 
@@ -104,7 +104,7 @@ deployment workflow.
 | `MOTHERDUCK_ADMIN_TOKEN` | REST administration, including service accounts, tokens, and compute settings |
 | `MOTHERDUCK_API_BASE_URL` | Optional REST API base URL override. Provider `api_base_url` takes precedence |
 
-Supply only the credentials required by that Terraform root. A SQL token and an
+Supply only the credentials required by each Terraform root. A SQL token and an
 organization admin token are separate credentials. Bootstrap identities first,
 then run warehouse Terraform using the resulting writer token.
 See [authentication and account ownership](guides/authentication.md).
@@ -129,11 +129,11 @@ See [state and imports](guides/state-and-lifecycle.md),
 
 ## Compatibility and support
 
-Terraform 1.5 or later is supported. Ephemeral resources require Terraform 1.10
-or later, and write-only arguments require Terraform 1.11 or later. Release packages support Linux with glibc 2.34 or newer (for example RHEL 9,
-Amazon Linux 2023, Debian 12, and Ubuntu 22.04) and macOS 13 or newer, on amd64
-and arm64.
-Windows is not a supported release target.
+The provider supports Terraform 1.5 or later. Ephemeral resources require
+Terraform 1.10 or later, and write-only arguments require Terraform 1.11 or
+later. Release packages support Linux with glibc 2.34 or newer (for example,
+RHEL 9, Amazon Linux 2023, Debian 12, and Ubuntu 22.04) and macOS 13 or newer,
+on amd64 and arm64. Windows is not a supported release target.
 
 The provider works with organizations in every MotherDuck region, on AWS and
 on Azure. The default `api_base_url`, `https://api.motherduck.com`, routes each

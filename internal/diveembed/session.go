@@ -35,6 +35,7 @@ type Model struct {
 	Version           types.Int64  `tfsdk:"version"`
 	RequiredResources types.List   `tfsdk:"required_resources"`
 	InitialState      types.String `tfsdk:"initial_state"`
+	Context           types.Map    `tfsdk:"context"`
 	Session           types.String `tfsdk:"session"`
 }
 
@@ -57,6 +58,9 @@ type Client interface {
 func Create(ctx context.Context, client Client, model *Model) error {
 	req, err := request(ctx, model)
 	if err != nil {
+		return err
+	}
+	if err := applyContext(model, &req); err != nil {
 		return err
 	}
 	session, err := client.CreateDiveEmbedSession(ctx, model.DiveID.ValueString(), req)

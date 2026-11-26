@@ -13,7 +13,7 @@ the user and queries through that customer's reader account.
 
 This guide deploys one database and restricted share per customer, plus a reader
 account and read-scaling pool for each. The writer owns all tenant databases.
-The app never needs its token.
+The application never needs the writer token.
 
 ![A pipeline writes Acme and Globex data through one central writer that owns both tenant databases and their restricted shares. Each share is granted to and attached by its own tenant reader account with a separate read pool. The backend authenticates users and routes queries to the matching reader.](https://raw.githubusercontent.com/motherduckdb/terraform-provider-motherduck/main/docs/assets/customer-facing-analytics.png)
 
@@ -43,7 +43,7 @@ its own rows.
 | Data boundary | Separate databases and shares. A grant mistake affects one tenant | One policy protects every tenant. A policy mistake can affect all of them |
 | Reader compute | A Duckling and read pool per reader | The same. Each reader account keeps its own Duckling |
 | Writes and schema changes | Fan out to every tenant database | One database and one migration |
-| Terraform objects per tenant | Database, schema, table, share, grant, reader, tokens | Reader, tokens, grant. The share is shared |
+| Terraform objects per tenant | Database, schema, table, share, grant, reader, tokens | Reader, tokens, grant. One share serves all tenants |
 | Restore, retention, and export | Independent per tenant | Shared by all tenants |
 | Offboarding | Drop the tenant's database | Revoke the grant, then delete the tenant's entitlement and data rows |
 | Query cost for a small tenant | Reads only its own database | Filters a shared table. Load rows ordered by `tenant_id` so scans can skip other tenants' data |
@@ -58,7 +58,7 @@ reader, attach it with a setup token, and then revoke the pooled grant.
 
 ## 1. Bootstrap the writer
 
-Apply the [writer-bootstrap example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.3/examples/blueprints/writer-bootstrap)
+Apply the [writer-bootstrap example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/blueprints/writer-bootstrap)
 in its own state with `MOTHERDUCK_ADMIN_TOKEN` and
 `writer_username = "svc_cfa_writer"`. Transfer its generated token to a protected
 secret-manager entry.
@@ -70,7 +70,7 @@ an admin state and pass usernames to the writer root.
 
 ## 2. Provision the tenants
 
-Copy the complete [customer-facing analytics example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.3/examples/customer-facing-analytics)
+Copy the complete [customer-facing analytics example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/customer-facing-analytics)
 into a new root with independent, protected state. Its default tenant IDs are
 `acme` and `globex`. Choose an unused prefix before applying.
 
@@ -147,7 +147,7 @@ is saved for the reader account. A grant does not perform this step, and a
 read-scaling token cannot attach a share. Use the one-hour setup token only for
 this initialization.
 
-Automatic share publication and read-replica synchronization have delay. Poll
+Automatic share publication and read-replica synchronization have a delay. Poll
 until the expected sample appears rather than assuming an immediate result.
 
 ## 5. Route requests through your backend
@@ -168,6 +168,9 @@ use the same `reporting` alias because their account attachments differ.
 The long-lived reader tokens stay in the backend. For a browser-embedded Dive,
 use the separate [Dive embedding mechanism](../ephemeral-resources/dive_embed_session.md)
 and its session lifecycle. Terraform is not a per-request session issuer.
+An embed session can carry a `context`, such as the viewer's tenant, that
+secure views read with `session_context('key')`. See
+[filter by the context of a short-lived token](row-and-column-security.md#filter-by-the-context-of-a-short-lived-token).
 
 ## 6. Verify the access boundary
 
@@ -185,8 +188,8 @@ The cross-tenant attachment test uses the setup credential because read-scaling
 credentials reject all attachment operations. It verifies the grant boundary,
 not just the token's read-only mode.
 
-The example is validated and planned offline in repository checks. Live access
-and freshness must be verified in the target organization with these identities.
+The example is validated and planned offline in repository checks. Verify live access
+and freshness in the target organization with these identities.
 
 ## Operate and offboard
 
@@ -214,7 +217,7 @@ databases and tables before adopting this example for real customer data.
 
 ## Run the backend companion
 
-The [Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.4.3/examples/customer-facing-analytics/backend/README.md)
+The [Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.4.5/examples/customer-facing-analytics/backend/README.md)
 queries these tenant databases with separate reader pools and verified server-side
 sessions. It includes tests for tampered tenant parameters and suspended access.
 Run it locally before adapting it to your authentication and deployment system.

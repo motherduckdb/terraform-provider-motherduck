@@ -49,13 +49,13 @@ Each `required_resources` URL must start with `md:`. Mount a database as
 
 `version_description` describes the Dive version that Terraform writes.
 MotherDuck stores it on the version, so changing it alone writes a new version
-with the same content and mounts, and sends the current `api_version` unless
-`api_version` is configured, so MotherDuck does not move the Dive to its
+with the same content and mounts. Unless `api_version` is configured, Terraform
+sends the current `api_version` so MotherDuck does not move the Dive to its
 default API version. `MD_CREATE_DIVE` cannot set it, so setting it at creation
 writes version 2 right after the Dive is created. If that second write fails,
 the apply keeps the new Dive with a warning instead of tainting it, and the
-next plan retries the write in place. When it is omitted, a content change
-writes a version without a description.
+next plan retries the write in place. When `version_description` is omitted, a content change writes a version
+without a description.
 `version_created_at` and `owner_id` are read from `MD_GET_DIVE`.
 
 MotherDuck ignores an empty `description` in a metadata update, so an existing
@@ -63,8 +63,9 @@ description cannot be cleared in place. Setting it to `""` or removing it fails
 the apply. Set a new non-empty description instead, or replace the Dive if it
 must have none. Setting `endorsed` status requires the appropriate
 organization-admin permission. MotherDuck sets the status of a new Dive after
-creating it. If it rejects that status, the apply keeps the new Dive with a
-warning instead of tainting it, and the next plan retries the status in place.
+creating it. If MotherDuck rejects that status, the apply keeps the new Dive
+with a warning instead of tainting it, and the next plan retries the status in
+place.
 When an update writes new content and the status change then fails, the apply
 fails but state records the written content, so the next apply retries only
 the status and does not write the content again.

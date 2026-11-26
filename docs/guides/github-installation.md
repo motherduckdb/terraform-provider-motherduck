@@ -14,11 +14,11 @@ so `terraform init` installs it and verifies the publisher signature.
 Install directly from
 [GitHub Releases](https://github.com/motherduckdb/terraform-provider-motherduck/releases)
 when you work in an air-gapped environment, want to pin a locally verified
-artifact, or need v0.2.1 or earlier, which are not on the Registry.
+artifact, or need versions v0.2.1 and earlier, which are not on the Registry.
 
 ## Download and verify
 
-You need Terraform 1.5 or later. Pick your platform: `linux_amd64`,
+You need Terraform 1.5 or later. Select your platform: `linux_amd64`,
 `linux_arm64`, `darwin_amd64` (Intel Mac), or `darwin_arm64` (Apple Silicon).
 Each release has one ZIP per platform plus these files:
 
@@ -30,7 +30,7 @@ The example uses the GitHub CLI, `shasum` (use `sha256sum` on Linux), and `awk`.
 You can also download the files from the release page.
 
 ```shell
-version=0.4.3
+version=0.4.5
 platform=darwin_arm64
 archive="terraform-provider-motherduck_${version}_${platform}.zip"
 sums="terraform-provider-motherduck_${version}_SHA256SUMS"
@@ -96,7 +96,7 @@ terraform {
   required_providers {
     motherduck = {
       source  = "motherduckdb/motherduck"
-      version = "= 0.4.3"
+      version = "= 0.4.5"
     }
   }
 }

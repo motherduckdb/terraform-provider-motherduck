@@ -58,13 +58,13 @@ MotherDuck database. Reads and writes run on MotherDuck compute.
   `default_schema` must already exist in the catalog.
 - `endpoint`, `warehouse`, `endpoint_type`, and `read_only` identify the
   catalog, so changing one replaces the database. Every other option changes
-  in place with `ALTER DATABASE`, and MotherDuck reattaches the catalog right
-  away. Removing an optional setting clears it so the catalog default applies.
+  in place with `ALTER DATABASE`, and MotherDuck reattaches the catalog
+  immediately. Removing an optional setting clears it so the catalog default applies.
 - MotherDuck does not report Iceberg options back. Terraform keeps the values
   it last applied and cannot detect changes made outside Terraform.
-- Removing the whole `iceberg` block keeps the database and stops managing its
+- Removing the entire `iceberg` block keeps the database and stops managing its
   options.
-- Iceberg databases cannot be shared, and do not support `transient`,
+- Iceberg databases cannot be shared and do not support `transient`,
   `snapshot_retention_days`, or MotherDuck snapshots. The Iceberg catalog
   keeps its own snapshot history.
 - Destroy drops only the MotherDuck database. The catalog and its tables stay
@@ -83,7 +83,7 @@ To import an Iceberg database, add the full `iceberg` block to the
 configuration before the first apply. The first apply after import runs
 `ALTER DATABASE` with the configured in-place options and adopts the identity
 options without replacing the database, because MotherDuck cannot report
-which catalog the database points at. Check that `endpoint`, `warehouse`,
+which catalog the database points to. Check that `endpoint`, `warehouse`,
 `endpoint_type`, and `read_only` match the existing database.
 
 See the MotherDuck [Apache Iceberg guide](https://motherduck.com/docs/integrations/file-formats/apache-iceberg/)

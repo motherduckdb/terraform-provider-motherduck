@@ -7,4 +7,9 @@ ephemeral "motherduck_dive_embed_session" "reader" {
   initial_state = jsonencode({
     region = "emea"
   })
+
+  # Secure view policies read these values with session_context('tenant').
+  context = {
+    tenant = "acme"
+  }
 }

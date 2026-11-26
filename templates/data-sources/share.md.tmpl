@@ -19,7 +19,7 @@ Set exactly one lookup input:
   URLs from error messages.
 
 The data source keeps the configured spelling of `name` or `url` instead of
-the canonical one MotherDuck reports, so references to it stay stable.
+the canonical value MotherDuck reports, so references to it stay stable.
 
 `motherduck_shared_with_me` does not report the source database of received
 shares. Use this data source with the share URL to read `source_database` and

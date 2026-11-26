@@ -57,7 +57,8 @@ database/share identifiers into that pipeline. Avoid having Terraform and an
 interactive editor or another deployment system overwrite the same content.
 
 Teams choosing Terraform for Flight definitions should use a separate workload
-state when its owners or release cadence differ from platform infrastructure.
+state when the workload's owners or release cadence differ from platform
+infrastructure.
 Creating a definition and configuring its schedule are distinct from executing it.
 
 Dive refresh and import read the mounted resources and API version of the
@@ -86,7 +87,7 @@ recreation nor deletion before proceeding.
 For deprecated Flight runs, removing the resource through normal destroy can
 request cancellation when `cancel_on_destroy` is true. To forget the run without
 that side effect, remove state ownership as above and delete its configuration.
-Future runs should be triggered by the execution workflow.
+Trigger future runs from the execution workflow.
 
 Changing a run's wait policy updates stored settings only. It does not start a
 new run. Changing the Flight ID or run configuration does start a new run.

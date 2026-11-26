@@ -11,14 +11,14 @@ Custom roles require a MotherDuck Business or Enterprise plan, or an active free
 trial, and permission to create roles and assign membership. Share grants run as the share owner.
 
 If you manage MotherDuck roles with Terraform, manage their memberships and
-share grants there too. Changes made through the UI or SQL can leave access in
+share grants in Terraform as well. Changes made through the UI or SQL can leave access in
 MotherDuck different from the configuration.
 
 Terraform checks grants in its state. A plan with no changes does not prove
 that no other grants exist. Use the role and share data sources to compare
 access in MotherDuck with the memberships and grants you intend to allow.
 
-The [example](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.4.3/examples/access-control/README.md) maps each team to a role
+The [example](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.4.5/examples/access-control/README.md) maps each team to a role
 and manages each membership and share grant as a resource. Follow the audit
 steps below to check for grants outside its state.
 
@@ -36,7 +36,7 @@ See [authentication](authentication.md) for credential requirements.
 
 ## Define teams and grants
 
-Copy the [example](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.4.3/examples/access-control/README.md) into a Terraform
+Copy the [example](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.4.5/examples/access-control/README.md) into a Terraform
 root. Set `teams` in `terraform.tfvars` so later `terraform import` commands
 read it automatically:
 
@@ -151,11 +151,11 @@ not delete the users, shares, or databases referenced by this example.
 ## Audit access for drift
 
 For an executable comparison of share audiences, use the
-[read-only share audit example](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.4.3/examples/share-access-audit/README.md).
+[read-only share audit example](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.4.5/examples/share-access-audit/README.md).
 It reports missing and unexpected audiences against an explicit allowlist and
 can fail a plan when they differ, including when an unchanged report still
 contains drift. It does not revoke grants or expand role membership.
-The [role access audit example](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.4.3/examples/role-access-audit/README.md)
+The [role access audit example](https://github.com/motherduckdb/terraform-provider-motherduck/blob/v0.4.5/examples/role-access-audit/README.md)
 performs the same comparison for role membership.
 
 Include an access audit when you manage roles with Terraform:
@@ -198,7 +198,7 @@ Terraform proposes changes. These can include output changes as well as resource
 changes.
 
 Reading these data sources does not enforce the configuration. The comparison
-is what identifies grants outside Terraform's state. Applying a plan restores
+identifies grants outside Terraform's state. Applying a plan restores
 managed grants but does not revoke grants Terraform does not own.
 
 ## Access boundaries
@@ -228,7 +228,7 @@ managed grants but does not revoke grants Terraform does not own.
   [motherduck_flight_grant](../resources/flight_grant.md), and audit them with
   [motherduck_dive_grantees](../data-sources/dive_grantees.md) and
   [motherduck_flight_grantees](../data-sources/flight_grantees.md). A Dive grant
-  does not grant the data the Dive queries.
+  does not grant access to the data the Dive queries.
 - This provider does not manage SSO, provisioning through an identity provider,
   membership of people in an organization, billing, or PrivateLink.
 - When the identity provider is the organization's source of truth for user role

@@ -54,9 +54,9 @@ scheduled:
 | Lite | `F16` | `F4`, `F16` |
 | Free | `F4` | `F4` |
 
-An expired free trial gets the Free plan limits and sizes.
+An expired free trial uses the Free plan limits and sizes.
 
-`F4`,`F16`, and `F32` have 4, 16, and 32 GB of memory. A Flight created
+`F4`, `F16`, and `F32` have 4, 16, and 32 GB of memory. A Flight created
 before sizes existed reads back as `F16`. MotherDuck checks a size against the
 plan only when it is set, so a Flight keeps its size after the organization
 changes plans. An update that sets a size the new plan does not offer is
@@ -65,7 +65,7 @@ rejected.
 The provider cannot see the organization's plan, so these limits fail at apply
 time, not at plan time.
 
-MotherDuck can disable a schedule on its own, for example after the
+MotherDuck can disable a schedule automatically, for example after the
 organization moves to a plan without scheduled runs. `schedule_status` then
 reads `DISABLED` while `schedule_cron` keeps its value. Terraform reports the
 status but does not manage it.
@@ -94,8 +94,8 @@ definition and then reconciles configured code and settings. Do not edit the
 same Flight through both Terraform and another deployment system.
 
 Destroy deletes the Flight definition. Verify its schedules, dependencies, and
-data-retention requirements before removing it. Function availability depends
-on the MotherDuck account and client.
+data-retention requirements before removing it. Flight management relies on
+MotherDuck SQL functions whose availability depends on the account and client.
 
 Only the owner can run, update, or delete a new Flight. To let other users,
 roles, or the whole organization start runs, grant `run` with

@@ -24,7 +24,7 @@ read-only serving connections. Two tokens for one account do not create separate
 data ownership. Read-scaling readers need account initialization and any share
 attachment through a read-write connection first. MotherDuck creates
 `read_scaling` tokens only for organizations on a Business plan or an active
-free trial, unless it has enabled read scaling for the organization.
+free trial, unless MotherDuck has enabled read scaling for the organization.
 
 MotherDuck creates tokens only for your own user or for a service account. A
 token for another human user fails.
@@ -50,9 +50,10 @@ interrupting consumers, create a second token, update and verify consumers,
 then retire the old one.
 
 The generated secret is stored in Terraform state. A sensitive output, as in
-the example, masks normal CLI display but does not encrypt state. If a token disappears from the
-API listing, refresh removes its state so the next apply can create a new one.
-The provider warns when it cannot explain the absence by the recorded expiry.
+the example, masks normal CLI display but does not encrypt state. If a token
+disappears from the API listing, refresh removes its state so the next apply
+can create a new one. The provider warns when the recorded expiry does not
+explain the absence.
 The listing, and the `motherduck_user_tokens` data source, include only
 unexpired tokens.
 

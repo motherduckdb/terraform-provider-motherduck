@@ -32,6 +32,10 @@ rest:
       - data_source.motherduck_dive_embed_session
       - ephemeral_resource.motherduck_dive_embed_session
     status: ephemeral
+  - path: /v1/tokens/short-lived
+    methods: [POST]
+    provider_surface: ephemeral_resource.motherduck_short_lived_token
+    status: ephemeral
 sql:
   resources:
     - motherduck_database

@@ -9,21 +9,21 @@ description: |-
 
 Each workflow below has a Registry guide that explains its configuration and
 lifecycle, and a complete runnable project on GitHub. The projects include
-Python, Node, SQL templates, and dependency locks. Links point at the v0.4.3
+Python, Node, SQL templates, and dependency locks. Links point at the v0.4.5
 release tag, except for the two examples added after that release, which point
 at `main`. They are examples, not published Terraform Registry modules.
 
-| Goal | Registry guide | Complete v0.4.3 example |
+| Goal | Registry guide | Complete v0.4.5 example |
 | --- | --- | --- |
-| First warehouse | [Create your first warehouse](getting-started.md) | [Simple warehouse](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.3/examples/warehouses/simple) |
-| Dev/prod warehouse | [Warehouse layouts](warehouse-examples.md) and [environments](environments.md) | [Bootstrap and layered roots](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.3/examples/warehouses) |
-| Ingestion and dbt | [Ownership and deployment](deployment-model.md) | [Pinned dlt cookbook and dbt companion](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.3/examples/cookbook-pipeline) |
-| Tenant analytics | [Customer-facing analytics](customer-facing-analytics.md) | [Terraform root and Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.3/examples/customer-facing-analytics) |
-| BI tools and AI agents | [Give BI tools and AI agents their own readers](bi-and-agent-readers.md) | [Reader accounts on one share](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/bi-and-agent-readers) |
-| Data lake | [Build a data lake on your own bucket](data-lake.md) | [DuckLake database and scoped S3 secret](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/data-lake) |
-| Reusable tenant infrastructure | [Authentication and ownership](authentication.md) | [Writer bootstrap](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.3/examples/blueprints/writer-bootstrap) and [read hypertenancy](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.3/examples/blueprints/read-hypertenancy) |
-| Team roles and grants | [Manage and audit access](access-control.md) | [Access control](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.3/examples/access-control), [share audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.3/examples/share-access-audit), and [role audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.3/examples/role-access-audit) |
-| Pulumi Python | [Use the provider with Pulumi](pulumi.md) | [Pinned Python bridge example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.3/examples/pulumi/python) |
+| First warehouse | [Create your first warehouse](getting-started.md) | [Simple warehouse](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/warehouses/simple) |
+| Dev/prod warehouse | [Warehouse layouts](warehouse-examples.md) and [environments](environments.md) | [Bootstrap and layered roots](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/warehouses) |
+| Ingestion and dbt | [Ownership and deployment](deployment-model.md) | [Pinned dlt cookbook and dbt companion](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/cookbook-pipeline) |
+| Tenant analytics | [Customer-facing analytics](customer-facing-analytics.md) | [Terraform root and Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/customer-facing-analytics) |
+| BI tools and AI agents | [Give BI tools and AI agents their own readers](bi-and-agent-readers.md) | [Reader accounts on one share](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/bi-and-agent-readers) |
+| Data lake | [Build a data lake on your own bucket](data-lake.md) | [DuckLake database and scoped S3 secret](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/data-lake) |
+| Reusable tenant infrastructure | [Authentication and ownership](authentication.md) | [Writer bootstrap](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/blueprints/writer-bootstrap) and [read hypertenancy](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/blueprints/read-hypertenancy) |
+| Team roles and grants | [Manage and audit access](access-control.md) | [Access control](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/access-control), [share audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/share-access-audit), and [role audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/role-access-audit) |
+| Pulumi Python | [Use the provider with Pulumi](pulumi.md) | [Pinned Python bridge example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/pulumi/python) |
 
 ## Install and select credentials
 
@@ -34,7 +34,7 @@ Git source pinned independently from the provider version:
 
 ```hcl
 module "writer_bootstrap" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.4.3"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.4.5"
 
   writer_username = "svc_analytics_writer"
 }
@@ -49,8 +49,8 @@ protected. See [authentication](authentication.md).
 
 The tenant modules expose sensitive `share_urls`, `reader_setup_tokens` and
 `reader_tokens`. Attach each share with its reader's setup token before querying
-with its read-scaling token. The one-hour setup credential can be recreated by a
-later apply after expiration, so the data-plane root remains privileged.
+with its read-scaling token. A later apply can recreate the one-hour setup credential
+after expiration, so the data-plane root remains privileged.
 
 Create an overlapping generation, transfer it to consumers and verify their
 connections before retiring the previous credential:
@@ -97,7 +97,7 @@ them explicitly after apply. The Flight helper does not run inside Terraform.
 Use separate owners, states and database names for dev and prod.
 
 The backend companion uses server-side tenant authentication and separate reader
-pools. Its local hashed-session map is a demonstration that must be replaced by
+pools. Its local hashed-session map is for demonstration only. Replace it with
 your production identity-provider integration before exposing the service.
 
 ## Validate and tear down
