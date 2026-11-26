@@ -12,13 +12,12 @@ ephemeral resource instead. This data source stores the session credential in
 Terraform state.
 
 Creates a short-lived Dive embed session for a service account. The session is
-valid for 24 hours, and the lifetime cannot be changed. Embedding needs a
+valid for 24 hours, and the lifetime cannot be changed. Embedding requires a
 Business plan or an active free trial, and `username` must be a service account
 in the same organization that can read the Dive. Share the Dive with the service
 account, or with a role it belongs to, before creating a session, for example
 with [motherduck_dive_grant](../resources/dive_grant.md). MotherDuck
-rejects a session for a service account that cannot read the Dive with a 403
-error.
+returns a 403 error if the service account cannot read the Dive.
 
 ## Migrating to the ephemeral resource
 

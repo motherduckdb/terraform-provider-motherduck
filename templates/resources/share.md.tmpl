@@ -12,8 +12,8 @@ publication, or `manual` when the data pipeline should explicitly publish a
 snapshot. Terraform manages the share configuration. A no-op apply does not
 publish newly inserted source data to a manual share.
 
-The example uses manual publication. After changing source data, run this as the
-share owner:
+The example uses manual publication. After changing source data, run the
+following statement as the share owner:
 
 ```sql
 UPDATE SHARE analytics_share;
@@ -27,10 +27,9 @@ Name, source database, access mode, visibility, and update mode are replacement-
 
 `include_pattern` creates a filtered share that exposes only the matching schemas and tables. Filtered shares are available on the Business plan and during an active free trial. Standard MotherDuck databases and MotherDuck-hosted DuckLake databases can be filtered. MotherDuck rejects include patterns on DuckLake databases with their own data path, and Iceberg databases cannot be shared. MotherDuck trims each pattern and drops blank ones, so Terraform rejects blank entries and entries with leading or trailing whitespace.
 
-Secure views filter rows, hide columns, and mask values for consumers of a share. Manage them with [motherduck_share_secure_view](share_secure_view.md). Replacing a share drops its secure views, so give each secure view `replace_triggered_by = [motherduck_share.<name>.created_ts]`. Combine them with `include_pattern = []` so a missing secure view hides its table. See [secure shared rows and columns](../guides/row-and-column-security.md).
+Secure views filter rows, hide columns, and mask values for consumers of a share. Manage them with [motherduck_share_secure_view](share_secure_view.md). Replacing a share drops its secure views, so configure each secure view with `replace_triggered_by = [motherduck_share.<name>.created_ts]`. Combine them with `include_pattern = []` so a missing secure view hides its table. See [secure shared rows and columns](../guides/row-and-column-security.md).
 
-Access, visibility, and update mode are optional and computed. If omitted, Terraform discovers and records live values during refresh and import. Explicit values are enforced. Drift on them plans replacement. Removing an explicit value adopts the live value instead of resetting it, and
-omitted options never force replacement when another attribute changes.
+Access, visibility, and update mode are optional and computed. If omitted, Terraform discovers and records live values during refresh and import. Terraform enforces explicit values, and drift on them plans replacement. Removing an explicit value adopts the live value instead of resetting it, and omitted options never force replacement when another attribute changes.
 
 The computed `url` is sensitive. Treat share URLs as access-bearing metadata, especially for unrestricted shares. Terraform still stores sensitive values in state, so use an encrypted backend with restricted access and pass URLs through sensitive outputs or a secret manager.
 

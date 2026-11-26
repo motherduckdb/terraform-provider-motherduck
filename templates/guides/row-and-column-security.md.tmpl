@@ -8,7 +8,7 @@ description: |-
 # Secure shared rows and columns
 
 MotherDuck enforces row-level security, column-level security, and column
-masking through secure views attached to a share. A secure view is a `SELECT`
+masking through secure views attached to a share. A secure view is a `SELECT` query
 that consumers of the share receive in place of a table. It can filter rows,
 omit columns, or replace values, and it can check the identity of the consumer
 running the query. MotherDuck evaluates it on its servers, so a modified client
@@ -105,8 +105,8 @@ Follow the same rule inside each policy:
 
 Every tenant's rows live in `app.daily_usage`. Each tenant has its own reader
 service account, as in the [customer-facing analytics guide](customer-facing-analytics.md).
-One share serves all of them, and a secure view returns each reader only its
-tenant's rows. It also returns `contact_email` only to readers in the
+One share serves all of them, and a secure view returns only the rows for each
+reader's tenant. It also returns `contact_email` only to readers in the
 `usage_pii_readers` role:
 
 ```hcl
@@ -154,7 +154,7 @@ VALUES ('svc_reader_acme', 'acme');
 ```
 
 Both halves are required. A grant without an entitlement row returns no rows,
-and an entitlement row without a grant cannot be attached. To suspend a tenant,
+and a reader with an entitlement row but no grant cannot attach the share. To suspend a tenant,
 revoke its grant with Terraform. To offboard it, also delete its entitlement
 row and its data rows.
 
@@ -263,7 +263,7 @@ share with `ATTACH 'md:_share/...' AS reporting`:
 
 - Consumers need DuckDB 1.5.5 or later for every query shape. Versions 1.4.0 to
   1.5.4 fail on `ORDER BY ... LIMIT`, `LIMIT ... OFFSET`, and `USING SAMPLE`.
-  Check the DuckDB version your application's client library embeds.
+  Check the DuckDB version that the application's client library embeds.
 - Consumers cannot read `rowid` through a secure view.
 - `CREATE DATABASE ... FROM` a share with secure views is refused. Use `COPY
   FROM DATABASE` instead. Copies contain only the rows and columns the consumer
@@ -283,7 +283,7 @@ share with `ATTACH 'md:_share/...' AS reporting`:
 - A function whose value is fixed for one query, such as `current_date` or
   `now()`, cannot be used inside a lambda in the body, for example
   `list_filter(dates, d -> d <= current_date)`. MotherDuck refuses the `CREATE`
-  or `ALTER SHARE` statement. Use the function outside the lambda. The role
+  or `ALTER SHARE` statement. Use the function outside the lambda. Role
   checks such as `is_role_in_session()` are allowed.
 
 See [manage roles and share access](access-control.md) for role membership and

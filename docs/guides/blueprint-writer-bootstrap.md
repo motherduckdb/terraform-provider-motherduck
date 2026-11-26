@@ -17,9 +17,9 @@ This blueprint is REST-only and requires an organization-admin `MOTHERDUCK_ADMIN
 
 ## Operating model
 
-Apply this module from an admin-owned root module with its own state, separate from tenant data state. The workflow holds organization-admin credentials and produces a read-write token, so it deserves tighter access than routine tenant changes.
+Apply this module from an admin-owned root module with its own state, separate from tenant data state. The workflow holds organization-admin credentials and produces a read-write token, so it requires stricter access controls than routine tenant changes.
 
-Store the generated writer token in a secret manager immediately. The data-plane Terraform reads it from there and uses it as `MOTHERDUCK_TOKEN`, which makes the writer the owner of every tenant database and share it creates.
+Store the generated writer token in a secret manager immediately. The data-plane Terraform reads the token from the secret manager and uses it as `MOTHERDUCK_TOKEN`, which makes the writer the owner of every tenant database and share it creates.
 
 ## Token lifecycle
 

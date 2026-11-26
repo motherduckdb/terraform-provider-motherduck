@@ -15,8 +15,8 @@ resources as `read-hypertenancy`: a database, an `app` schema, a restricted
 share and grant, a reader service account with Duckling configuration, a
 one-hour setup token, and rotating read-scaling tokens. It has the same inputs
 and outputs except `expected_writer_username`, the guard that fails the plan
-when the SQL token does not belong to the writer. The module stays available
-so existing module sources pinned to it keep working.
+when the SQL token does not belong to the writer. The module remains available
+so existing module sources pinned to it continue to work.
 
 ## Switch to read hypertenancy
 
@@ -28,8 +28,8 @@ not replace tenant resources:
    add a `moved` block from `module.hypertenancy` to the new name.
 2. Set `expected_writer_username` to the service account behind
    `MOTHERDUCK_TOKEN`.
-3. Run `terraform init -upgrade` and confirm that `terraform plan` creates or
-   destroys nothing.
+3. Run `terraform init -upgrade` and confirm that `terraform plan` neither
+   creates nor destroys resources.
 
 Token rotation, reader setup, and tenant offboarding work the same way in both
 modules. See [read hypertenancy](blueprint-read-hypertenancy.md).

@@ -80,10 +80,10 @@ secret body deliberately before a rotation or update. See
 
 ## Flights secrets
 
-A `flights` secret holds key and value pairs that a Flight reads as environment
+A `flights` secret holds key-value pairs that a Flight reads as environment
 variables. Set its values in `flight_params`, which the provider sends as
-`PARAMS MAP {...}`. `params` is not valid for this type. Attach the secret to a
-Flight with `flight_secret_names`. The run receives each pair twice, as `<key>`
+`PARAMS MAP {...}`. The `params` attribute is not valid for this type. Attach
+the secret to a Flight with `flight_secret_names`. The run receives each pair twice, as `<key>`
 and as `<secret name>_<key>`. MotherDuck sets `MOTHERDUCK_TOKEN`,
 `MOTHERDUCK_FLIGHTS_RUN`, `MOTHERDUCK_FLIGHT_ID`, `MOTHERDUCK_FLIGHT_RUN_ID`, and
 `MOTHERDUCK_HOST` itself, so a key with one of those names is available only

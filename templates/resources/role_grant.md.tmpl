@@ -50,16 +50,15 @@ Permissions received through other grants remain in effect.
 
 A [secure view](share_secure_view.md) can check role membership with
 `is_role_in_session('role_name')` to mask a column for consumers outside the
-role. Grants and revokes take up to about a minute to
-reach `is_role_in_session()`, in open sessions as well as new ones, so a revoked
-role can still unmask a column briefly.
+role. Grants and revokes take up to approximately one minute to reach
+`is_role_in_session()` in both open and new sessions. A revoked role can still
+unmask a column during that window.
 
 ### Organizations that manage roles through SCIM
 
 An organization can make its identity provider the source of truth for user role
 assignment. MotherDuck then refuses role grants and revokes for people, and the
-provider reports the refusal with the reason. Grants to service accounts and to
-roles keep working. If destroy is refused, MotherDuck keeps the grant and Terraform
+provider reports the refusal with the reason. Grants to service accounts and roles continue to work. If destroy is refused, MotherDuck keeps the grant and Terraform
 keeps it in state. Manage the person's roles in the identity provider, or run
 `terraform state rm` on the resource to stop managing the grant without revoking it.
 

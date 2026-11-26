@@ -68,14 +68,14 @@ resource instead, Pulumi stores them as secrets in state.
 
 Terraform requires `name` on resources that have one. Pulumi makes it optional
 and, when it is omitted, generates `<logical name>-<7 random characters>`, for
-example `analytics-a704189`. The hyphen means SQL must quote the name. Set
+example `analytics-a704189`. Because the generated name contains a hyphen, SQL queries must quote it. Set
 `name` explicitly for databases, schemas, tables, views, secrets, and shares
 that SQL, dbt, or applications refer to.
 
 ### Replacements
 
 Pulumi creates a replacement before it deletes the original. When the
-replacement keeps the same name, the create fails with an error such as
+replacement keeps the same name, the create operation fails with an error such as
 `Table with name "facts" already exists`, and the original is left unchanged.
 Changing a table's `columns` is a common example.
 
@@ -104,9 +104,9 @@ new token before the old one is revoked, which suits rotation.
 ### Functions during preview
 
 Pulumi calls a function during `pulumi preview` and `pulumi up` whenever its
-arguments are known, even with `dependsOn`. A function that reads a resource
-created in the same program by a literal name therefore fails before the
-resource exists. Terraform defers that read until apply. In Pulumi, read the
+arguments are known, even with `dependsOn`. A function that uses a literal name to read a
+resource created in the same program therefore fails before the resource
+exists. Terraform defers that read until apply. In Pulumi, read the
 resource's own outputs, or pass a value that is only known after creation,
 such as its `id`:
 
@@ -119,7 +119,7 @@ variables:
         flightId: ${flight.id}
 ```
 
-Functions fit objects that another stack or team owns, such as the
+Use functions for objects that another stack or team owns, such as the
 `motherduck:getSecret` lookup for a separately owned secret.
 
 ### Sensitive function results
@@ -177,8 +177,8 @@ for drift. Do not manage the same object from both Terraform and Pulumi.
 - Every change to `main` runs a live Pulumi lifecycle against MotherDuck:
   create, refresh, an empty preview, in-place updates, a `deleteBeforeReplace`
   replacement, import, and destroy. It covers databases, schemas, tables,
-  views, secrets, shares, snapshots, Flights, Guides, and Dives, and with an
-  admin token also service accounts, access tokens, Duckling configuration,
-  roles, and role grants.
+  views, secrets, shares, snapshots, Flights, Guides, and Dives. With an admin
+  token, it also covers service accounts, access tokens, Duckling
+  configuration, roles, and role grants.
 - `motherduck_share_grant`, `motherduck_share_secure_view`, and the deprecated
   `motherduck_flight_run` map to Pulumi but do not have a live Pulumi test.

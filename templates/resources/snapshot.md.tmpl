@@ -19,14 +19,14 @@ and verify that load before creating the snapshot.
 Changing the name renames the snapshot. Refresh tracks the snapshot by its
 `snapshot_id`, so a rename outside Terraform plans an in-place rename back. Changing its database requires
 replacement, except that a change in the letter case of the database name only
-updates state. Destroy removes the managed name rather than promising immediate
+updates state. Destroy removes the managed name rather than guaranteeing immediate
 physical deletion of retained history.
 
 If creation succeeds but catalog readback fails, Terraform keeps the database
 and snapshot name for recovery. Destroy resolves a missing snapshot ID from
 that name before clearing it, including after the creating database was dropped.
-Failed, empty or ambiguous recovery lookups keep
-the resource in state and stop cleanup. Refresh also keeps missing-ID state
+Failed, empty, or ambiguous recovery lookups keep the resource in state and
+stop cleanup. Refresh also keeps missing-ID state
 when metadata is unlisted because the snapshot name may still be retained.
 Retry after catalog reads recover. If you confirm that the remote name was
 already cleared, remove the resource from state explicitly.

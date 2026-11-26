@@ -17,7 +17,7 @@ Role-scoped access requires a session whose `MD_SET_GUIDE_ACCESS` accepts a
 unavailable-feature diagnostic. An organization-admin token alone does not make
 the feature available.
 
-Check the authenticated session before using it:
+Check the authenticated session before using this data source:
 
 ```sql
 SELECT count(*)

@@ -23,9 +23,10 @@ cooldown settings, so omit the corresponding cooldown when selecting Pulse.
 
 Cooldowns are optional. MotherDuck stores the configuration exactly as written,
 so a write without a cooldown resets it. On create, Terraform sends no cooldown
-for an unset one, so MotherDuck applies its default and replaces any cooldown
-set outside Terraform, such as in the MotherDuck UI. To keep such a cooldown,
-set it in the configuration before the first apply, or import the resource.
+for an unset attribute, so MotherDuck applies its default and replaces any
+cooldown set outside Terraform, such as in the MotherDuck UI. To keep an
+existing cooldown, set it in the configuration before the first apply, or
+import the resource.
 After that, Terraform records the live value of an unset cooldown and keeps it
 while that instance size stays the same. When the instance size changes,
 MotherDuck applies its default for the new size. Removing a configured cooldown
@@ -61,7 +62,7 @@ the provider does not check these values itself.
 ## Destroy and import
 
 Destroy removes this resource from Terraform state **without resetting the live
-compute settings**, because the API has no reset/delete operation for them.
+compute settings**, because the API has no reset or delete operation for them.
 The provider emits a warning. Change the configuration explicitly when you want
 to resize compute before giving up management.
 

@@ -42,8 +42,8 @@ Free, Lite, and not yet started trial organizations can have at most two
 service accounts. Business organizations and active free trials have no such
 limit.
 
-Create tokens with `motherduck_access_token` and configure its compute with
-`motherduck_duckling_config`. Account creation does not switch the provider's
+Create tokens with `motherduck_access_token` and configure the account's compute
+with `motherduck_duckling_config`. Account creation does not switch the provider's
 SQL identity or move existing databases to the new account.
 
 ## Service accounts only
@@ -58,10 +58,10 @@ needs the `member_management.view_all_members` privilege. The built-in
 `admin`, `builder`, and `explorer` roles include it. The listing pages by
 offset and can skip a user while other users are created or deleted. When the
 username is missing from the listing, the provider checks
-`GET /v1/users/{username}/instances`. A not-found answer means the account is
+`GET /v1/users/{username}/instances`. A not-found response means the account is
 gone, so refresh removes it from state and destroy treats it as deleted. When
 the account still exists, the provider fails with an error, keeps the state,
-and sends no delete. Retry the operation.
+and sends no delete request. Retry the operation.
 
 **Deleting the service account deletes the data it owns.** Destroy downstream
 warehouses with their original writer credential before removing their account.

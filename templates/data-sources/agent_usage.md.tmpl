@@ -18,9 +18,9 @@ error.
 MotherDuck records one row per agent run. Set `start_time` and `end_time` to
 read a bounded window, and use `limit` and `offset` to page through it. Both
 bounds must be RFC 3339 timestamps with a time zone offset, such as
-`2026-11-01T00:00:00Z`. A run is returned when it finished at or after
-`start_time` and before `end_time`. AI units are reported as a decimal string.
-Use `tonumber()` to add them up.
+`2026-11-01T00:00:00Z`. The data source returns runs that finished at or after `start_time` and before
+`end_time`. AI units are reported as a decimal string. Use `tonumber()` to sum
+them.
 
 Each row reports when the run started and finished in `start_time` and
 `end_time`. Older MotherDuck clients report only the finish time, so
@@ -30,7 +30,8 @@ the same value as `end_time`.
 The current MotherDuck client reports `start_time` and `end_time` and no longer
 reports `run_finished_ts`. Provider versions earlier than 0.4.2 filter on
 `run_finished_ts`, so they fail to read this data source with a binder error.
-Configurations that read it need provider version 0.4.2 or later.
+Configurations that read this data source require provider version 0.4.2 or
+later.
 
 This data source requires a MotherDuck client that exposes `md_agent_usage`.
 When the connected client does not, the read fails with a

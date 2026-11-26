@@ -48,8 +48,8 @@ Use `attach_mode = "single"` only when the provider should attach the configured
 
 Use environment variables in automation instead of committing tokens into `.tf` or `.tfvars` files.
 
-- `MOTHERDUCK_TOKEN` is used for SQL resources and data sources.
-- `MOTHERDUCK_ADMIN_TOKEN` is used for REST administration resources and data sources.
+- Set `MOTHERDUCK_TOKEN` for SQL resources and data sources.
+- Set `MOTHERDUCK_ADMIN_TOKEN` for REST administration resources and data sources.
 
 Use `admin_token` only for organization administration: service accounts, access tokens, Duckling configuration, and active account inspection. Use the SQL token for databases, schemas, tables, views, shares, share grants, secure views, roles, role grants, secrets, snapshots, Dives, Flights, and Guides.
 
@@ -95,7 +95,7 @@ Avoid modules that create both platform-level service accounts and all tenant da
 
 For multi-tenant deployments, start from the blueprint modules: [writer bootstrap](blueprint-writer-bootstrap.md) creates the writer service account and token, and [read hypertenancy](blueprint-read-hypertenancy.md) creates per-tenant databases, shares, and readers owned by that writer.
 
-Only the owner of a database can write to it, and only the share owner can run `GRANT READ ON SHARE`. Apply tenant data-plane modules with the writer service account's token so the writer owns the databases it must write and the shares it must grant.
+Only the owner of a database can write to it, and only the share owner can run `GRANT READ ON SHARE`. Apply tenant data-plane modules with the writer service account's token so the writer owns the databases it must write to and the shares it must grant.
 
 ## Naming
 
@@ -141,7 +141,7 @@ Dive and Flight SQL function availability can vary by account, plan, region, and
 
 ## Lifecycle behavior
 
-Treat identity and create-only arguments as replacements. For example, changing a service account username, an access token name, token type, TTL, a database name, DuckLake path, or Iceberg catalog endpoint or warehouse, a table column type or primary key, or a share definition should create a replacement resource instead of mutating the existing object. A username change that only alters letter case is the exception, because MotherDuck compares usernames case-insensitively, so it updates in place. New service account usernames must start with a letter and contain only letters, ASCII digits, and underscores. Existing accounts whose usernames contain hyphens, at signs, or periods can be imported and managed. A service account `description` is create-only, and changing it fails the plan rather than replacing the account. A new access token is `read_write` when `token_type` is omitted, and an omitted `token_type` keeps the type of an existing or imported token.
+Treat identity and create-only arguments as replacements. For example, changing a service account username, access token name, token type, TTL, database name, DuckLake path, Iceberg catalog endpoint or warehouse, table column type, primary key, or share definition should create a replacement resource instead of mutating the existing object. A username change that alters only letter case updates in place because MotherDuck compares usernames case-insensitively. New service account usernames must start with a letter and contain only letters, ASCII digits, and underscores. Existing accounts whose usernames contain hyphens, at signs, or periods can be imported and managed. A service account `description` is create-only, and changing it fails the plan rather than replacing the account. A new access token is `read_write` when `token_type` is omitted, and an omitted `token_type` keeps the type of an existing or imported token.
 
 Mutable configuration should update in place. `motherduck_duckling_config` updates instance sizes, read-scaling flock size, and cooldown settings for the same username. Public REST limits are validated locally: username fields must be non-blank and 1-255 characters. Instance sizes accept `pulse`, `standard`, `jumbo`, `mega`, or `giga`. Read-scaling flock size must be 0-64. Cooldown values must be 60-86400 seconds. Dive/Flight SQL data-source IDs, Dive/Flight import IDs, and Dive embed-session IDs must be UUIDs with no leading or trailing whitespace. `motherduck_database.snapshot_retention_days`, `motherduck_view.query`, `motherduck_secret` parameters, and snapshot names also update in place.
 
@@ -157,7 +157,7 @@ MotherDuck Pulse Duckling instances do not support cooldown seconds. Omit `read_
 
 Snapshot resources manage snapshot names, not immediate physical deletion of retained snapshot bytes. Destroying a `motherduck_snapshot` removes the name. MotherDuck retention controls when the unnamed snapshot data ages out. If a snapshot is unnamed outside Terraform, the next apply restores the configured named resource. MotherDuck may attach the name back to the same underlying `snapshot_id` while the unnamed snapshot remains retained.
 
-Creating shares and snapshots depends on catalog metadata being visible immediately after SQL execution. The provider retries transient MotherDuck catalog errors such as timeouts or temporary unavailability and keeps Terraform state values known if a post-create read still fails. If an apply fails because MotherDuck cannot return share or snapshot metadata, rerun `terraform apply` after the transient clears so Terraform can refresh the created object before making further changes.
+Creating shares and snapshots depends on catalog metadata being visible immediately after SQL execution. The provider retries transient MotherDuck catalog errors such as timeouts or temporary unavailability and keeps Terraform state values known if a post-create read still fails. If an apply fails because MotherDuck cannot return share or snapshot metadata, rerun `terraform apply` after the transient error clears so Terraform can refresh the created object before making further changes.
 
 When managed SQL objects are deleted outside Terraform, the provider removes missing databases, schemas, tables, views, shares, secrets, and share grants from state during refresh so the next plan can recreate them. This is a repair mechanism for missing objects, not a substitute for reviewing every drift plan. If a database was dropped out of band, Terraform can recreate the object graph but cannot recover the deleted data. Secret metadata such as `scope` can be repaired when it is configured through `params`, but secret body values cannot be compared because MotherDuck does not return those values after creation.
 

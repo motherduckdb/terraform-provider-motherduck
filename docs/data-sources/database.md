@@ -8,8 +8,8 @@ description: |-
 # motherduck_database (Data Source)
 
 Reads one existing database from `MD_INFORMATION_SCHEMA.DATABASES` using the
-configured SQL identity. Use this when another Terraform state or deployment
-tool owns the database, and a downstream configuration needs its metadata.
+configured SQL identity. Use this data source when another Terraform state or deployment
+tool owns the database and a downstream configuration needs its metadata.
 
 The read fails if the exact name is absent from the caller's catalog or the
 catalog query fails. A successful read confirms catalog visibility at refresh

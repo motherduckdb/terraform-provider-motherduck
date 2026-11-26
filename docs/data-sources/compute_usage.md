@@ -15,11 +15,11 @@ admins have that access. Configure the provider `token` (or `MOTHERDUCK_TOKEN`)
 with such a principal. Other tokens fail the read with a query history access
 error.
 
-MotherDuck records one row per Duckling, user, and 30-second window, so a
+MotherDuck records one row per Duckling, user, and 30-second window, so the
 history grows quickly. Set `start_time` and `end_time` to read a bounded window,
 and use `limit` and `offset` to page through it. Both bounds must be RFC 3339
-timestamps with a time zone offset, such as `2026-11-01T00:00:00Z`. Uptime is
-reported as a decimal string. Use `tonumber()` to add it up.
+timestamps with a time zone offset, such as `2026-11-01T00:00:00Z`. MotherDuck
+reports uptime as a decimal string. Use `tonumber()` to sum it.
 
 This data source requires a MotherDuck client that exposes
 `md_compute_usage`. When the connected client does not, the read fails with a

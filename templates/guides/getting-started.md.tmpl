@@ -20,8 +20,8 @@ result, and remove the tutorial resources.
 
 You need Terraform 1.5 or later, Git, a MotherDuck account that can create
 databases, and a read-write token available to Terraform as `MOTHERDUCK_TOKEN`.
-Use your secret manager or local credential workflow to supply it. No organization
-admin token is needed.
+Use your secret manager or local credential workflow to supply it. You do not need an
+organization admin token.
 
 Use the same account in the MotherDuck SQL editor for the data-loading steps.
 For a service account, use the [impersonation workflow](https://motherduck.com/docs/key-tasks/service-accounts-guide/impersonate-service-accounts/)
@@ -40,7 +40,7 @@ terraform init
 
 The example includes the provider requirement, input variables, SQL templates,
 and outputs. `terraform init` installs the signed provider from the Registry.
-Keep `.terraform.lock.hcl` when you copy this root into your own repository.
+Keep `.terraform.lock.hcl` when you copy this root module into your own repository.
 
 The core configuration is:
 
@@ -106,8 +106,8 @@ terraform plan -var-file=dev.tfvars -detailed-exitcode
 ```
 
 Expect **no changes**, with exit code 0. Terraform manages the table definition,
-not the rows you just inserted. Exit code 2 means a proposed change, and 1 means
-an error. Review either before another apply.
+not the rows you just inserted. Exit code 2 indicates a proposed change, and exit code 1 indicates
+an error. Review either result before running apply again.
 
 ## 5. Remove the tutorial
 
@@ -116,7 +116,7 @@ terraform plan -destroy -var-file=dev.tfvars -out=destroy.tfplan
 terraform apply destroy.tfplan
 ```
 
-Review that the plan removes only the five tutorial resources. This also removes
+Verify that the plan removes only the five tutorial resources. This also removes
 the sample data. Do not add unrelated data to the tutorial database.
 
 ## Build on it

@@ -9,7 +9,7 @@ description: |-
 
 Grants `run` on one MotherDuck Flight to a user, a role, or the whole organization. The grantee can then start runs of the Flight. Runs use the access token and secrets of the Flight owner, and a run grant does not let the grantee see or edit the Flight.
 
-Use this resource when Terraform owns who can run a Flight besides its owner.
+Use this resource when Terraform manages who can run a Flight besides its owner.
 Each resource owns one grant: to one user or service account, to one role, or
 to the whole organization. Only the owner of a Flight can grant access to it,
 so configure the provider `token` (or `MOTHERDUCK_TOKEN`) with the owner's
@@ -29,7 +29,7 @@ Flight is deleted, the grant is removed from state. MotherDuck resolves
 principal names case-insensitively, so a change in the letter case of
 `grantee_name` only updates state and does not revoke the grant.
 
-To review everyone who can run a Flight, read
+To review all principals that can run a Flight, read
 [motherduck_flight_grantees](../data-sources/flight_grantees.md).
 
 ## Example Usage

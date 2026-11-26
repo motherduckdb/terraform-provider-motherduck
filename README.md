@@ -68,7 +68,7 @@ are [separate deployment stages](docs/guides/authentication.md).
 ## What belongs in Terraform
 
 > **Deployment recommendation:** Use Terraform for databases, service accounts,
-> access tokens, Duckling configuration, roles/grants, and shares. Keep Dives,
+> access tokens, Duckling configuration, roles, grants, and shares. Keep Dives,
 > Flight Python, and Guide Markdown in version control and deploy them through
 > the MotherDuck CLI or a code deployment pipeline. Terraform apply does not
 > compile application code, validate every data dependency, or run a data load.
@@ -102,13 +102,13 @@ Flight-run resources are deprecated. See [resource scope](docs/guides/resource-s
 
 Adding or dropping a table column updates the table in place. Changing a
 column type or the primary key replaces the table and its rows, so protect
-important data before adopting these examples. Token values are stored in state
-even when marked sensitive, so use an encrypted backend with restricted access
-and locking. Storage credentials can stay out of state through the write-only
-arguments of `motherduck_secret`.
+important data before adopting these examples. Terraform stores token values in
+state even when marked sensitive, so use an encrypted backend with restricted
+access and locking. Storage credentials can stay out of state through the
+write-only arguments of `motherduck_secret`.
 
-Terraform 1.5+ is supported, with packages for Linux (glibc 2.34 or newer) and
-macOS 13 or newer on amd64 and arm64.
+The provider supports Terraform 1.5+, with packages for Linux (glibc 2.34 or
+newer) and macOS 13 or newer on amd64 and arm64.
 Ephemeral resources require Terraform 1.10+, and write-only arguments require
 Terraform 1.11+. See the
 [tested Terraform and OpenTofu matrix](docs/guides/ci-and-release.md).
