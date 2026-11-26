@@ -24,6 +24,7 @@ import (
 	"github.com/motherduckdb/terraform-provider-motherduck/internal/tfvalidators"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
@@ -779,14 +780,32 @@ func (v stringEnumValidator) ValidateString(ctx context.Context, req validator.S
 	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return
 	}
-	value := req.ConfigValue.ValueString()
-	canonical := strings.ToLower(strings.TrimSpace(value))
-	for _, allowed := range v.values {
-		if canonical == allowed && value == canonical {
-			return
-		}
+	if validateStringEnumValue(req.ConfigValue.ValueString(), v.values) {
+		return
 	}
 	resp.Diagnostics.AddAttributeError(req.Path, "Invalid "+v.name, "Value must be a lowercase canonical value, one of: "+strings.Join(v.values, ", ")+".")
+}
+
+func validateStringEnumValue(value string, allowed []string) bool {
+	canonical := strings.ToLower(strings.TrimSpace(value))
+	for _, option := range allowed {
+		if canonical == option && value == canonical {
+			return true
+		}
+	}
+	return false
+}
+
+func validateUserOrRoleGranteeType(granteeType string, diags *diag.Diagnostics) bool {
+	if validateStringEnumValue(granteeType, []string{"user", "role"}) {
+		return true
+	}
+	diags.AddAttributeError(
+		path.Root("grantee_type"),
+		"Invalid grantee type",
+		"Value must be a lowercase canonical value, one of: user, role.",
+	)
+	return false
 }
 
 type serviceAccountUsernameValidator struct{}

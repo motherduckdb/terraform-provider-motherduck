@@ -269,3 +269,55 @@ func TestTableModifyPlanExplainsUnresolvableColumnType(t *testing.T) {
 		}
 	}
 }
+
+func TestTableCreateAndUpdateValidateResolvedColumns(t *testing.T) {
+	ctx := context.Background()
+	client := &recordingSQLClient{}
+	r := &tableResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+
+	invalidModel := tableModel{
+		ID:          types.StringValue("analytics.main.facts"),
+		Database:    types.StringValue("analytics"),
+		Schema:      types.StringValue("main"),
+		Name:        types.StringValue("facts"),
+		Columns:     types.MapValueMust(types.StringType, map[string]attr.Value{"id": types.StringValue("   ")}),
+		ColumnOrder: types.ListNull(types.StringType),
+		PrimaryKey:  types.ListNull(types.StringType),
+		NotNull:     types.SetNull(types.StringType),
+	}
+	validState := tableModel{
+		ID:          types.StringValue("analytics.main.facts"),
+		Database:    types.StringValue("analytics"),
+		Schema:      types.StringValue("main"),
+		Name:        types.StringValue("facts"),
+		Columns:     types.MapValueMust(types.StringType, map[string]attr.Value{"id": types.StringValue("INTEGER")}),
+		ColumnOrder: types.ListNull(types.StringType),
+		PrimaryKey:  types.ListNull(types.StringType),
+		NotNull:     types.SetNull(types.StringType),
+	}
+
+	plan := tfsdk.Plan{Schema: schemaResp.Schema}
+	if diags := plan.Set(ctx, invalidModel); diags.HasError() {
+		t.Fatal(diags)
+	}
+	var createResp resource.CreateResponse
+	r.Create(ctx, resource.CreateRequest{Plan: plan}, &createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected blank column type to fail Create")
+	}
+
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(ctx, validState); diags.HasError() {
+		t.Fatal(diags)
+	}
+	var updateResp resource.UpdateResponse
+	r.Update(ctx, resource.UpdateRequest{Plan: plan, State: state}, &updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected blank column type to fail Update")
+	}
+	if len(client.execs) != 0 {
+		t.Fatalf("executed SQL queries %v on invalid columns", client.execs)
+	}
+}

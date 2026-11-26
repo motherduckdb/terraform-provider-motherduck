@@ -34,3 +34,27 @@ func TestStringMaxUTF16Units(t *testing.T) {
 		})
 	}
 }
+
+func TestStringLengthValidatorSingularPlural(t *testing.T) {
+	ctx := context.Background()
+	singular := StringLength("role", 1, 0)
+	if got, want := singular.Description(ctx), "must be at least 1 character"; got != want {
+		t.Fatalf("singular Description() = %q, want %q", got, want)
+	}
+	if got, want := singular.MarkdownDescription(ctx), "must be at least `1` character"; got != want {
+		t.Fatalf("singular MarkdownDescription() = %q, want %q", got, want)
+	}
+
+	plural := StringLength("role", 2, 0)
+	if got, want := plural.Description(ctx), "must be at least 2 characters"; got != want {
+		t.Fatalf("plural Description() = %q, want %q", got, want)
+	}
+	if got, want := plural.MarkdownDescription(ctx), "must be at least `2` characters"; got != want {
+		t.Fatalf("plural MarkdownDescription() = %q, want %q", got, want)
+	}
+	var resp validator.StringResponse
+	plural.ValidateString(ctx, validator.StringRequest{Path: path.Root("name"), ConfigValue: types.StringValue("a")}, &resp)
+	if !resp.Diagnostics.HasError() || !strings.Contains(resp.Diagnostics.Errors()[0].Detail(), "at least 2 characters.") {
+		t.Fatalf("plural diagnostics = %v, want 'at least 2 characters.'", resp.Diagnostics)
+	}
+}

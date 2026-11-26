@@ -6,10 +6,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 )
 
 func TestComputeUsageQueries(t *testing.T) {
@@ -112,5 +116,35 @@ func TestComputeUsageExplainsQueryHistoryErrors(t *testing.T) {
 	ds.queryRows(context.Background(), fakeRowsClient{err: errors.New("admin only function")}, "SELECT 1", types.StringNull(), &diags)
 	if !diags.HasError() || diags[0].Summary() != "Unable to read motherduck_compute_usage" {
 		t.Fatalf("unexpected diagnostic for an unrelated error: %v", diags)
+	}
+}
+
+func TestRowsDataSourceReadValidatesResolvedWindow(t *testing.T) {
+	ctx := context.Background()
+	ds := &rowsDataSource{
+		baseDataSource: baseDataSource{provider: &providerctx.Context{SQL: &admissionSQLClient{available: true}}},
+		spec:           findSpec(t, "compute_usage"),
+	}
+	var schemaResp datasource.SchemaResponse
+	ds.Schema(ctx, datasource.SchemaRequest{}, &schemaResp)
+
+	attrTypes := map[string]tftypes.Type{}
+	values := map[string]tftypes.Value{}
+	for name, attrSchema := range schemaResp.Schema.Attributes {
+		tfType := attrSchema.GetType().TerraformType(ctx)
+		attrTypes[name] = tfType
+		values[name] = tftypes.NewValue(tfType, nil)
+	}
+	values["start_time"] = tftypes.NewValue(tftypes.String, "2026-11-02T00:00:00Z")
+	values["end_time"] = tftypes.NewValue(tftypes.String, "2026-11-01T00:00:00Z")
+
+	cfg := tfsdk.Config{
+		Schema: schemaResp.Schema,
+		Raw:    tftypes.NewValue(tftypes.Object{AttributeTypes: attrTypes}, values),
+	}
+	var resp datasource.ReadResponse
+	ds.Read(ctx, datasource.ReadRequest{Config: cfg}, &resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected resolved inverted usage window to fail Read before querying SQL")
 	}
 }

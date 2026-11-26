@@ -298,6 +298,9 @@ func (r *roleGrantResource) Create(ctx context.Context, req resource.CreateReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if !validateUserOrRoleGranteeType(plan.GranteeType.ValueString(), &resp.Diagnostics) {
+		return
+	}
 	query := roleGrantStatement("GRANT", plan.RoleName.ValueString(), "TO", plan.GranteeType.ValueString(), plan.GranteeName.ValueString())
 	if err := client.Exec(ctx, query); err != nil {
 		resp.Diagnostics.AddError("Unable to grant MotherDuck role", rolePermissionErrorDetail(err, roleAssignmentErrorDetail(err, false)))
@@ -360,6 +363,9 @@ func (r *roleGrantResource) Delete(ctx context.Context, req resource.DeleteReque
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if !validateUserOrRoleGranteeType(state.GranteeType.ValueString(), &resp.Diagnostics) {
+		return
+	}
 	query := roleGrantStatement("REVOKE", state.RoleName.ValueString(), "FROM", state.GranteeType.ValueString(), state.GranteeName.ValueString())
 	if err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) }); err != nil && !isNotFound(err) {
 		resp.Diagnostics.AddError("Unable to revoke MotherDuck role", rolePermissionErrorDetail(err, roleAssignmentErrorDetail(err, true)))
@@ -393,6 +399,9 @@ func (r *roleGrantResource) ImportState(ctx context.Context, req resource.Import
 func (r *roleGrantResource) readRoleGrant(ctx context.Context, model *roleGrantModel, diags *diag.Diagnostics) bool {
 	client := r.sql(ctx, diags)
 	if client == nil {
+		return false
+	}
+	if !validateUserOrRoleGranteeType(model.GranteeType.ValueString(), diags) {
 		return false
 	}
 	query := showRolesToStatement(model.GranteeType.ValueString(), model.GranteeName.ValueString())

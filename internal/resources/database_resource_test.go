@@ -6,12 +6,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 )
 
 func TestDatabaseSnapshotRetentionUsesStateForUnknown(t *testing.T) {
@@ -259,4 +263,104 @@ func TestDatabaseTypeValidator(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDatabaseCreateAndUpdateValidateResolvedConfig(t *testing.T) {
+	ctx := context.Background()
+	client := &recordingSQLClient{}
+	r := &databaseResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+	icebergTypes := icebergObjectAttrTypes(schemaResp.Schema)
+
+	invalidCreate := tfsdk.Plan{Schema: schemaResp.Schema}
+	if diags := invalidCreate.Set(ctx, databaseModel{
+		ID:                    types.StringUnknown(),
+		Name:                  types.StringValue("analytics"),
+		DatabaseType:          types.StringValue("default"),
+		DataPath:              types.StringValue("s3://bucket/path"),
+		UUID:                  types.StringUnknown(),
+		Transient:             types.BoolNull(),
+		SnapshotRetentionDays: types.Int64Null(),
+		Encrypted:             types.BoolNull(),
+		DataInliningRowLimit:  types.Int64Null(),
+		Iceberg:               types.ObjectNull(icebergTypes),
+		Timeouts:              timeouts.Value{Object: types.ObjectNull(databaseTimeoutsAttrTypes(schemaResp.Schema))},
+	}); diags.HasError() {
+		t.Fatal(diags)
+	}
+	var createResp resource.CreateResponse
+	r.Create(ctx, resource.CreateRequest{Plan: invalidCreate}, &createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected resolved default database with data_path to fail Create")
+	}
+
+	validIceberg, diags := types.ObjectValueFrom(ctx, icebergTypes, databaseIcebergModel{
+		Secret:               types.StringValue("aws_secret"),
+		DefaultSchema:        types.StringValue("main"),
+		EndpointType:         types.StringValue("glue"),
+		DefaultRegion:        types.StringValue("us-east-1"),
+		AccessDelegationMode: types.StringValue("vended_credentials"),
+	})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	invalidIceberg, diags := types.ObjectValueFrom(ctx, icebergTypes, databaseIcebergModel{
+		Secret:               types.StringValue("aws_secret"),
+		DefaultSchema:        types.StringValue("main"),
+		EndpointType:         types.StringValue("INVALID_ENDPOINT"),
+		DefaultRegion:        types.StringValue("us-east-1"),
+		AccessDelegationMode: types.StringValue("vended_credentials"),
+	})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(ctx, databaseModel{
+		ID:                    types.StringValue("lake"),
+		Name:                  types.StringValue("lake"),
+		DatabaseType:          types.StringValue("iceberg"),
+		DataPath:              types.StringNull(),
+		UUID:                  types.StringValue("uuid"),
+		Transient:             types.BoolNull(),
+		SnapshotRetentionDays: types.Int64Null(),
+		Encrypted:             types.BoolNull(),
+		DataInliningRowLimit:  types.Int64Null(),
+		Iceberg:               validIceberg,
+		Timeouts:              timeouts.Value{Object: types.ObjectNull(databaseTimeoutsAttrTypes(schemaResp.Schema))},
+	}); diags.HasError() {
+		t.Fatal(diags)
+	}
+	invalidPlan := tfsdk.Plan{Schema: schemaResp.Schema}
+	if diags := invalidPlan.Set(ctx, databaseModel{
+		ID:                    types.StringValue("lake"),
+		Name:                  types.StringValue("lake"),
+		DatabaseType:          types.StringValue("iceberg"),
+		DataPath:              types.StringNull(),
+		UUID:                  types.StringValue("uuid"),
+		Transient:             types.BoolNull(),
+		SnapshotRetentionDays: types.Int64Null(),
+		Encrypted:             types.BoolNull(),
+		DataInliningRowLimit:  types.Int64Null(),
+		Iceberg:               invalidIceberg,
+		Timeouts:              timeouts.Value{Object: types.ObjectNull(databaseTimeoutsAttrTypes(schemaResp.Schema))},
+	}); diags.HasError() {
+		t.Fatal(diags)
+	}
+	var updateResp resource.UpdateResponse
+	r.Update(ctx, resource.UpdateRequest{Plan: invalidPlan, State: state}, &updateResp)
+	if !updateResp.Diagnostics.HasError() {
+		t.Fatal("expected resolved invalid iceberg option to fail Update")
+	}
+	if len(client.execs) != 0 {
+		t.Fatalf("executed SQL queries %v on invalid config", client.execs)
+	}
+}
+
+func icebergObjectAttrTypes(s resourceschema.Schema) map[string]attr.Type {
+	return s.Type().(types.ObjectType).AttrTypes["iceberg"].(types.ObjectType).AttrTypes
+}
+
+func databaseTimeoutsAttrTypes(s resourceschema.Schema) map[string]attr.Type {
+	return s.Type().(types.ObjectType).AttrTypes["timeouts"].(timeouts.Type).AttrTypes
 }

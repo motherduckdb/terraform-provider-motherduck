@@ -236,9 +236,14 @@ func validateDatabaseIcebergConfig(ctx context.Context, config databaseModel, da
 		diags.AddAttributeError(icebergPath, "Invalid MotherDuck database configuration", "`iceberg` is only valid when `database_type = \"iceberg\"`.")
 	}
 	options := databaseIcebergOptions(ctx, config.Iceberg, diags)
+	validateDatabaseIcebergOptions(options, diags)
+}
+
+func validateDatabaseIcebergOptions(options *databaseIcebergModel, diags *diag.Diagnostics) {
 	if options == nil {
 		return
 	}
+	icebergPath := path.Root("iceberg")
 	for _, option := range databaseIcebergStringOptions {
 		value := option.value(options)
 		if value.IsNull() || value.IsUnknown() {

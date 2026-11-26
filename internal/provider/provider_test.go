@@ -475,3 +475,21 @@ func TestUserAgentValidatorRejectsControlCharacters(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigureTrimsBlankDatabaseAndAttachMode(t *testing.T) {
+	t.Setenv("MOTHERDUCK_TOKEN", "env_token")
+	t.Setenv("MOTHERDUCK_API_BASE_URL", "")
+	p := New("test")()
+	var resp provider.ConfigureResponse
+	p.Configure(context.Background(), provider.ConfigureRequest{Config: providerTestConfig(t, map[string]tftypes.Value{
+		"database":    tftypes.NewValue(tftypes.String, "  \t "),
+		"attach_mode": tftypes.NewValue(tftypes.String, " \n "),
+	})}, &resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+	}
+	ctxData := resp.ResourceData.(*providerctx.Context)
+	if ctxData.SQLConfig.Database != "" || ctxData.SQLConfig.AttachMode != "" {
+		t.Fatalf("SQLConfig = %+v, want blank database and attach_mode normalized to empty", ctxData.SQLConfig)
+	}
+}

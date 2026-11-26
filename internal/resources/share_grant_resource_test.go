@@ -11,7 +11,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/motherduckdb/terraform-provider-motherduck/internal/providerctx"
 )
 
 func TestShareGrantErrorDetail(t *testing.T) {
@@ -132,5 +134,42 @@ func TestShareGrantStatementsQuoteDottedUserAsOneIdentifier(t *testing.T) {
 	}
 	if got, want := shareGrantStatement("REVOKE", "analytics", "FROM", "user", username), `REVOKE READ ON SHARE "analytics" FROM USER "first.last@example.com"`; got != want {
 		t.Fatalf("shareGrantStatement() = %q, want %q", got, want)
+	}
+}
+
+func TestShareGrantCreateAndDeleteValidateGranteeType(t *testing.T) {
+	ctx := context.Background()
+	client := &recordingSQLClient{}
+	r := &shareGrantResource{baseResource: baseResource{provider: &providerctx.Context{SQL: client}}}
+	var schemaResp resource.SchemaResponse
+	r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
+
+	model := shareGrantModel{
+		ID:          types.StringUnknown(),
+		Share:       types.StringValue("analytics"),
+		GranteeType: types.StringValue("GROUP"),
+		Username:    types.StringValue("reader"),
+	}
+	plan := tfsdk.Plan{Schema: schemaResp.Schema}
+	if diags := plan.Set(ctx, model); diags.HasError() {
+		t.Fatal(diags)
+	}
+	var createResp resource.CreateResponse
+	r.Create(ctx, resource.CreateRequest{Plan: plan}, &createResp)
+	if !createResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid resolved grantee_type to fail Create")
+	}
+
+	state := tfsdk.State{Schema: schemaResp.Schema}
+	if diags := state.Set(ctx, model); diags.HasError() {
+		t.Fatal(diags)
+	}
+	var deleteResp resource.DeleteResponse
+	r.Delete(ctx, resource.DeleteRequest{State: state}, &deleteResp)
+	if !deleteResp.Diagnostics.HasError() {
+		t.Fatal("expected invalid state grantee_type to fail Delete")
+	}
+	if len(client.execs) != 0 {
+		t.Fatalf("executed SQL queries %v on invalid grantee_type", client.execs)
 	}
 }

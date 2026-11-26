@@ -241,3 +241,26 @@ func TestUsernameValidatorsCountUTF16Units(t *testing.T) {
 		})
 	}
 }
+
+func TestRequestAppliesRuntimeValidation(t *testing.T) {
+	ctx := context.Background()
+
+	both := nullModel()
+	both.SessionName = types.StringValue("one")
+	both.SessionHint = types.StringValue("two")
+	if _, err := request(ctx, &both); err == nil {
+		t.Fatal("expected request() to reject conflicting session_name and session_hint")
+	}
+
+	oversized := nullModel()
+	oversized.RequiredResources = resourceList(t, resourceObject(t, strings.Repeat("u", RequiredResourcesMaxBytes), types.StringNull()))
+	if _, err := request(ctx, &oversized); err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("request() error = %v, want size limit error", err)
+	}
+
+	invalidState := nullModel()
+	invalidState.InitialState = types.StringValue(`["not-an-object"]`)
+	if _, err := request(ctx, &invalidState); err == nil || !strings.Contains(err.Error(), "JSON object") {
+		t.Fatalf("request() error = %v, want JSON object error", err)
+	}
+}

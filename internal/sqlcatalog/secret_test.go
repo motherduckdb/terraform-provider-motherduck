@@ -17,10 +17,11 @@ func TestSecretByNameResolvesLikeDuckDB(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
+	// TYPE http uses a built-in DuckDB secret type so tests stay offline without extension autoloading.
 	for _, statement := range []string{
-		`CREATE SECRET "MySecret" (TYPE s3, KEY_ID 'my')`,
-		`CREATE SECRET "äpfel" (TYPE s3, KEY_ID 'lower')`,
-		`CREATE SECRET "Äpfel" (TYPE s3, KEY_ID 'upper')`,
+		`CREATE SECRET "MySecret" (TYPE http)`,
+		`CREATE SECRET "äpfel" (TYPE http)`,
+		`CREATE SECRET "Äpfel" (TYPE http)`,
 	} {
 		if _, err := db.Exec(statement); err != nil {
 			t.Fatalf("%s: %v", statement, err)
@@ -59,11 +60,12 @@ func TestSecretNameFilterListsOnlyTheResolvedSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
+	// TYPE http uses a built-in DuckDB secret type so tests stay offline without extension autoloading.
 	for _, statement := range []string{
-		`CREATE SECRET "MySecret" (TYPE s3, KEY_ID 'my')`,
-		`CREATE SECRET "äpfel" (TYPE s3, KEY_ID 'lower')`,
-		`CREATE SECRET "Äpfel" (TYPE s3, KEY_ID 'upper')`,
-		`CREATE SECRET "öl" (TYPE s3, KEY_ID 'only_lower')`,
+		`CREATE SECRET "MySecret" (TYPE http)`,
+		`CREATE SECRET "äpfel" (TYPE http)`,
+		`CREATE SECRET "Äpfel" (TYPE http)`,
+		`CREATE SECRET "öl" (TYPE http)`,
 	} {
 		if _, err := db.Exec(statement); err != nil {
 			t.Fatalf("%s: %v", statement, err)

@@ -71,6 +71,9 @@ func (r *shareGrantResource) Create(ctx context.Context, req resource.CreateRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	if !validateUserOrRoleGranteeType(plan.GranteeType.ValueString(), &resp.Diagnostics) {
+		return
+	}
 	query := shareGrantStatement("GRANT", plan.Share.ValueString(), "TO", plan.GranteeType.ValueString(), plan.Username.ValueString())
 	if err := client.Exec(ctx, query); err != nil {
 		resp.Diagnostics.AddError("Unable to grant MotherDuck share access", shareGrantErrorDetail(err))
@@ -145,6 +148,9 @@ func (r *shareGrantResource) Delete(ctx context.Context, req resource.DeleteRequ
 	}
 	if state.GranteeType.IsNull() || state.GranteeType.IsUnknown() {
 		state.GranteeType = types.StringValue("user")
+	}
+	if !validateUserOrRoleGranteeType(state.GranteeType.ValueString(), &resp.Diagnostics) {
+		return
 	}
 	query := shareGrantStatement("REVOKE", state.Share.ValueString(), "FROM", state.GranteeType.ValueString(), state.Username.ValueString())
 	if err := retry.SQL(ctx, func() error { return client.Exec(ctx, query) }); err != nil && !isNotFound(err) {

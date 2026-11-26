@@ -1,6 +1,7 @@
 package datasources
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -36,5 +37,8 @@ func TestTypedRowsCharacterization(t *testing.T) {
 	}
 	if !spec.typedRowsAttribute().NestedObject.Attributes["value"].IsSensitive() {
 		t.Fatal("value must remain sensitive")
+	}
+	if gotNull := typedRowStringValue(json.RawMessage(" null ")); !gotNull.IsNull() {
+		t.Fatalf("padded JSON null = %#v, want null", gotNull)
 	}
 }

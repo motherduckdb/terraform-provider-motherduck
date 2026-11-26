@@ -115,3 +115,20 @@ func TestTokenMetadataOnlySortsByID(t *testing.T) {
 		t.Fatalf("tokens = %#v, want sorted metadata without secrets", tokens)
 	}
 }
+
+func TestSortRowsByKeysDeterministicWithTieBreak(t *testing.T) {
+	rows := []map[string]any{
+		{"name": "b", "tag": "x"},
+		{"name": "a", "tag": "z"},
+		{"name": "a", "tag": "y"},
+	}
+	sorted := sortRowsByKeys(rowSortKey{field: "name"})(rows)
+	got, err := json.Marshal(sorted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `[{"name":"a","tag":"y"},{"name":"a","tag":"z"},{"name":"b","tag":"x"}]`
+	if string(got) != want {
+		t.Fatalf("sorted rows = %s, want %s", got, want)
+	}
+}

@@ -71,6 +71,10 @@ check_no_search_matches \
   "JWT-like token found outside ignored generated/private paths:" \
   'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
 
+check_no_search_matches \
+  "Em dash found in repository files (use hyphens, colons, or parentheses instead):" \
+  $'\xe2\x80\x94'
+
 # Competitor comparisons and source links belong in documentation. Guard the
 # implementation and dependencies against copied provider scaffolding instead.
 set +e
@@ -101,27 +105,75 @@ done < <(
   perl -ne 'while (m{(?:\./)?scripts/[A-Za-z0-9_./*-]+[.]sh}g) { print "$&\n" }' Makefile | sort -u
 )
 
-while IFS=$'\t' read -r file line target; do
-  case "${target}" in
-    ""|\#*|http://*|https://*|mailto:*)
-      continue
-      ;;
-  esac
+find README.md docs examples -type f -name '*.md' -print | sort | perl -e '
+  use strict;
+  use warnings;
+  use Cwd qw(abs_path);
+  use File::Spec;
 
-  target="${target%%#*}"
-  target="${target#<}"
-  target="${target%>}"
+  chomp(my @files = <STDIN>);
+  my %anchors;
 
-  local_path="$(dirname "${file}")/${target}"
-  if [[ ! -e "${local_path}" ]]; then
-    echo "Broken local Markdown link in ${file}:${line}: ${target}" >&2
-    exit 1
-  fi
-done < <(
-  find README.md docs examples -type f -name '*.md' -print | sort | while IFS= read -r file; do
-    perl -ne 'while (/\[[^\]]+\]\(([^)]+)\)/g) { print "$ARGV\t$.\t$1\n" }' "${file}"
-  done
-)
+  sub index_anchors {
+    my ($file, $key) = @_;
+    $anchors{$key} = {};
+    open my $fh, "<:encoding(UTF-8)", $file or die "$file: $!";
+    my (%seen, $in_fence);
+    while (my $line = <$fh>) {
+      $in_fence = !$in_fence if $line =~ /^\s*(?:```|~~~)/;
+      next if $in_fence;
+      while ($line =~ /<a\s+[^>]*\b(?:id|name)="([^"]+)"/g) {
+        $anchors{$key}{$1} = 1;
+      }
+      if ($line =~ /^#{1,6}\s+(.+?)\s*#*\s*$/) {
+        my $h = lc($1);
+        $h =~ s/\[([^\]]+)\]\([^)]+\)/$1/g;
+        $h =~ s/`//g;
+        $h =~ s/[^\p{L}\p{N}\s_-]//g;
+        $h =~ s/ /-/g;
+        next if $h eq "";
+        my $n = $seen{$h}++;
+        $anchors{$key}{$n ? "$h-$n" : $h} = 1;
+      }
+    }
+    close $fh;
+  }
+
+  for my $f (@files) {
+    my $self_key = abs_path($f) // $f;
+    index_anchors($f, $self_key) unless exists $anchors{$self_key};
+
+    open my $fh, "<:encoding(UTF-8)", $f or die "$f: $!";
+    my ($dir) = $f =~ m{^(.*)/[^/]+$};
+    $dir = "." unless defined $dir;
+    my $in_fence = 0;
+    while (my $line = <$fh>) {
+      $in_fence = !$in_fence if $line =~ /^\s*(?:```|~~~)/;
+      next if $in_fence;
+      while ($line =~ /\[[^\]]+\]\(([^)]+)\)/g) {
+        my $t = $1;
+        next if $t eq "" || $t =~ m{^(?:https?://|mailto:)};
+        $t =~ s/^<//;
+        $t =~ s/>$//;
+        my ($path, $frag) = split /#/, $t, 2;
+        my $target_file = File::Spec->canonpath($path eq "" ? $f : "$dir/$path");
+        if (!-e $target_file) {
+          print STDERR "Broken local Markdown link in $f:$.: $t\n";
+          exit 1;
+        }
+        if (defined $frag && $frag ne "" && -f $target_file && $target_file =~ /\.md$/) {
+          my $target_key = abs_path($target_file) // $target_file;
+          index_anchors($target_file, $target_key) unless exists $anchors{$target_key};
+          if (!$anchors{$target_key}{$frag}) {
+            print STDERR "Broken Markdown heading anchor in $f:$.: $t\n";
+            exit 1;
+          }
+        }
+      }
+    }
+    close $fh;
+  }
+'
 
 while IFS= read -r script_path; do
   if perl -0ne 'if (/cleanup\n\s*trap - EXIT/) { $found = 1 } END { exit !$found }' "${script_path}"; then
