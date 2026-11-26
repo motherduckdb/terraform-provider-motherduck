@@ -9,21 +9,21 @@ description: |-
 
 Each workflow below has a Registry guide that explains its configuration and
 lifecycle, and a complete runnable project on GitHub. The projects include
-Python, Node, SQL templates, and dependency locks. Links point at the v0.4.4
+Python, Node, SQL templates, and dependency locks. Links point at the v0.4.5
 release tag, except for the two examples added after that release, which point
 at `main`. They are examples, not published Terraform Registry modules.
 
-| Goal | Registry guide | Complete v0.4.4 example |
+| Goal | Registry guide | Complete v0.4.5 example |
 | --- | --- | --- |
-| First warehouse | [Create your first warehouse](getting-started.md) | [Simple warehouse](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.4/examples/warehouses/simple) |
-| Dev/prod warehouse | [Warehouse layouts](warehouse-examples.md) and [environments](environments.md) | [Bootstrap and layered roots](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.4/examples/warehouses) |
-| Ingestion and dbt | [Ownership and deployment](deployment-model.md) | [Pinned dlt cookbook and dbt companion](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.4/examples/cookbook-pipeline) |
-| Tenant analytics | [Customer-facing analytics](customer-facing-analytics.md) | [Terraform root and Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.4/examples/customer-facing-analytics) |
+| First warehouse | [Create your first warehouse](getting-started.md) | [Simple warehouse](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/warehouses/simple) |
+| Dev/prod warehouse | [Warehouse layouts](warehouse-examples.md) and [environments](environments.md) | [Bootstrap and layered roots](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/warehouses) |
+| Ingestion and dbt | [Ownership and deployment](deployment-model.md) | [Pinned dlt cookbook and dbt companion](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/cookbook-pipeline) |
+| Tenant analytics | [Customer-facing analytics](customer-facing-analytics.md) | [Terraform root and Node backend](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/customer-facing-analytics) |
 | BI tools and AI agents | [Give BI tools and AI agents their own readers](bi-and-agent-readers.md) | [Reader accounts on one share](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/bi-and-agent-readers) |
 | Data lake | [Build a data lake on your own bucket](data-lake.md) | [DuckLake database and scoped S3 secret](https://github.com/motherduckdb/terraform-provider-motherduck/tree/main/examples/data-lake) |
-| Reusable tenant infrastructure | [Authentication and ownership](authentication.md) | [Writer bootstrap](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.4/examples/blueprints/writer-bootstrap) and [read hypertenancy](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.4/examples/blueprints/read-hypertenancy) |
-| Team roles and grants | [Manage and audit access](access-control.md) | [Access control](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.4/examples/access-control), [share audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.4/examples/share-access-audit), and [role audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.4/examples/role-access-audit) |
-| Pulumi Python | [Use the provider with Pulumi](pulumi.md) | [Pinned Python bridge example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.4/examples/pulumi/python) |
+| Reusable tenant infrastructure | [Authentication and ownership](authentication.md) | [Writer bootstrap](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/blueprints/writer-bootstrap) and [read hypertenancy](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/blueprints/read-hypertenancy) |
+| Team roles and grants | [Manage and audit access](access-control.md) | [Access control](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/access-control), [share audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/share-access-audit), and [role audit](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/role-access-audit) |
+| Pulumi Python | [Use the provider with Pulumi](pulumi.md) | [Pinned Python bridge example](https://github.com/motherduckdb/terraform-provider-motherduck/tree/v0.4.5/examples/pulumi/python) |
 
 ## Install and select credentials
 
@@ -34,7 +34,7 @@ Git source pinned independently from the provider version:
 
 ```hcl
 module "writer_bootstrap" {
-  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.4.4"
+  source = "github.com/motherduckdb/terraform-provider-motherduck//examples/blueprints/writer-bootstrap?ref=v0.4.5"
 
   writer_username = "svc_analytics_writer"
 }
